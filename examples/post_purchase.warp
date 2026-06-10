@@ -1,0 +1,26 @@
+project "post_purchase_thank_you" {
+  version = "1.0.0"
+  tenant  = "your-tenant-id"
+
+  // Capacity-verification comes first: the model won't let an order reach
+  // Accepted until the buyer (a Party) is known — Invariant 3.
+  ACPGetCustomerProfile profile {
+    customer_id: "cust_demo"
+  }
+
+  OrderPlaced order {
+    min_value: Currency(150, MAD)
+  }
+
+  // Commitments form before Fulfillments execute — Invariant 4 — so the delay
+  // and the message are declared after the order.
+  DelayFor wait {
+    duration: Duration(2, hours)
+  }
+
+  WhatsAppSend thank_you {
+    to:       profile.phone
+    template: "order_thank_you"
+    lang:     profile.language
+  }
+}

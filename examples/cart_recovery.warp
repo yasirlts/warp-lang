@@ -1,0 +1,20 @@
+project "cart_recovery" {
+  version = "1.0.0"
+  tenant  = "your-tenant-id"
+
+  CartAbandoned trigger {
+    min_value: Currency(200, MAD)
+    after:     Duration(30, minutes)
+  }
+
+  ACPGetCustomerProfile profile {
+    customer_id: trigger.customer_id
+  }
+
+  WhatsAppSend message {
+    to:       profile.phone
+    template: "cart_reminder"
+    lang:     profile.language
+    params:   { cart_value: trigger.cart_value }
+  }
+}
