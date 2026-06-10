@@ -1,85 +1,148 @@
 # Warp
 
-**The formal commerce language.**
+**The formal commerce layer for AI-generated code.**
 
-Warp is a typed workflow runtime for commerce. It defines what
-commerce is — precisely enough that a compiler can enforce it.
+[![npm](https://img.shields.io/npm/v/@warp-lang/commerce-types)](https://www.npmjs.com/package/@warp-lang/commerce-types)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+---
 
 ## The Problem
 
-Every commerce platform has its own model of commerce. SAP calls
-an order a SalesOrder. Shopify calls it an Order. Odoo calls it a
-sale.order. These are the same concept expressed in incompatible
-vocabularies.
+AI coding models generate plausible commerce code. Not correct commerce code.
+Plausible.
 
-Every AI system that touches commerce must learn each platform's
-vocabulary independently. Every integration requires custom mapping
-work. Every developer who moves between platforms starts over.
-
-Warp ends this.
-
-## What Warp Is
-
-Warp defines five primitives that hold across every commerce domain:
-
-- **Party** — any entity participating in commerce
-- **Value** — what moves or is accessed between parties
-- **Intent** — expressed desire before commitment
-- **Commitment** — formal agreement between parties
-- **Fulfillment** — execution of a commitment
-
-These five primitives have been tested adversarially across physical
-goods commerce, services, financial commerce, and digital goods.
-No sixth primitive has been found necessary.
-
-## The Compiler
-
-Warp workflows are written in `.warp` files and compiled before
-they touch any real customer. The compiler enforces the commerce
-model's invariants:
-
-- You cannot fulfill a cancelled commitment
-- You cannot mix currencies without explicit conversion
-- A commitment cannot reach Accepted without capacity verification
-- Fulfillment cannot precede Commitment in the same workflow
-
-Commerce mistakes are impossible to express — not merely likely
-to be caught.
-
-## A Warp Workflow
-
-```
-project "cart_recovery" {
-  version = "1.0.0"
-  tenant  = "your-tenant-id"
-
-  CartAbandoned trigger {
-    min_value: Currency(200, MAD)
-    after:     Duration(30, minutes)
-  }
-
-  ACPGetCustomerProfile profile {
-    customer_id: trigger.customer_id
-  }
-
-  WhatsAppSend message {
-    to:       profile.phone
-    template: "cart_reminder"
-    lang:     profile.language
-  }
+```typescript
+// AI generates this. It looks right.
+const order = {
+  id: generateId(),
+  status: "pending",
+  total: 150,           // what currency?
+  items: [...]
 }
+
+// Later, somewhere else, also AI-generated:
+order.status = "fulfilled"  // was it ever accepted?
+order.total += 50           // mixed currencies silently
+order.status = "pending"    // backward transition — now what?
 ```
 
-The compiler catches `profile.name` passed to `WhatsAppSend.to`
-before this workflow ever runs — `to` expects `PhoneNumber`,
-not `String`.
+These bugs are invisible at generation time. They surface in production, and
+they are hard to find because the code looks correct.
+
+The root cause: AI models have no formal commerce vocabulary to reason against.
+They pattern-match against informal examples and reproduce informal bugs.
+
+---
+
+## The Solution
+
+Warp is a formal commerce specification with a type system. Five primitives that
+hold across every commerce domain. Six invariants the compiler enforces.
+TypeScript types that make the wrong thing impossible to express.
+
+```typescript
+import { type Money, transitionCommitment } from "@warp-lang/commerce-types"
+
+// Money always carries currency — enforced by the type
+const total: Money = { amount: 150, currency: "MAD" }
+
+// State transitions validated against the 26-transition table
+const result = transitionCommitment(order, { type: "Fulfilled" }, actorId)
+// result.ok === false for an invalid transition (Draft → Fulfilled,
+// Fulfilled → Proposed, …); result.error explains why
+```
+
+When AI coding models see these types in your project, they generate code that
+satisfies them. The TypeScript compiler enforces the invariants. Correct
+commerce code becomes the path of least resistance.
+
+---
+
+## Install
+
+```bash
+npm install @warp-lang/commerce-types
+```
+
+> Python types (`warp-commerce-types`) are planned — see [Status](#status).
+
+---
+
+## For AI Coding Agents
+
+Add to your project root:
+
+```bash
+curl -o CLAUDE.md https://raw.githubusercontent.com/yasirlts/warp-lang/main/CLAUDE.md
+```
+
+Claude Code, Cursor, and any CLAUDE.md-aware agent will validate all commerce
+code against the Warp model automatically.
+
+---
+
+## For Vibe Coders
+
+Tell your AI:
+
+> "Use the Warp Commerce Model for all commerce types in this project.
+> Reference: https://github.com/yasirlts/warp-lang/blob/main/spec/COMMERCE_MODEL.md"
+
+Your AI now generates formally correct commerce code instead of plausible
+commerce code.
+
+---
+
+## For Developers
+
+The five Warp primitives cover every commerce domain:
+
+| Primitive | What it is | Example |
+|-----------|-----------|---------|
+| Party | Any entity in commerce | Customer, Vendor, AI Agent |
+| Value | What moves between parties | Product, Money, License |
+| Intent | Desire before commitment | Shopping cart, Wishlist |
+| Commitment | Formal agreement | Order, Subscription, Contract |
+| Fulfillment | Execution of commitment | Shipment, Payment, Access grant |
+
+These five have been tested adversarially across physical goods, services,
+financial commerce, and digital goods. No sixth primitive has been found
+necessary.
+
+---
+
+## The Six Invariants
+
+The compiler enforces these. You cannot violate them.
+
+```
+I-1  Value Conservation     Money always carries currency.
+                            No silent currency mixing.
+
+I-2  State Monotonicity     Orders follow directed state paths.
+                            No backward transitions.
+
+I-3  Capacity Verification  Party capacity verified before Accepted.
+                            No accepting without checking.
+
+I-4  Temporal Integrity     Fulfillment follows Commitment.
+                            No shipping before accepting.
+
+I-5  Identity Permanence    IDs are immutable after creation.
+                            No reassigning or reusing.
+
+I-6  Tree Consistency       Child order values sum to parent.
+                            No split-order accounting errors.
+```
+
+---
 
 ## Live
 
-Warp is running in production at [warp.aimer.ma](https://warp.aimer.ma).
+The Warp compiler is running at [warp.aimer.ma](https://warp.aimer.ma).
 
 ```bash
-# Compile a workflow
 curl -X POST https://warp.aimer.ma/api/v1/workflows/compile \
   -H "X-Warp-API-Key: your-key" \
   -H "Content-Type: application/json" \
@@ -92,63 +155,34 @@ curl -X POST https://warp.aimer.ma/api/v1/workflows/compile \
 {"workflow_name":"hello","node_count":1,"status":"compiled","warnings":[]}
 ```
 
-You can get a tenant id and key in 30 seconds — see the
+Get a tenant id and key in 30 seconds — see the
 [Getting Started guide](docs/GETTING_STARTED.md).
-
-## Get Started
-
-→ [Getting Started Guide](docs/GETTING_STARTED.md) — zero to
-  running workflow in 15 minutes
-
-→ [Commerce Model](spec/COMMERCE_MODEL.md) — the formal
-  specification of commerce
-
-→ [Type Specification](spec/TYPE_SPEC.md) — the type system
-
-→ [Warp-Compatible Guide](spec/COMPATIBLE_GUIDE.md) — build
-  an adapter for your platform
-
-→ [.warp Syntax Reference](docs/WARP_DSL_SYNTAX.md) — the grammar
-
-## The Commerce Model
-
-The formal specification is in [`spec/COMMERCE_MODEL.md`](spec/COMMERCE_MODEL.md).
-
-It answers one question: what is commerce, stated formally.
-
-Not what Shopify thinks commerce is. Not what SAP thinks commerce
-is. What commerce **is** — stated precisely enough that two
-independent implementations produce compatible results.
-
-## Warp-Compatible
-
-If your platform implements the Warp type spec, add this to your
-README:
-
-```
-Warp-compatible
-```
-
-See the [compatibility guide](spec/COMPATIBLE_GUIDE.md) for what
-this means and how to get there.
-
-## Status
-
-The five primitives are stable. The type system is in active
-development. The compiler enforces six commerce invariants in
-production.
-
-| Component | Status |
-|-----------|--------|
-| Commerce Model | v0.2 — stable |
-| Type Specification | v0.3 — active development |
-| Compiler | Live — 6 invariant checks |
-| Runtime | Live at warp.aimer.ma |
-
-## License
-
-MIT — see [LICENSE](LICENSE).
 
 ---
 
-*Built by [Lamar Tech Solutions](https://warp.aimer.ma). Casablanca, Morocco.*
+## Documentation
+
+- [Getting Started](docs/GETTING_STARTED.md) — zero to running in 15 minutes
+- [Commerce Model](spec/COMMERCE_MODEL.md) — the formal specification
+- [Type Specification](spec/TYPE_SPEC.md) — the complete type system
+- [Warp-Compatible Guide](spec/COMPATIBLE_GUIDE.md) — build a platform adapter
+- [.warp Syntax Reference](docs/WARP_DSL_SYNTAX.md) — the grammar
+- [CLAUDE.md Template](CLAUDE.md) — drop into any project for AI-aware commerce
+
+---
+
+## Status
+
+| Component | Status |
+|-----------|--------|
+| Commerce Model | v0.2 stable |
+| TypeScript types | [v0.1 — live on npm](https://www.npmjs.com/package/@warp-lang/commerce-types) |
+| Python types | planned |
+| Compiler | Live — 6 invariant checks |
+| Runtime | Live at warp.aimer.ma |
+
+---
+
+## License
+
+MIT — use freely, build on it, ship Warp-compatible products.
