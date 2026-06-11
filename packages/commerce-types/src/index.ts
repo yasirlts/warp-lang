@@ -1,7 +1,7 @@
 /**
  * @warp-lang/commerce-types
  *
- * Formal commerce types derived from the Warp Commerce Model v0.2:
+ * Formal commerce types derived from the Warp Commerce Model v0.3:
  * - the five primitives (Party, Value, Intent, Commitment, Fulfillment),
  * - currency-safe Money,
  * - validated state transitions (the 26-transition commitment table),
@@ -16,6 +16,11 @@ export * from "./states.js";
 export * from "./primitives.js";
 export * from "./transitions.js";
 export * from "./invariants.js";
+// v0.3 — full commerce vocabulary (cascade cancellation, volume pricing,
+// loyalty earn terms, threshold activation, AwardProtest, v0.3 Evidence).
+// PaymentTiming + its PostFulfillmentTrigger / CommissionStructure /
+// CommissionFee are re-exported above via `export * from "./states.js"`.
+export * from "./commerce-v03.js";
 
 // Aliases — the `verifyInvariantN` / `auditCommerceCode` names used by the
 // CLAUDE.md template's quick-reference resolve to the canonical checkers.

@@ -146,7 +146,32 @@ export type AccessModel =
   | { kind: "Stream"; simultaneous_streams: number }
   | { kind: "Download"; redownloadable: boolean }
   | { kind: "APIAccess"; calls_per_period?: number; endpoint: string }
-  | { kind: "NFT"; blockchain: string; contract_address: string; token_id: string };
+  | { kind: "NFT"; blockchain: string; contract_address: string; token_id: string }
+  // v0.3 — perishable event ticket; value expires when the event ends.
+  | {
+      kind: "EventAccess";
+      event: string;
+      location: string;
+      date: string;
+      entry_window_start: string;
+      entry_window_end: string;
+      transferable: boolean;
+    }
+  // v0.3 — trade finance title documents held by a bank, released on payment.
+  | { kind: "DocumentaryCollection"; held_by: string; release_condition: string }
+  // v0.3 — verified environmental instrument; retirable (ValueState::Retired).
+  | {
+      kind: "CarbonCredit";
+      standard: string;
+      vintage: number;
+      project_id: string;
+      project_type: string;
+      location: string;
+      quantity: number;
+      retired: boolean;
+      additionality_verified: boolean;
+      verification_body?: string;
+    };
 
 export interface DigitalGood {
   kind: "DigitalGood";
@@ -192,7 +217,11 @@ export type ValueState =
   | { type: "Committed"; commitment_id: CommitmentID }
   | { type: "InTransit"; fulfillment_id: FulfillmentID }
   | { type: "Transferred"; to: PartyID; at: string }
-  | { type: "Returned"; from: PartyID; initiated_at: string };
+  | { type: "Returned"; from: PartyID; initiated_at: string }
+  // v0.3 — terminal state for permanently consumed exclusive goods (carbon
+  // credits after offset use, redeemed gift certificates, used coupons).
+  // No transition out of Retired is valid.
+  | { type: "Retired"; retired_at: string; retired_by: PartyID; reason: string; certificate?: string };
 
 export interface Value {
   id: ValueID;

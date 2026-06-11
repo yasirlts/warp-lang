@@ -6,7 +6,8 @@
  */
 
 import type { Money } from "./money.js";
-import type { Commitment, Fulfillment, Party, PartyCapacity, Value } from "./primitives.js";
+import { CurrencyMismatchError } from "./money.js";
+import type { Commitment, Fulfillment, Party, PartyCapacity, PartyID, Value } from "./primitives.js";
 import { isValidCommitmentTransition } from "./transitions.js";
 
 export type InvariantId = "I-1" | "I-2" | "I-3" | "I-4" | "I-5" | "I-6";
@@ -79,6 +80,51 @@ export function checkI1ValueConservation(commitments: Commitment[]): InvariantVi
     }
   }
   return out;
+}
+
+/**
+ * I-1, fourth clause (v0.3) — loyalty point creation.
+ *
+ * Loyalty points and merchant-issued currency are the only ValueForm where
+ * value *creation* (not transfer) is the primary operation: the issuer mints
+ * points as a liability — a promise to honor them in future transactions.
+ * Conservation therefore applies to the issuer's total outstanding liability
+ * pool, not to any single transaction. A merchant must not issue more points
+ * than the business can sustain as redeemable value.
+ *
+ * `sustainable` is true when the redemption value of all outstanding points
+ * does not exceed the issuer's capacity to honor them.
+ */
+export interface LoyaltyLiabilityCheck {
+  issuer: PartyID;
+  total_points_outstanding: number;
+  points_per_currency_unit: number;
+  redemption_rate: Money; // value of a single point when redeemed
+  sustainable: boolean; // outstanding * rate <= issuer capacity
+}
+
+export function checkLoyaltyLiability(
+  issuer: PartyID,
+  outstanding_points: number,
+  redemption_value_per_point: Money,
+  issuer_revenue_capacity: Money,
+): LoyaltyLiabilityCheck {
+  // Liability and capacity must be denominated in the same currency to compare.
+  if (redemption_value_per_point.currency !== issuer_revenue_capacity.currency) {
+    throw new CurrencyMismatchError(
+      redemption_value_per_point.currency,
+      issuer_revenue_capacity.currency,
+    );
+  }
+  const totalLiability = outstanding_points * redemption_value_per_point.amount;
+  return {
+    issuer,
+    total_points_outstanding: outstanding_points,
+    points_per_currency_unit:
+      redemption_value_per_point.amount === 0 ? 0 : 1 / redemption_value_per_point.amount,
+    redemption_rate: redemption_value_per_point,
+    sustainable: totalLiability <= issuer_revenue_capacity.amount,
+  };
 }
 
 // --- I-2: State Monotonicity ----------------------------------------------

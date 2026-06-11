@@ -56,3 +56,51 @@ export type FulfillmentState =
   | { type: "Reversed"; reason: string; initiated_by: PartyID; at: string };
 
 export type FulfillmentStateType = FulfillmentState["type"];
+
+// ---------------------------------------------------------------------------
+// Payment timing — when value moves in a Commitment (Primitive 4, terms.payment).
+// The base timings are simple variants; the v0.3 additions carry structured data.
+// ---------------------------------------------------------------------------
+
+export type PaymentTiming =
+  | { type: "Immediate" }
+  | { type: "Upfront" }
+  | { type: "OnDelivery" }
+  | { type: "OnServiceCompletion" }
+  | { type: "AfterGoodsReceived" }
+  | { type: "Installments" }
+  | { type: "Milestone" }
+  | { type: "Recurring" }
+  | { type: "Simultaneous" }
+  | { type: "Metered" }
+  // v0.3 — payment after fulfillment AND after a post-fulfillment trigger resolves
+  | { type: "PostFulfillment"; trigger: PostFulfillmentTrigger }
+  // v0.3 — trade finance: importer pays the bank to receive title documents
+  | { type: "DocumentsAgainstPayment"; documents_held_by: PartyID; release_condition: string }
+  // v0.3 — B2B credit terms: Net30 / Net60 / Net90
+  | {
+      type: "Net";
+      days: 30 | 60 | 90;
+      from: "InvoiceDate" | "DeliveryDate" | "EndOfMonth";
+      early_payment_discount?: number;
+    }
+  // v0.3 — marketplace platforms, single- or double-sided commission
+  | { type: "CommissionSplit"; structure: CommissionStructure };
+
+export type PaymentTimingType = PaymentTiming["type"];
+
+/** v0.3 — the post-fulfillment event that must resolve before payment. */
+export type PostFulfillmentTrigger =
+  | { type: "InsuranceAdjudication"; adjudicator: PartyID; claim_reference?: string; deadline?: string }
+  | { type: "InspectionCompletion"; inspector: PartyID; standard?: string }
+  | { type: "AcceptanceTest"; tester: PartyID; criteria: string };
+
+/** v0.3 — how a marketplace platform takes commission. */
+export type CommissionStructure =
+  | { type: "SingleSided"; rate: number; paid_by: string; paid_to: PartyID }
+  | { type: "DoubleSided"; buyer_fee: CommissionFee; seller_fee: CommissionFee };
+
+export interface CommissionFee {
+  rate: number;
+  paid_to: PartyID;
+}
