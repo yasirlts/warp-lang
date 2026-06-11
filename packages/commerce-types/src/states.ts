@@ -104,3 +104,48 @@ export interface CommissionFee {
   rate: number;
   paid_to: PartyID;
 }
+
+// ---------------------------------------------------------------------------
+// Evidence — proof a Fulfillment occurred (model Primitive 5: Evidence).
+// The complete union, suitable for attaching to `Fulfillment.evidence`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Proof a Fulfillment occurred. Discriminated on `kind`.
+ *
+ * NOTE — relationship to `EvidenceV03` (commerce-v03.ts): the three v0.3
+ * members below (`RegistryRecording`, `MedicalRecord`, `RetirementCertificate`)
+ * are *parallel representations* of the standalone `EvidenceV03` interfaces,
+ * which key on `type`. `EvidenceV03` is left untouched for anyone already
+ * importing it; this `Evidence` union (keyed on `kind`, consistent with the
+ * rest of this file's structures) is the complete set for attaching to a
+ * Fulfillment. They are not interchangeable by discriminant — pick `Evidence`
+ * for new code.
+ */
+export type Evidence =
+  | { kind: "ProofOfDelivery"; photo_uri?: string; signature?: string; timestamp: string; recipient: PartyID }
+  | { kind: "PaymentReceipt"; reference: string; amount: Money; timestamp: string; mechanism: string }
+  | { kind: "AccessGrant"; token: string; granted_at: string; expires_at?: string }
+  | { kind: "ServiceCompletion"; confirmed_by: PartyID; timestamp: string; notes?: string }
+  | { kind: "WarehouseReceipt"; location: string; received_at: string }
+  | {
+      kind: "BillOfLading";
+      reference: string;
+      issued_by: PartyID;
+      origin_port: string;
+      destination_port: string;
+      issued_at: string;
+    }
+  | { kind: "CustomsClearance"; reference: string; cleared_at: string; jurisdiction: string }
+  | { kind: "TriggerVerification"; trigger_type: string; timestamp: string }
+  // v0.3 (parallel to EvidenceV03 — see note above):
+  | { kind: "RegistryRecording"; registry: string; reference: string; recorded_at: string; notary?: string }
+  | { kind: "MedicalRecord"; reference: string; issued_by: string; patient: string; service_date: string }
+  | {
+      kind: "RetirementCertificate";
+      reference: string;
+      issued_by: string;
+      quantity: number;
+      retired_at: string;
+      project_id: string;
+    };

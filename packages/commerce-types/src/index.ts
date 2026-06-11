@@ -21,6 +21,15 @@ export * from "./invariants.js";
 // PaymentTiming + its PostFulfillmentTrigger / CommissionStructure /
 // CommissionFee are re-exported above via `export * from "./states.js"`.
 export * from "./commerce-v03.js";
+// v0.3.0 — gap-closure: the terms aggregate (delivery/payment/conditions/…),
+// the market-making AuctionProcess, metered EntitlementConsumption, and the
+// PartiallyFulfilled ResolutionProcess. `Evidence` (states.ts) and
+// `ContingentValue`/`Quantity` (primitives.ts) surface via the `export *`
+// lines above.
+export * from "./terms.js";
+export * from "./auction.js";
+export * from "./metering.js";
+export * from "./resolution.js";
 
 // Aliases — the `verifyInvariantN` / `auditCommerceCode` names used by the
 // CLAUDE.md template's quick-reference resolve to the canonical checkers.

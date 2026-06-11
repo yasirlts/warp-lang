@@ -105,6 +105,8 @@ export interface AwardProtest {
   id: string;
   filed_by: string;
   against: string; // CommitmentID of the awarded Commitment
+  // References `AuctionProcess.id` from auction.ts (the procurement auction
+  // whose award is being challenged).
   auction_process: string;
   grounds: string[];
   filed_at: string;

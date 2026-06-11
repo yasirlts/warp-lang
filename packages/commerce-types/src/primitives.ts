@@ -7,7 +7,10 @@
  */
 
 import type { CurrencyCode, Money } from "./money.js";
-import type { CommitmentState, FulfillmentState, IntentState } from "./states.js";
+import type { CommitmentState, Evidence, FulfillmentState, IntentState } from "./states.js";
+// Type-only import — `terms.ts` imports back from this module (PartyID,
+// Quantity), so this is a type-only cycle (erased at compile, no runtime cycle).
+import type { CommitmentTerms } from "./terms.js";
 
 // ---------------------------------------------------------------------------
 // Branded identifiers — globally unique, immutable (Invariant 5).
@@ -200,7 +203,41 @@ export interface NothingValue {
   kind: "Nothing";
 }
 
-export type ValueForm = PhysicalGood | DigitalGood | ServiceValue | MoneyValue | NothingValue;
+/**
+ * Value that depends on a trigger firing (insurance, prediction markets,
+ * options) — model Primitive 2: ValueForm::ContingentValue. The model's
+ * `if_triggered` / `if_not_triggered` are themselves `Value`s; to avoid a
+ * recursive type explosion the package carries lightweight descriptions
+ * (`if_not_triggered` is often the model's `Nothing`).
+ */
+export interface ContingentValue {
+  kind: "ContingentValue";
+  trigger_type: string;
+  monitoring_period_start?: string;
+  monitoring_period_end?: string;
+  monitoring_party?: PartyID;
+  if_triggered_description: string;
+  if_not_triggered_description: string; // often "Nothing"
+}
+
+export type ValueForm =
+  | PhysicalGood
+  | DigitalGood
+  | ServiceValue
+  | MoneyValue
+  | NothingValue
+  | ContingentValue;
+
+/**
+ * A unit-bearing quantity (model Primitive 2: `Value.quantity` carries a unit,
+ * e.g. "hours", "kg"). `Value.quantity` itself stays a bare `number` for
+ * backward compatibility; `Quantity` is used where the model needs the unit
+ * (e.g. wholesale `RecurringDelivery`).
+ */
+export interface Quantity {
+  amount: number;
+  unit?: string;
+}
 
 export type ReservationBasis =
   | "PhysicalStock"
@@ -290,6 +327,12 @@ export interface Commitment {
   originated_from?: IntentID;
   created_at: string;
   expires_at?: string;
+  /**
+   * The terms governing this Commitment — delivery, payment, conditions, and
+   * the v0.3 term structures (model Primitive 4: `Commitment.terms`). Optional
+   * so existing object literals and `newCommitment()` callers are unchanged.
+   */
+  terms?: CommitmentTerms;
 }
 
 export function newCommitment(
@@ -327,6 +370,11 @@ export interface Fulfillment {
   planned_at: string;
   started_at?: string;
   completed_at?: string;
+  /**
+   * Proof the Fulfillment occurred (model Primitive 5: `Fulfillment.evidence`).
+   * Optional so existing literals and `newFulfillment()` callers are unchanged.
+   */
+  evidence?: Evidence[];
 }
 
 export function newFulfillment(commitment: CommitmentID): Fulfillment {
