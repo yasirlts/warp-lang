@@ -190,7 +190,9 @@ Price                      → Value { form: Money }
 
 > The package ships these mappings: `import { fromShopifyOrder } from "@warp-lang/commerce-types/platforms/shopify"`
 > (also `/platforms/woocommerce`, `/platforms/stripe`). Stripe amounts are
-> minor-unit aware (cents ↔ decimal, zero-decimal currencies handled).
+> minor-unit aware (cents ↔ decimal; zero-decimal currencies like JPY and
+> three-decimal currencies like TND/BHD/KWD/OMR/JOD are handled). Adapters
+> synthesize a valid transition history, so their output passes `auditCommerce`.
 
 ---
 
@@ -261,5 +263,5 @@ import {
 
 ---
 
-*Based on Warp Commerce Model v0.2*
+*Based on Warp Commerce Model v0.3*
 *https://github.com/yasirlts/warp-lang*

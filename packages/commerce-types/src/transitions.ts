@@ -211,3 +211,104 @@ export function transitionFulfillment(
   if (to.type === "Completed") next.completed_at = at;
   return { ok: true, value: next };
 }
+
+// ---------------------------------------------------------------------------
+// History synthesis — reconstruct a *valid* history for an object known only in
+// its final state.
+//
+// A platform adapter that maps, say, a paid+fulfilled Shopify order knows the
+// final state (`Fulfilled`) but not the path that produced it. Setting the
+// final state with an empty history makes the object fail the package's own
+// auditor: `checkI4TemporalIntegrity` derives "did this reach Accepted?" from
+// history entries, so an empty-history Fulfilled order falsely reports an
+// Invariant-4 violation. These helpers replay the canonical path from the
+// initial state through the transition functions above, so the synthesized
+// history is valid by construction and the auditor passes.
+// ---------------------------------------------------------------------------
+
+/** The states to pass through (after Draft) to reach `target`. */
+function commitmentPath(target: CommitmentState): CommitmentState[] {
+  const proposed: CommitmentState = { type: "Proposed" };
+  const accepted: CommitmentState = { type: "Accepted" };
+  const partiallyFulfilled: CommitmentState = {
+    type: "PartiallyFulfilled",
+    fulfilled_item_ids: [],
+    remaining_item_ids: [],
+  };
+  const fulfilled: CommitmentState = { type: "Fulfilled" };
+  switch (target.type) {
+    case "Draft":
+      return [];
+    case "Proposed":
+    case "Tendered":
+    case "Cancelled":
+      return [target]; // Draft → {Proposed | Tendered | Cancelled} are all valid
+    case "Accepted":
+      return [proposed, target];
+    case "Modified":
+    case "Active":
+    case "Disputed":
+    case "PartiallyFulfilled":
+      return [proposed, accepted, target];
+    case "Fulfilled":
+      return [proposed, accepted, partiallyFulfilled, target];
+    case "Refunded":
+      return [proposed, accepted, partiallyFulfilled, fulfilled, target];
+  }
+}
+
+/**
+ * Return a copy of `commitment` driven to `target` with a synthesized, valid
+ * history (every step applied through {@link transitionCommitment}). Pass a
+ * freshly created `Draft` commitment (e.g. from `newCommitment`). On the
+ * impossible event that a step is rejected, falls back to setting the final
+ * state directly so the adapter still returns a usable object.
+ */
+export function applyCommitmentPath(
+  commitment: Commitment,
+  target: CommitmentState,
+  actor: PartyID,
+  reason?: string,
+): Commitment {
+  let current = commitment;
+  for (const step of commitmentPath(target)) {
+    const result = transitionCommitment(current, step, actor, reason);
+    if (!result.ok || !result.value) return { ...commitment, state: target };
+    current = result.value;
+  }
+  return current;
+}
+
+/** The states to pass through (after Planned) to reach `target`. */
+function fulfillmentPath(target: FulfillmentState): FulfillmentState[] {
+  const inProgress: FulfillmentState = { type: "InProgress" };
+  switch (target.type) {
+    case "Planned":
+      return [];
+    case "InProgress":
+    case "Failed":
+      return [target]; // Planned → {InProgress | Failed} are valid
+    case "Completed":
+    case "Reversed":
+      return [inProgress, target]; // via InProgress
+  }
+}
+
+/**
+ * Return a copy of `fulfillment` driven to `target` with a synthesized, valid
+ * history (every step through {@link transitionFulfillment}, which also stamps
+ * `started_at` / `completed_at`). Pass a freshly created `Planned` fulfillment.
+ */
+export function applyFulfillmentPath(
+  fulfillment: Fulfillment,
+  target: FulfillmentState,
+  actor: PartyID,
+): Fulfillment {
+  let current = fulfillment;
+  for (const step of fulfillmentPath(target)) {
+    const result = transitionFulfillment(current, step, actor);
+    if (!result.ok || !result.value) return { ...fulfillment, state: target };
+    current = result.value;
+  }
+  return current;
+}

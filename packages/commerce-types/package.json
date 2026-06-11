@@ -1,31 +1,52 @@
 {
   "name": "@warp-lang/commerce-types",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Formal commerce types derived from the Warp Commerce Model \u2014 typed money, validated state transitions, and the six commerce invariants.",
   "type": "module",
+  "sideEffects": false,
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./platforms/shopify": {
-      "import": "./dist/platforms/shopify.js",
-      "require": "./dist/platforms/shopify.cjs",
-      "types": "./dist/platforms/shopify.d.ts"
+      "import": {
+        "types": "./dist/platforms/shopify.d.ts",
+        "default": "./dist/platforms/shopify.js"
+      },
+      "require": {
+        "types": "./dist/platforms/shopify.d.cts",
+        "default": "./dist/platforms/shopify.cjs"
+      }
     },
     "./platforms/woocommerce": {
-      "import": "./dist/platforms/woocommerce.js",
-      "require": "./dist/platforms/woocommerce.cjs",
-      "types": "./dist/platforms/woocommerce.d.ts"
+      "import": {
+        "types": "./dist/platforms/woocommerce.d.ts",
+        "default": "./dist/platforms/woocommerce.js"
+      },
+      "require": {
+        "types": "./dist/platforms/woocommerce.d.cts",
+        "default": "./dist/platforms/woocommerce.cjs"
+      }
     },
     "./platforms/stripe": {
-      "import": "./dist/platforms/stripe.js",
-      "require": "./dist/platforms/stripe.cjs",
-      "types": "./dist/platforms/stripe.d.ts"
+      "import": {
+        "types": "./dist/platforms/stripe.d.ts",
+        "default": "./dist/platforms/stripe.js"
+      },
+      "require": {
+        "types": "./dist/platforms/stripe.d.cts",
+        "default": "./dist/platforms/stripe.cjs"
+      }
     }
   },
   "files": [

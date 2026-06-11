@@ -13,6 +13,10 @@ import {
   valueId,
 } from "../primitives.js";
 import type { CommitmentState } from "../states.js";
+import { applyCommitmentPath } from "../transitions.js";
+
+/** The synthetic party recorded as the actor of adapter-built history entries. */
+const ADAPTER_ACTOR = partyId("system:woocommerce-adapter");
 
 export type WooOrderStatus =
   | "pending"
@@ -51,8 +55,11 @@ function orderState(order: WooOrder): CommitmentState {
   switch (order.status) {
     case "pending":
       return { type: "Proposed" };
-    case "processing":
+    // on-hold is awaiting payment/stock — the order is proposed, not yet
+    // accepted. (Previously mis-mapped to Accepted alongside `processing`.)
     case "on-hold":
+      return { type: "Proposed" };
+    case "processing":
       return { type: "Accepted" };
     case "completed":
       return { type: "Fulfilled" };
@@ -66,11 +73,11 @@ function orderState(order: WooOrder): CommitmentState {
 
 export function fromWooOrder(order: WooOrder): Commitment {
   const buyer = order.customer_id ? partyId(String(order.customer_id)) : partyId("woo_guest");
-  const c = newCommitment(buyer, partyId("woo_store"));
-  return {
-    ...c,
+  // Fresh Draft → canonical path to the final state, so the commitment carries
+  // a valid history (see transitions.ts / checkI4TemporalIntegrity).
+  const draft: Commitment = {
+    ...newCommitment(buyer, partyId("woo_store")),
     id: commitmentId(String(order.id)),
-    state: orderState(order),
     subject: {
       offered: [],
       requested: [
@@ -83,6 +90,7 @@ export function fromWooOrder(order: WooOrder): Commitment {
       ],
     },
   };
+  return applyCommitmentPath(draft, orderState(order), ADAPTER_ACTOR, "woocommerce-adapter");
 }
 
 export function fromWooCart(cart: WooCart): Intent {
@@ -91,6 +99,8 @@ export function fromWooCart(cart: WooCart): Intent {
 }
 
 export function fromWooCustomer(customer: WooCustomer): Party {
+  // WooCommerce customer payloads carry no locale here; en/USD/US is an explicit
+  // fallback — overwrite `.locale` when the caller knows the real locale.
   return individual(partyId(String(customer.id)), { language: "en", currency: "USD", jurisdiction: "US" });
 }
 

@@ -37,25 +37,38 @@ They pattern-match against informal examples and reproduce informal bugs.
 
 ## The Solution
 
-Warp is a formal commerce specification with a type system. Five primitives that
-hold across every commerce domain. Six invariants the compiler enforces.
-TypeScript types that make the wrong thing impossible to express.
+Warp is a formal commerce specification with a typed vocabulary and runtime
+validators. Five primitives that hold across every commerce domain. Six
+invariants you can validate at runtime. TypeScript types where the compiler
+catches what types can catch — money that can't exist without a currency —
+and runtime validators catch the rest.
 
 ```typescript
 import { type Money, transitionCommitment } from "@warp-lang/commerce-types"
 
-// Money always carries currency — enforced by the type
+// Money always carries currency — this IS a compile-time guarantee:
+// `{ amount: 150 }` is a type error. You cannot construct money without a currency.
 const total: Money = { amount: 150, currency: "MAD" }
 
-// State transitions validated against the 26-transition table
+// State transitions ARE enforced — by the transition functions, at runtime.
+// transitionCommitment rejects any move not in the 26-transition table.
 const result = transitionCommitment(order, { type: "Fulfilled" }, actorId)
 // result.ok === false for an invalid transition (Draft → Fulfilled,
 // Fulfilled → Proposed, …); result.error explains why
 ```
 
 When AI coding models see these types in your project, they generate code that
-satisfies them. The TypeScript compiler enforces the invariants. Correct
-commerce code becomes the path of least resistance.
+satisfies them. The transition functions reject illegal state moves; the
+`auditCommerce` / `checkI*` validators report invariant violations on demand.
+Correct commerce code becomes the path of least resistance.
+
+> **What this package is:** a typed commerce vocabulary with runtime validators.
+> It is **not** a compiler, and it does not make every invariant impossible to
+> violate — invariants 1, 3, 4, 5, and 6 are *runtime audits* you invoke, not
+> compile-time guarantees. The hosted Warp compiler at
+> [warp.aimer.ma](https://warp.aimer.ma) enforces the invariants at compile time
+> for `.warp` workflows; this package gives you the types and the runtime checks
+> to use the same model directly in TypeScript.
 
 ---
 
@@ -71,13 +84,19 @@ npm install @warp-lang/commerce-types
 
 ## For AI Coding Agents
 
-Add to your project root:
+Add to your project root — **pin to a reviewed commit SHA**, not `main`:
 
 ```bash
-curl -o CLAUDE.md https://raw.githubusercontent.com/yasirlts/warp-lang/main/CLAUDE.md
+# Replace <COMMIT_SHA> with a commit you've reviewed:
+curl -o CLAUDE.md https://raw.githubusercontent.com/yasirlts/warp-lang/<COMMIT_SHA>/CLAUDE.md
 ```
 
-Claude Code, Cursor, and any CLAUDE.md-aware agent will validate all commerce
+> **Why a SHA, not `main`:** CLAUDE.md becomes part of your AI agent's standing
+> instructions. Fetching it from an unpinned branch hands whoever can push to
+> that branch unreviewed write access to those instructions — a supply-chain /
+> prompt-injection risk. Pin to a commit you've read, and bump it deliberately.
+
+Claude Code, Cursor, and any CLAUDE.md-aware agent will then validate commerce
 code against the Warp model automatically.
 
 ---
@@ -114,7 +133,12 @@ necessary.
 
 ## The Six Invariants
 
-The compiler enforces these. You cannot violate them.
+This package provides the types and **runtime validators** for these — call
+`auditCommerce(...)` or the individual `checkI*` functions to validate a set of
+commerce objects and get back a list of violations. (State transitions, I-2, are
+additionally enforced *as you build* by the `transition*` functions.) The hosted
+Warp compiler at [warp.aimer.ma](https://warp.aimer.ma) enforces all six at
+compile time for `.warp` workflows.
 
 ```
 I-1  Value Conservation     Money always carries currency.
@@ -175,10 +199,10 @@ Get a tenant id and key in 30 seconds — see the
 
 | Component | Status |
 |-----------|--------|
-| Commerce Model | v0.2 stable |
-| TypeScript types | [v0.1 — live on npm](https://www.npmjs.com/package/@warp-lang/commerce-types) |
+| Commerce Model | v0.3 stable |
+| TypeScript types | [v0.3.1 — live on npm](https://www.npmjs.com/package/@warp-lang/commerce-types) |
 | Python types | planned |
-| Compiler | Live — 6 invariant checks |
+| Compiler | Hosted at warp.aimer.ma — 6 invariant checks (separate from this package) |
 | Runtime | Live at warp.aimer.ma |
 
 ---

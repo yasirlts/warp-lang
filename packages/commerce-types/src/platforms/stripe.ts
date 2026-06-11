@@ -8,6 +8,10 @@ import type { CurrencyCode, Money } from "../money.js";
 import type { Commitment, Party, Value } from "../primitives.js";
 import { commitmentId, individual, newCommitment, partyId, valueId } from "../primitives.js";
 import type { CommitmentState } from "../states.js";
+import { applyCommitmentPath } from "../transitions.js";
+
+/** The synthetic party recorded as the actor of adapter-built history entries. */
+const ADAPTER_ACTOR = partyId("system:stripe-adapter");
 
 export type StripePaymentIntentStatus =
   | "requires_payment_method"
@@ -35,26 +39,46 @@ export interface StripePrice {
   currency: string;
 }
 
-/** Currencies Stripe treats as zero-decimal (amount is already the whole unit). */
+/**
+ * Currencies with no minor unit — the Stripe amount is already the whole unit.
+ * (Uppercase; `minorUnitFactor` normalizes case.)
+ */
 const ZERO_DECIMAL = new Set([
-  "bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx",
-  "vnd", "vuv", "xaf", "xof", "xpf",
+  "JPY", "KRW", "VND", "CLP", "ISK", "XAF", "XOF", "XPF", "BIF", "DJF",
+  "GNF", "KMF", "MGA", "PYG", "RWF", "UGX", "VUV",
 ]);
+
+/**
+ * Currencies with THREE minor digits (millimes/fils) — the Stripe amount is the
+ * whole unit × 1000, NOT × 100. TND is in this package's featured currency list;
+ * treating it as two-decimal made every TND amount 10× wrong.
+ */
+const THREE_DECIMAL = new Set(["TND", "BHD", "KWD", "OMR", "JOD"]);
+
+/**
+ * The integer factor between a currency's whole unit and its Stripe minor unit:
+ * 1 (zero-decimal), 1000 (three-decimal), or 100 (the default two-decimal case).
+ */
+function minorUnitFactor(currency: string): number {
+  const c = currency.toUpperCase();
+  if (ZERO_DECIMAL.has(c)) return 1;
+  if (THREE_DECIMAL.has(c)) return 1000;
+  return 100;
+}
 
 /** Convert a Stripe minor-unit amount into Warp `Money`. */
 export function fromStripeAmount(amount: number, currency: string): Money {
   const code = currency.toUpperCase() as CurrencyCode;
-  if (ZERO_DECIMAL.has(currency.toLowerCase())) return { amount, currency: code };
-  return { amount: amount / 100, currency: code };
+  return { amount: amount / minorUnitFactor(currency), currency: code };
 }
 
-/** Convert Warp `Money` into a Stripe `{ amount, currency }`. */
+/**
+ * Convert Warp `Money` into a Stripe `{ amount, currency }`. Rounds to an
+ * integer after scaling so `1.5 * 1000` is exactly `1500`, never `1499.9999`.
+ */
 export function toStripeAmount(money: Money): { amount: number; currency: string } {
-  const currency = money.currency.toLowerCase();
-  const amount = ZERO_DECIMAL.has(currency)
-    ? Math.round(money.amount)
-    : Math.round(money.amount * 100);
-  return { amount, currency };
+  const amount = Math.round(money.amount * minorUnitFactor(money.currency));
+  return { amount, currency: money.currency.toLowerCase() };
 }
 
 function intentState(pi: StripePaymentIntent): CommitmentState {
@@ -72,11 +96,11 @@ function intentState(pi: StripePaymentIntent): CommitmentState {
 
 export function fromStripePaymentIntent(pi: StripePaymentIntent): Commitment {
   const buyer = pi.customer ? partyId(pi.customer) : partyId("stripe_guest");
-  const c = newCommitment(buyer, partyId("stripe_merchant"));
-  return {
-    ...c,
+  // Fresh Draft → canonical path to the final state, so the commitment carries
+  // a valid history (see transitions.ts / checkI4TemporalIntegrity).
+  const draft: Commitment = {
+    ...newCommitment(buyer, partyId("stripe_merchant")),
     id: commitmentId(pi.id),
-    state: intentState(pi),
     subject: {
       offered: [],
       requested: [
@@ -89,9 +113,12 @@ export function fromStripePaymentIntent(pi: StripePaymentIntent): Commitment {
       ],
     },
   };
+  return applyCommitmentPath(draft, intentState(pi), ADAPTER_ACTOR, "stripe-adapter");
 }
 
 export function fromStripeCustomer(customer: StripeCustomer): Party {
+  // Stripe customer payloads carry no locale here; en/USD/US is an explicit
+  // fallback — overwrite `.locale` when the caller knows the real locale.
   return individual(partyId(customer.id), { language: "en", currency: "USD", jurisdiction: "US" });
 }
 

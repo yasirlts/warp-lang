@@ -6,7 +6,7 @@
  */
 
 import type { Money } from "./money.js";
-import { CurrencyMismatchError } from "./money.js";
+import { CurrencyMismatchError, moneyEquals } from "./money.js";
 import type { Commitment, Fulfillment, Party, PartyCapacity, PartyID, Value } from "./primitives.js";
 import { isValidCommitmentTransition } from "./transitions.js";
 
@@ -251,12 +251,18 @@ export function checkI6TreeConsistency(
     });
     return out;
   }
-  if (childAmount !== parentSum.total.amount) {
+  // Compare with a minor-unit tolerance, NOT exact float equality: children of
+  // 0.1 + 0.2 MAD must reconcile against a parent of 0.3 MAD even though
+  // 0.1 + 0.2 === 0.30000000000000004 in IEEE-754. `moneyEpsilon` is half the
+  // currency's smallest minor unit (0.005 for 2-decimal currencies), so only a
+  // real discrepancy (≥ half a cent) is flagged. For exact splits that never
+  // drift in the first place, build children with `allocate()` (money.ts).
+  if (!moneyEquals(childAmount, parentSum.total.amount, parentSum.total.currency)) {
     out.push({
       invariant: "I-6",
       name: "Commitment Tree Consistency",
       description: `Children of ${parent.id} sum to ${childAmount} ${parentSum.total.currency} but the parent requests ${parentSum.total.amount} ${parentSum.total.currency}.`,
-      fix: "Child commitment values must sum to the parent; recalculate after any substitution or cancellation.",
+      fix: "Child commitment values must sum to the parent; recalculate after any substitution or cancellation (use allocate() for exact splits).",
     });
   }
   return out;

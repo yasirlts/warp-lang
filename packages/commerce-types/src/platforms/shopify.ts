@@ -16,7 +16,11 @@ import {
   partyId,
   valueId,
 } from "../primitives.js";
-import type { CommitmentState } from "../states.js";
+import type { CommitmentState, FulfillmentState } from "../states.js";
+import { applyCommitmentPath, applyFulfillmentPath } from "../transitions.js";
+
+/** The synthetic party recorded as the actor of adapter-built history entries. */
+const ADAPTER_ACTOR = partyId("system:shopify-adapter");
 
 // --- minimal Shopify type stubs (only the fields we map) -------------------
 
@@ -79,11 +83,12 @@ function orderState(order: ShopifyOrder): CommitmentState {
 
 export function fromShopifyOrder(order: ShopifyOrder): Commitment {
   const buyer = order.customer ? partyId(order.customer.id) : partyId("shopify_guest");
-  const c = newCommitment(buyer, partyId("shopify_store"));
-  return {
-    ...c,
+  // Start from a fresh Draft and replay the canonical path to the order's final
+  // state, so the returned commitment carries a VALID history (not an empty one
+  // that would falsely fail checkI4TemporalIntegrity — see transitions.ts).
+  const draft: Commitment = {
+    ...newCommitment(buyer, partyId("shopify_store")),
     id: commitmentId(order.id),
-    state: orderState(order),
     subject: {
       offered: [],
       requested: [
@@ -96,6 +101,7 @@ export function fromShopifyOrder(order: ShopifyOrder): Commitment {
       ],
     },
   };
+  return applyCommitmentPath(draft, orderState(order), ADAPTER_ACTOR, "shopify-adapter");
 }
 
 export function fromShopifyCart(cart: ShopifyCart): Intent {
@@ -104,6 +110,9 @@ export function fromShopifyCart(cart: ShopifyCart): Intent {
 }
 
 export function fromShopifyCustomer(customer: ShopifyCustomer): Party {
+  // Shopify's order/customer payloads carry no locale; en/USD/US is an explicit
+  // fallback. Callers with a known locale should overwrite `.locale` after
+  // mapping (or use `individual(id, knownLocale)` directly).
   return individual(partyId(customer.id), { language: "en", currency: "USD", jurisdiction: "US" });
 }
 
@@ -117,19 +126,27 @@ export function fromShopifyProduct(product: ShopifyProduct): Value {
 }
 
 export function fromShopifyFulfillment(f: ShopifyFulfillment): Fulfillment {
-  const base = newFulfillment(commitmentId(f.order_id));
-  const ful = { ...base, id: fulfillmentId(f.id) };
+  const base = { ...newFulfillment(commitmentId(f.order_id)), id: fulfillmentId(f.id) };
+  let target: FulfillmentState;
   switch (f.status) {
     case "success":
-      return { ...ful, state: { type: "Completed" } };
+      target = { type: "Completed" };
+      break;
     case "open":
     case "pending":
-      return { ...ful, state: { type: "InProgress" } };
+      target = { type: "InProgress" };
+      break;
     case "failure":
-      return { ...ful, state: { type: "Failed", reason: "shopify failure", recoverable: true } };
+      target = { type: "Failed", reason: "shopify failure", recoverable: true };
+      break;
     case "cancelled":
-      return { ...ful, state: { type: "Reversed", reason: "cancelled", initiated_by: partyId("shopify"), at: new Date().toISOString() } };
+      target = { type: "Reversed", reason: "cancelled", initiated_by: partyId("shopify"), at: new Date().toISOString() };
+      break;
   }
+  // Replay the path to `target` so the fulfillment carries a valid history and
+  // `started_at` / `completed_at` are set (an empty-history Completed would
+  // otherwise be inconsistent with the auditor's temporal checks).
+  return applyFulfillmentPath(base, target, ADAPTER_ACTOR);
 }
 
 export function toShopifyOrderStatus(state: CommitmentState): ShopifyOrderStatus {
