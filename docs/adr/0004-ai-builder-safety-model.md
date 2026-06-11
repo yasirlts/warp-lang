@@ -1,0 +1,170 @@
+# ADR-0004: AI Builder Safety Model
+
+Date: 2026-05-22
+Status: ACCEPTED
+Accepted: 2026-05-22
+Deciders: Yasir Ahmad (CTO)
+
+## Context
+
+[CONTRACTS.md](../../CONTRACTS.md) C-06 forbids the AI builder from
+showing a non-compiling workflow to the merchant. The compiler is
+the safety net. But the AI will fail to compile sometimes — the
+question is what happens then.
+
+The merchant of the AI builder is, by definition, a non-engineer.
+They have no way to debug a broken workflow graph. They will see
+"AI made workflow → activate" and trust the result. The AI must
+not betray that trust.
+
+## Decision points
+
+1. How many compile → fix → recompile cycles before the AI gives
+   up?
+2. When the AI gives up, what does the merchant see?
+3. What does the AI tell the merchant to do differently?
+4. In what language?
+5. How do we distinguish "AI couldn't figure it out" from "AI
+   produced a compiling workflow but it doesn't match what the
+   merchant actually wanted"?
+
+## Decision
+
+### Two safety layers, two failure modes
+
+C-06 alone is not sufficient. The compiler enforces
+**type-correctness**: every input gets a value of the right type,
+every wire connects compatible ports. But the compiler cannot
+enforce **intent-correctness**: that the workflow it just validated
+is the workflow the merchant actually wanted.
+
+A merchant who asks for "send a WhatsApp every hour forever" can
+produce a workflow that compiles perfectly and is semantically
+insane. The compiler will not save them. They need a second gate
+that sits between the compiled graph and activation, framed in
+their language, not in types.
+
+This ADR establishes two gates that must both pass before a workflow
+goes live:
+
+- **C-06 (type-correctness):** the compiler accepts the graph.
+- **The summary gate (intent-correctness):** the merchant reads a
+  plain-language summary of what the compiled graph actually does
+  and explicitly approves it.
+
+The summary gate is the topic of this ADR. C-06 is settled by
+[CONTRACTS.md](../../CONTRACTS.md).
+
+### Round budget: 3
+
+- **Round 1:** AI generates initial graph from merchant prompt.
+- If compile fails → AI sees full compiler errors → tries again (round 2).
+- If round 2 fails → AI tries once more (round 3).
+- If round 3 fails → AI returns a structured `ClarificationRequest`,
+  not a broken graph.
+
+Three rounds matches the observed iteration count in early
+prototypes (most fixable graphs converge in 1–2 rounds; rejecting
+at 3 catches the cases that need human input without burning tokens
+in an infinite loop).
+
+### What the merchant sees on failure
+
+A `ClarificationRequest` is a structured object — never a stack
+trace, never a compiler error, never the failed graph:
+
+```json
+{
+  "summary": "I need a bit more info to build this.",
+  "specifics": [
+    "When you said 'send them a message', do you mean WhatsApp or email?",
+    "What language should the message be in?"
+  ],
+  "language": "AR"
+}
+```
+
+The merchant clarifies. The AI tries again with a fresh 3-round
+budget.
+
+### Language
+
+`ClarificationRequest.language` matches the merchant's session
+language per P-7. Arabic merchants see Arabic clarifications.
+
+### The summary gate — generated from the compiled graph
+
+The AI builder MUST present a plain-language summary of the workflow
+it generated before activation:
+
+> I built a workflow that: waits 30 minutes after a cart is
+> abandoned, then sends a WhatsApp message in the customer's
+> language. After 24 hours, if they still haven't checked out,
+> I send a follow-up with a discount offer.
+
+The merchant either approves, or asks for changes. **Approval is
+the activation gate** — not the compiler pass.
+
+**Critical:** the summary is generated **from the compiled graph,
+not from the AI's original interpretation of the merchant's
+prompt.** This is the mechanism that catches the case where the AI
+misunderstood the request but produced a compiling-but-wrong graph.
+Reading the compiled graph as the source of truth means the summary
+describes what will actually run, not what the AI thought the
+merchant meant. If those diverge, the merchant sees the divergence
+in plain language and says "that's not what I meant" — which is
+exactly what this gate is for.
+
+Concretely: the summary is produced by a separate model call that
+receives the compiled graph as input. It never sees the original
+merchant prompt. (A second call that reconciles the summary against
+the original prompt is allowed for surface polish, but the
+ground-truth pass reads the graph.)
+
+## Consequences
+
+Positive:
+- C-06 is honored: no broken workflow ever reaches activation
+- Merchants get a soft surface for failure (clarification, not
+  errors) — preserves trust
+- Plain-language summary catches semantic mistakes the compiler
+  can't catch
+
+Negative:
+- Three rounds of compilation per failed attempt is expensive in
+  tokens — measure cost
+- Plain-language summary is itself AI-generated; could misrepresent
+  the graph. Mitigation: summary is generated by a different model
+  call than the graph itself, reading the compiled graph (ground
+  truth), not the merchant's original prompt.
+- Merchants who skim the summary and approve without reading
+  produce wrong workflows. Acceptable risk — same failure mode as
+  any tool with a confirmation step.
+
+## Outstanding implementation questions
+
+Resolved by acceptance:
+- Summary gate is kept and framed as the intent-correctness layer
+  complementing C-06.
+- Summary is generated from the compiled graph as ground truth,
+  not from the merchant's original prompt.
+
+Deferred to implementation:
+- Three rounds is a gut number — collect data from internal tests
+  during Phase 3 prototyping and revisit if the ceiling is too low
+  or too generous.
+- Pricing — charge per AI builder generation, or only per active
+  workflow? Affects whether token cost shapes the round budget.
+- Should the summary call be a model call or deterministic graph-
+  to-text rendering? Deterministic is cheaper and audit-friendly
+  but reads more mechanically. Start with a model call; build the
+  deterministic version as a fallback when the model is unavailable.
+
+## Enforcement
+
+- The AI builder API endpoint refuses to return any graph that
+  fails the compiler. It returns either a compiling graph or a
+  `ClarificationRequest`. No other shapes.
+- A merchant-facing client cannot bypass the summary step.
+  Activation requires explicit confirmation of the summary, not
+  just the graph.

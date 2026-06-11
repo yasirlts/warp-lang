@@ -1,0 +1,40 @@
+// Cart-recovery workflow — the canonical .warp example for visual
+// verification of the warp-language extension's syntax highlighting.
+//
+// Open this file in VS Code with the extension active. The language
+// picker in the bottom right should read "Warp"; the file should
+// render with the colours documented in README.md.
+
+project "cart_recovery" {
+    version = "1.0.0"
+    tenant  = "tenant_aimer_prod_001"
+
+    CartAbandoned trigger {
+        min_value: Currency(200, MAD)
+        after:     Duration(30, minutes)
+    }
+
+    ACPGetCustomerProfile profile {
+        customer_id: trigger.customer_id
+    }
+
+    WhatsAppSend first_touch {
+        to:       profile.phone
+        template: "cart_reminder"
+        lang:     profile.language
+    }
+
+    DelayFor wait {
+        duration: Duration(24, hours)
+    }
+
+    ACPEvaluateStrategy offer {
+        customer_id: trigger.customer_id
+    }
+
+    WhatsAppSend followup {
+        to:       profile.phone
+        template: "cart_offer"
+        lang:     profile.language
+    }
+}

@@ -1,0 +1,9 @@
+# Generated-workflow output directory.
+#
+# `POST /api/v1/workflows/compile` writes files here as
+# `{workflow_name}.rs`. They are NOT yet pulled into the crate's
+# compilation graph in Phase 3 — see `src/lib.rs` for the Phase 4
+# build.rs wiring plan.
+#
+# This file (`.gitkeep`) exists to keep the directory in the repo;
+# git would otherwise drop an empty dir.

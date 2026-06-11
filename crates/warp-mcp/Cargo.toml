@@ -1,0 +1,32 @@
+[package]
+name = "warp-mcp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Warp Model Context Protocol server — exposes Warp workflow tools to MCP-compatible AI agents over stdio JSON-RPC"
+
+[[bin]]
+name = "warp-mcp"
+path = "src/main.rs"
+
+[lib]
+name = "warp_mcp"
+path = "src/lib.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true }
+reqwest.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+warp-core.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+# Integration tests in tests/ link only against the crate + dev-deps, so the
+# commerce-advisor integration tests need these explicitly.
+serde_json.workspace = true
+reqwest.workspace = true

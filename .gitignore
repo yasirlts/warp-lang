@@ -2,3 +2,7 @@
 node_modules/
 dist/
 *.tsbuildinfo
+
+# Rust build output (the compiler workspace). Cargo.lock IS committed.
+/target/
+**/target/

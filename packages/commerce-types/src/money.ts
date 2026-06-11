@@ -1,8 +1,8 @@
 /**
  * Money — the typed monetary value of the Warp Commerce Model (Primitive 2:
  * Value → ValueForm → Money). Money ALWAYS carries its currency; there is no
- * amount without a denomination. This is how Invariant 1 (Value Conservation)
- * becomes impossible to violate by accident: you cannot add MAD to EUR.
+ * amount without a denomination. This is how accidental currency mixing is
+ * caught rather than silently allowed: you cannot add MAD to EUR.
  */
 
 /**

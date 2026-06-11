@@ -1,0 +1,56 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/warp-core",
+    "crates/warp-mcp",
+    "crates/warp-generated",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Yasir Ahmad", "Lamar Tech Solutions"]
+repository = "https://github.com/yasirlts/warp-lang"
+license = "MIT"
+
+[workspace.dependencies]
+# Execution foundation — Restate's MIT-licensed SDK provides durable
+# execution, durable sleep, awakeables, and per-key isolation. See
+# docs/adr/0006-restate-as-execution-foundation.md.
+restate-sdk = "0.10"
+
+# Async runtime + utilities
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Decimal arithmetic — required for the Currency type (no float drift on money)
+rust_decimal = { version = "1", features = ["serde-with-str"] }
+
+# Logging / tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# HTTP client — used by the AI builder (warp-core) to call the Anthropic API
+# and by warp-mcp's commerce-advisor tools. rustls-tls keeps the TLS stack
+# in one place.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# UUID generation — v4 for model-primitive ids (IntentID/CommitmentID/
+# FulfillmentID::new_v4) and scratch names; v5 for deterministic ids.
+uuid = { version = "1", features = ["v4", "v5"] }
+
+# Internal crates (the published language workspace — compiler + MCP tools +
+# the generated-workflow target crate). The node catalog, storage, and the
+# commercial server are intentionally NOT part of this open workspace.
+warp-core = { path = "crates/warp-core" }

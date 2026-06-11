@@ -6,6 +6,30 @@ specification for all commerce logic.
 Specification: https://github.com/yasirlts/warp-lang/blob/main/spec/COMMERCE_MODEL.md
 Type package: npm install @warp-lang/commerce-types
 
+Warp is a typed, compiled commerce workflow language (an original Rust
+compiler; Restate for durable execution) plus the
+`@warp-lang/commerce-types` runtime validators. Apply these rules when you
+write `.warp` workflows or TypeScript commerce code in this project.
+
+---
+
+## What the compiler actually enforces (be precise)
+
+The Warp compiler does **not** enforce all six invariants, and the types do
+**not** make every mistake impossible. State the truth:
+
+- **I-3 Capacity**, **I-4 Temporal Integrity**, **I-5 Identity Permanence** —
+  enforced at compile time; a violation blocks compilation.
+- **I-6 Tree Consistency** — partially checked (literal child/parent values).
+- **I-1 Value Conservation** — a *warning* only; currency mixing compiles with
+  a warning, it does not block.
+- **I-2 State Monotonicity** — not yet enforced at compile time.
+
+For the invariants the compiler does not block, enforce them yourself: use the
+`transition*` functions (which reject invalid state moves) and the runtime
+validators `auditCommerce` / `checkI*` from `@warp-lang/commerce-types`. The
+rules below are the standards to code to regardless of what the compiler blocks.
+
 ---
 
 ## Core Rule

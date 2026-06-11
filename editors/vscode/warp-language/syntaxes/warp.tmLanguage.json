@@ -1,0 +1,141 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Warp",
+  "scopeName": "source.warp",
+  "fileTypes": ["warp"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#project-header" },
+    { "include": "#header-fields" },
+    { "include": "#node-types" },
+    { "include": "#config-keys" },
+    { "include": "#commerce-types" },
+    { "include": "#references" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.warp",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "project-header": {
+      "patterns": [
+        {
+          "match": "\\b(project)\\s+(\"[^\"]+\")",
+          "captures": {
+            "1": { "name": "keyword.control.warp" },
+            "2": { "name": "string.quoted.double.warp entity.name.section.warp" }
+          }
+        }
+      ]
+    },
+    "header-fields": {
+      "patterns": [
+        {
+          "name": "keyword.other.warp",
+          "match": "\\b(version|tenant)\\b"
+        }
+      ]
+    },
+    "node-types": {
+      "patterns": [
+        {
+          "comment": "Built-in Warp node types — mirrors BUILTIN_NODE_SPECS in warp-core/src/dsl/type_checker.rs",
+          "name": "entity.name.type.node.warp",
+          "match": "\\b(CartAbandoned|OrderPlaced|WhatsAppSend|DelayFor|ACPGetCustomerProfile|ACPEvaluateStrategy)\\b"
+        }
+      ]
+    },
+    "config-keys": {
+      "patterns": [
+        {
+          "comment": "Identifier followed by a colon at the start of an indented line — config key.",
+          "match": "^\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*:",
+          "captures": {
+            "1": { "name": "variable.parameter.config.warp" }
+          }
+        }
+      ]
+    },
+    "commerce-types": {
+      "patterns": [
+        {
+          "comment": "Currency(amount, code) — typed money literal.",
+          "match": "\\b(Currency)\\s*\\(\\s*([0-9]+(?:\\.[0-9]+)?)\\s*,\\s*(MAD|EUR|USD|SAR|AED)\\s*\\)",
+          "captures": {
+            "1": { "name": "support.type.commerce.currency.warp" },
+            "2": { "name": "constant.numeric.warp" },
+            "3": { "name": "support.constant.currency-code.warp" }
+          }
+        },
+        {
+          "comment": "Duration(amount, unit) — typed duration literal.",
+          "match": "\\b(Duration)\\s*\\(\\s*([0-9]+)\\s*,\\s*(seconds|minutes|hours|days)\\s*\\)",
+          "captures": {
+            "1": { "name": "support.type.commerce.duration.warp" },
+            "2": { "name": "constant.numeric.warp" },
+            "3": { "name": "support.constant.duration-unit.warp" }
+          }
+        }
+      ]
+    },
+    "references": {
+      "patterns": [
+        {
+          "comment": "instance.field — reference to a previously declared instance's output.",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\.([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "variable.other.warp" },
+            "2": { "name": "variable.other.member.warp" }
+          }
+        },
+        {
+          "comment": "Bare `trigger` keyword — first node of category triggers.",
+          "name": "variable.language.trigger.warp",
+          "match": "\\btrigger\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.warp",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.warp",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.warp",
+          "match": "\\b[0-9]+(?:\\.[0-9]+)?\\b"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.section.block.warp",
+          "match": "[{}]"
+        },
+        {
+          "name": "punctuation.separator.warp",
+          "match": "[:,=]"
+        }
+      ]
+    }
+  }
+}

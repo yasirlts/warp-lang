@@ -1,0 +1,24 @@
+[package]
+name = "warp-generated"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Warp generated workflows — output of the .warp DSL compiler. Files under `generated/` are written by the management API's POST /api/v1/workflows/compile and rebuilt by `cargo build -p warp-generated` ahead of a warp-server restart."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# warp-generated is a stable shell crate in Phase 3 — `src/lib.rs`
+# carries the registration surface and exposes a `count()` helper.
+# Files under `generated/` are written by the compile endpoint but
+# are NOT yet wired into the crate's compilation graph; that wiring
+# (build.rs auto-includes the contents of `generated/` into the
+# crate) lands in Phase 4 with the hot-reload story.
+#
+# When Phase 4 turns on, the workspace's `warp-core` + `warp-catalog`
+# will become real dependencies here — the generated workflows use
+# their types. Phase 3 keeps the dep-list minimal so the crate
+# compiles cleanly on every push.

@@ -1,0 +1,41 @@
+{
+  "name": "warp-language",
+  "displayName": "Warp Commerce Language",
+  "description": "Syntax highlighting + basic language support for .warp commerce workflow files.",
+  "version": "0.1.0",
+  "publisher": "lamar-tech",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yasirlts/warp",
+    "directory": "editors/vscode/warp-language"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "warp",
+        "aliases": [
+          "Warp",
+          "warp"
+        ],
+        "extensions": [
+          ".warp"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "warp",
+        "scopeName": "source.warp",
+        "path": "./syntaxes/warp.tmLanguage.json"
+      }
+    ]
+  }
+}
