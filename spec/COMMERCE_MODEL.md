@@ -1,6 +1,6 @@
 # WARP COMMERCE MODEL
 ## The Formal Specification of Commerce
-### Version 0.2 — Market-Making Commerce Incorporated
+### Version 0.3 — Full Commerce Vocabulary
 
 ---
 
@@ -14,15 +14,16 @@ This is not a technical specification for any particular system.
 It contains no implementation code, no platform references, no tooling
 decisions. It answers one question: what is commerce, stated formally.
 
-**Stability:** This document is in active development. The five primitives
-are stable. The invariants are stable. Extensions are being validated
-through adversarial testing across commerce domains.
+**Stability:** The five primitives are stable. The six invariants
+are stable (with one refined clause in Invariant 1). Extensions
+validated through adversarial testing across 40+ commerce domains.
 
-**v0.2 changes from v0.1:** Four additions following adversarial testing
-of market-making commerce (auctions, prediction markets, derivatives,
-two-sided matching, collateral lending). The five primitives held.
-Additions: CommitmentState::Tendered, ValueState::UnderAuction,
-AuctionProcess auxiliary record, corrected lifecycle diagram.
+**v0.3 changes from v0.2:** Ten additional commerce domains tested —
+real estate, healthcare, government procurement, wholesale/distribution,
+marketplace platforms, cross-border trade finance, event commerce,
+loyalty programs, social/group commerce, and environmental markets.
+The five primitives held across all domains. See Changelog for
+full extension list.
 
 ---
 
@@ -107,22 +108,28 @@ next transitions without human input.
 
 Everything in commerce derives from five primitives. No commerce operation
 anywhere in the world requires a concept outside these five. This claim
-has been tested adversarially across physical goods commerce (including
-Amazon, Alibaba, Temu, Shein, and Net-a-Porter), multi-recipient gifting
-with returns, physical retail POS including multi-store chains and
+has been tested adversarially across 40+ commerce domains: physical goods
+commerce (Amazon, Alibaba, Temu, Shein, Net-a-Porter), multi-recipient
+gifting with returns, physical retail POS including multi-store chains and
 franchise models, services commerce including appointments, subscriptions,
 gig economy, and professional services with milestones, financial commerce
 including BNPL, loans, insurance, escrow, and currency exchange, digital
 commerce including software licensing, streaming, API access, and NFTs,
-and market-making commerce including auctions, prediction markets,
-derivatives, two-sided matching, and collateral lending.
+market-making commerce including auctions, prediction markets, derivatives,
+two-sided matching, and collateral lending, real estate including title
+transfer and financing contingencies, healthcare including insurance
+adjudication and prescription requirements, government procurement including
+scored selection and award protests, wholesale and distribution including
+blanket POs and volume pricing, marketplace platforms with double-sided
+commission structures, cross-border trade finance including documentary
+collections and customs release, event commerce including cascade
+cancellation, loyalty programs including point creation and redemption,
+social and group commerce with threshold-activated commitments, and
+environmental markets including carbon credit verification and retirement.
 
-The five primitives hold across all domains. Extensions to these primitives
-are required for specific domains. No sixth primitive has been found
-necessary across any tested domain including market-making commerce.
-Auctions require two extensions to existing primitives —
-CommitmentState::Tendered and ValueState::UnderAuction — and one
-auxiliary coordination record (AuctionProcess), but no new primitive.
+The five primitives hold across all tested domains. Extensions to these
+primitives are required for specific domains. No sixth primitive has been
+found necessary.
 
 **On the "pricing is outside the model" boundary:**
 
@@ -303,6 +310,33 @@ ValueForm {
           applies_to: Vec<TransactionType>
         }
       }
+      EventAccess {                // v0.3 — perishable event tickets
+        event: String              // event identifier
+        location: String
+        date: Date
+        entry_window: TimeWindow
+        transferable: bool
+        expiry: EventEnd           // value expires when event ends
+                                   // EventEnd is a FinalizationTrigger variant
+      }
+      DocumentaryCollection {     // v0.3 — trade finance title documents
+        held_by: PartyID           // bank holding the documents
+        release_condition: ReleaseCondition
+                                   // documents are Exclusive DigitalGoods
+                                   // only one party holds them at a time
+                                   // released on payment confirmation
+      }
+      CarbonCredit {               // v0.3 — verified environmental instrument
+        standard: String           // "Verra VCS", "Gold Standard", etc.
+        vintage: u32               // year credits were generated
+        project_id: String
+        project_type: String       // "Reforestation", "Solar", etc.
+        location: String
+        quantity: Quantity
+        retired: bool              // true = permanently consumed, ValueState::Retired
+        additionality_verified: bool
+        verification_body: Option<String>
+      }
     }
   }
 
@@ -431,9 +465,23 @@ ValueState {
   }
 }
 
-// For exclusive digital goods (NFTs, unique certificates):
+// For exclusive digital goods (NFTs, unique certificates,
+// carbon credits, one-time use instruments):
 // Uses the same physical goods ValueState (Available → Transferred)
-// because exclusivity means transfer follows the same conservation rule
+// because exclusivity means transfer follows the same conservation rule.
+// Additionally gains one terminal state:
+
+// Terminal state for permanently consumed exclusive goods
+Retired {
+  retired_at: Timestamp
+  retired_by: PartyID
+  reason: String
+  certificate: Option<String>
+  // Applies to: carbon credits after offset use,
+  // gift certificates after redemption,
+  // consumed API credits, used coupons
+  // NO transition out of Retired is valid — it is terminal
+}
 ```
 
 **Critical constraint on Money:**
@@ -617,6 +665,38 @@ Commitment {
           pickup_window: TimeWindow
           condition_required: Option<Condition>
         }
+        TitleTransfer {          // v0.3 — real estate, legal ownership transfer
+          mechanism: TitleMechanism {
+            NotarialDeed         // Morocco, France, civil law systems
+            WarrantyDeed         // US common law
+            LandRegistration     // UK, Torrens systems
+          }
+          registry: String       // "Conservation Foncière Casablanca", etc.
+          title_number: Option<String>
+          notary: Option<PartyID>
+        }
+        RecurringDelivery {      // v0.3 — wholesale blanket POs
+          schedule: Frequency
+          quantity_per_delivery: Quantity
+          first_delivery: Timestamp
+          last_delivery: Option<Timestamp>
+          flexibility: Option<QuantityFlexibility> {
+            min_per_delivery: Quantity
+            max_per_delivery: Quantity
+          }
+        }
+        CustomsRelease {         // v0.3 — cross-border, government-controlled release
+          customs_reference: String
+          cleared_at: Timestamp
+          duties_paid: Option<Money>
+          inspection_required: bool
+        }
+        RegistryRetirement {     // v0.3 — carbon credits, permanent consumption recording
+          registry: PartyID
+          retirement_reference: String
+          retired_on_behalf_of: PartyID
+          reason: String
+        }
       }
       address: Option<Address>
       window: Option<DeliveryWindow> {
@@ -667,6 +747,61 @@ Commitment {
           unit: String
           period: Duration
           cap: Option<Money>
+        }
+        PostFulfillment {         // v0.3 — payment after fulfillment AND after a
+                                  // post-fulfillment trigger resolves
+                                  // healthcare: insurer adjudicates after the visit
+                                  // construction: inspection after completion
+          trigger: PostFulfillmentTrigger {
+            InsuranceAdjudication {
+              adjudicator: PartyID
+              claim_reference: Option<String>
+              deadline: Option<Timestamp>
+            }
+            InspectionCompletion {
+              inspector: PartyID
+              standard: Option<String>
+            }
+            AcceptanceTest {      // IT projects, custom manufacturing
+              tester: PartyID
+              criteria: String
+            }
+          }
+        }
+        DocumentsAgainstPayment { // v0.3 — trade finance
+                                  // importer pays bank to receive title documents
+          documents_held_by: PartyID
+          release_condition: ReleaseCondition
+        }
+        Net {                     // v0.3 — B2B credit terms: Net30, Net60, Net90
+          days: u32
+          from: NetTermsAnchor {
+            InvoiceDate
+            DeliveryDate
+            EndOfMonth
+          }
+          early_payment_discount: Option<Decimal>
+        }
+        CommissionSplit {         // v0.3 — marketplace platforms
+          structure: CommissionStructure {
+            SingleSided {
+              rate: Decimal
+              paid_by: PartyRole
+              paid_to: PartyID    // the platform
+            }
+            DoubleSided {
+              buyer_fee: CommissionFee {
+                rate: Decimal
+                paid_to: PartyID
+                added_to: BuyerTotal
+              }
+              seller_fee: CommissionFee {
+                rate: Decimal
+                paid_to: PartyID
+                deducted_from: SellerPayout
+              }
+            }
+          }
         }
       }
       split: Option<Vec<PaymentPart>> {  // split payment (POS loyalty + card + cash)
@@ -741,8 +876,116 @@ Commitment {
         max_concurrent: u32
         enforcement: EnforcementParty
       }
+      FinancingContingency {     // v0.3 — real estate, conditional on lender approval
+        lender: Option<PartyID>
+        amount: Money
+        rate_cap: Option<Decimal>
+        approval_deadline: Timestamp
+        if_not_met: CommitmentState
+      }
+      InspectionContingency {    // v0.3 — real estate, property condition gate
+        inspector: Option<PartyID>
+        deadline: Timestamp
+        if_failed: CommitmentState
+      }
+      PrescriptionRequired {     // v0.3 — healthcare, regulatory requirement
+        prescription: Option<PrescriptionDocument> {
+          reference: String
+          issuer: PartyID
+          issued_at: Timestamp
+          valid_until: Timestamp
+          medication: String
+          quantity: String
+          refills: u32
+        }
+        verified_by: Option<PartyID>
+        must_verify_before: CommitmentStateTransition
+      }
+      RegistryVerification {     // v0.3 — carbon credits, title deeds
+        registry: PartyID
+        must_verify_before: CommitmentStateTransition
+        verifies: Vec<String>
+      }
+      ThresholdActivation {      // v0.3 — group buying, crowdfunding
+        minimum_participants: u32
+        maximum_participants: Option<u32>
+        activation_deadline: Timestamp
+        if_threshold_not_met: CommitmentState
+        if_threshold_met: CommitmentState
+        price_tiers: Option<Vec<GroupPriceTier>> {
+          participants: u32
+          price: Money
+        }
+      }
+      ComplianceDocumentation {  // v0.3 — government procurement
+        required_documents: Vec<String>
+        submission_deadline: Timestamp
+        verified_by: PartyID
+        if_not_submitted: CommitmentState
+      }
+      NoReturnPolicy {           // v0.3 — healthcare, irreversible services
+        basis: String
+        jurisdiction: JurisdictionCode
+      }
+      EventCancellationPolicy {  // v0.3 — event commerce, force majeure
+        if_cancelled: AutoRefund {
+          amount: RefundAmount { FullRefund | PartialRefund { rate: Decimal } }
+          deadline: Duration
+        }
+        if_postponed: CustomerChoice {
+          options: Vec<PostponementOption>
+          decision_window: Duration
+        }
+      }
     }
-    
+
+    // v0.3 — additional CommitmentTerms
+    cascade: Option<CascadeCancellation> {
+      // when parent Commitment is Cancelled, all children automatically
+      // transition to child_transition state (event commerce, franchise,
+      // multi-year contracts, force majeure)
+      trigger: CascadeTrigger {
+        ParentCancelled
+        ParentDisputed
+        ExternalEvent { event_type: String }
+      }
+      applies_to: CascadeScope {
+        AllChildren
+        ChildrenInState { states: Vec<CommitmentState> }
+      }
+      child_transition: CommitmentState
+      auto_refund: Option<RefundPolicy>
+    }
+
+    volume_pricing: Option<VolumePricing> {  // v0.3 — wholesale, tiered pricing
+      tiers: Vec<VolumeTier> {
+        min: u32
+        max: Option<u32>
+        price_per_unit: Money
+      }
+      true_up: Option<TrueUpPolicy>  // year-end reconciliation if tier crossed
+    }
+
+    loyalty: Option<LoyaltyEarnTerm> {  // v0.3 — loyalty programs
+      program: String
+      earn_rate: Decimal             // points per unit of currency spent
+      points_earned: Quantity
+      credited_on: LoyaltyCreditTrigger {
+        FulfillmentComplete
+        PaymentReceived
+      }
+      currency: CurrencyCode         // CurrencyCode::Custom for loyalty points
+    }
+
+    required_documents: Option<RequiredDocuments> {  // v0.3 — trade finance
+      BillOfLading: bool
+      CommercialInvoice: bool
+      PackingList: bool
+      CertificateOfOrigin: bool
+      InsuranceCertificate: bool
+      CustomsDeclaration: bool
+    }
+
     jurisdiction: JurisdictionCode   // governing law
     duration: Option<CommitmentDuration> {
       Fixed { ends_at: Timestamp }
@@ -967,6 +1210,18 @@ AuctionProcess {
     Vickrey {                    // sealed bid, winner pays second-highest price
       reserve_price: Option<Money>
     }
+    ScoredSelection {            // v0.3 — government procurement
+                                 // winner determined by weighted multi-criteria
+                                 // scoring, not just price
+      criteria: Vec<ScoringCriterion> {
+        name: String
+        weight: Decimal          // weights must sum to 1.0
+        max_points: u32
+      }
+      minimum_threshold: Option<u32>  // minimum score to qualify
+      evaluation_committee: Vec<PartyID>
+      publication_required: bool  // must results be published?
+    }
   }
   
   tendered_commitments: Vec<CommitmentID>  // all bids submitted
@@ -986,11 +1241,51 @@ AuctionProcess {
         ReserveNotMet            // highest bid below reserve
         BuyItNowExercised        // seller accepted an early offer
         SellerCancelled
+        AwardProtestUpheld       // v0.3: protest reversed the award
       }
     }
   }
 }
 ```
+
+**The AwardProtest — auxiliary record for government procurement challenges:**
+
+When a Tendered Commitment is awarded in a government procurement
+and a losing party challenges the decision, an AwardProtest is filed.
+This is not a Commitment Dispute. An AwardProtest challenges whether
+the correct Tendered Commitment was selected.
+
+```
+AwardProtest {
+  id: ProtestID
+  filed_by: PartyID              // the challenging party
+  against: CommitmentID          // the awarded Commitment
+  auction_process: AuctionProcessID
+  grounds: Vec<String>           // stated legal grounds for the challenge
+  filed_at: Timestamp
+  deadline_for_response: Timestamp
+  reviewing_body: Option<PartyID>
+
+  state: ProtestState {
+    Filed
+    UnderReview { reviewer: PartyID }
+    Upheld {
+      remedy: ProtestRemedy {
+        ReEvaluation             // scoring redone
+        AwardToProtestant        // award switched to challenger
+        Cancellation             // entire procurement cancelled
+      }
+    }
+    Dismissed                   // protest fails, original award stands
+  }
+}
+```
+
+If a protest is Upheld with ReEvaluation or Cancellation:
+- The awarded Tendered Commitment transitions: Accepted → Cancelled
+- A new AuctionProcess may be opened or all Tendered Commitments
+  revert for re-evaluation
+- The AwardProtest state is the authoritative record of why
 
 **How auction commerce flows through the model:**
 
@@ -1155,6 +1450,25 @@ Evidence {
     verified_by: Option<PartyID>
     timestamp: Timestamp
   }
+  RegistryRecording {             // v0.3 — real estate title registration
+    registry: String
+    reference: String
+    recorded_at: Timestamp
+    notary: Option<PartyID>
+  }
+  MedicalRecord {                 // v0.3 — healthcare service evidence
+    reference: String
+    issued_by: PartyID
+    patient: PartyID
+    service_date: Timestamp
+  }
+  RetirementCertificate {         // v0.3 — carbon credit retirement proof
+    reference: String
+    issued_by: PartyID            // the carbon registry
+    quantity: Quantity
+    retired_at: Timestamp
+    project_id: String
+  }
 }
 ```
 
@@ -1205,9 +1519,26 @@ Conservation applies to access rights, not to the goods themselves.
 A provider cannot grant more access rights than their license permits
 them to sub-license.
 
-For exclusive digital goods (NFTs, unique digital certificates):
+For exclusive digital goods (NFTs, unique digital certificates,
+carbon credits before retirement):
 Ownership transfers. The originating party loses the token.
-The original Invariant 1 applies without modification.
+The original transfer conservation rule applies without modification.
+When an exclusive digital good is retired (ValueState::Retired),
+it is permanently consumed. No transfer occurs — the value is
+extinguished by mutual agreement and recorded as such.
+
+For loyalty points and merchant-issued currency
+(CurrencyCode::Custom, rewards points, store credits):
+This is the only ValueForm where value creation, not transfer,
+is the primary operation. The issuing party creates points as a
+commerce obligation — a liability to accept points in future
+transactions. Conservation applies to the issuer's total liability
+pool: points outstanding must not exceed the issuer's capacity to
+honor them. A merchant cannot issue more points than their business
+can sustain as redeemable value. Points earned by a customer are
+created by the issuer (not transferred from a pool) and credited
+as a new Value with CurrencyCode::Custom. When redeemed, they
+transfer normally (customer → merchant) and are extinguished.
 
 **Invariant 2 — State Monotonicity:**
 
@@ -1555,36 +1886,150 @@ Market-making commerce:
   ✓ Tradeable derivatives (exclusive digital good representing the right)
   ✓ Collateral lending chains (collateral as CommitmentCondition,
       securitization as Commitment with DigitalGood subject)
+
+Real estate commerce:
+  ✓ Standard residential purchase with financing contingency
+  ✓ Financing contingency failure — deposit return
+  ✓ Full closing with simultaneous three-party money flows
+  ✓ Title transfer via notarial deed and land registry
+  ✓ Property inspection contingency with repair negotiation
+
+Healthcare commerce:
+  ✓ Insured medical visit — post-fulfillment insurance adjudication
+  ✓ Split payment (patient copay + insurer payment)
+  ✓ Price finalization after service delivery (not before)
+  ✓ Prescription pharmaceutical with regulatory gate
+  ✓ No-return policy for medical goods
+
+Government and public procurement:
+  ✓ Scored selection with weighted criteria (not just price)
+  ✓ Minimum technical threshold — disqualification
+  ✓ Award protest mechanism — upheld and dismissed
+  ✓ Compliance documentation requirements
+  ✓ Publication requirements for results
+
+Wholesale and distribution:
+  ✓ Blanket purchase order — Active parent, recurring child Commitments
+  ✓ Volume pricing with year-end true-up
+  ✓ Net 30/60/90 credit terms
+  ✓ Quantity flexibility — call-off within agreed range
+  ✓ Recurring physical delivery schedule
+
+Marketplace platforms with commission:
+  ✓ Double-sided commission (fee from buyer AND seller)
+  ✓ Platform holds funds, disburses after service delivery
+  ✓ Value conservation verified: guest paid = host received + platform fee
+  ✓ Single-sided commission variant
+
+Cross-border trade finance:
+  ✓ Documentary collection — bank holds title documents
+  ✓ Documents-against-payment timing
+  ✓ Customs clearance as government intermediary release
+  ✓ Required documents as CommitmentTerm
+  ✓ Title documents as Exclusive DigitalGood with escrow pattern
+
+Event and entertainment commerce:
+  ✓ Perishable ticket — EventAccess with expiry at EventEnd
+  ✓ Non-transferable ticket restriction
+  ✓ Event cancellation with cascade to all child Commitments
+  ✓ Force majeure — simultaneous mass cancellation + refund
+  ✓ Postponement with customer choice
+
+Loyalty and rewards programs:
+  ✓ Points earned on purchase — LoyaltyEarnTerm
+  ✓ Points creation as controlled value creation (Invariant 1 fourth clause)
+  ✓ Points redemption as standard Money transfer (CurrencyCode::Custom)
+  ✓ Points expiry — ValueState::AccessExpired applies
+  ✓ Split payment: cash + loyalty points
+
+Social and group commerce:
+  ✓ Group buying deal — ThresholdActivation
+  ✓ Price tiers as group size increases
+  ✓ Threshold not met — all pledges cancel
+  ✓ Threshold met — all Tendered Commitments activate simultaneously
+
+Environmental markets:
+  ✓ Carbon credit purchase with registry verification
+  ✓ Credit retirement — ValueState::Retired (terminal)
+  ✓ Additionality verification as CommitmentCondition
+  ✓ RetirementCertificate as Evidence type
+  ✓ CarbonCredit as AccessModel variant
 ```
 
 **Result: No test has required a sixth primitive.**
 
-All required additions have been extensions to existing primitive
-structures. Market-making commerce required two extensions
-(CommitmentState::Tendered, ValueState::UnderAuction) and one
-auxiliary coordination record (AuctionProcess). Neither Tendered
-nor UnderAuction introduces a new commerce concept — they are
-specializations of existing Commitment and Value state that handle
-the open-counterparty and contested-allocation properties specific
-to auction mechanisms.
+Across 40+ domains spanning every major category of human commercial
+activity, the five primitives — Party, Value, Intent, Commitment,
+Fulfillment — have been sufficient to represent every commerce operation
+tested. All additions have been extensions to existing primitive
+structures: new CommitmentConditions, new CommitmentTerms, new
+DeliveryMethods, new PaymentTimings, new AccessModel variants,
+new Evidence types, and new ValueStates. No new fundamental commerce
+concept has been found that requires a sixth primitive.
 
-**On the "pricing outside the model" boundary and auctions:**
-
-An auction's price discovery mechanism is outside the model. The
-AuctionProcess records bids and determines the winner — this is
-coordination infrastructure. The Tendered Commitment records the
-bid as a formal offer — this is inside the model. The boundary is
-correct: price discovery happens in the mechanism; the resulting
-price enters the model as Money in the winning Commitment.
-
-This means the model cannot represent "what would the price have
-been under a different mechanism." It can represent "what price
-was established by this mechanism and what Commitment resulted."
-For a formal commerce model this is the correct scope.
+The claim is evidence-based, not asserted: "no sixth primitive has
+been found necessary across any tested domain."
 
 ---
 
 ## Changelog
+
+### v0.3 (2026-06-11) — Full commerce vocabulary
+
+Ten additional domains tested. All held. No sixth primitive found.
+40+ domains total across all major categories of human commerce.
+
+New DeliveryMethod variants:
+  TitleTransfer (real estate, legal ownership via notarial deed)
+  RecurringDelivery (wholesale blanket POs, scheduled shipments)
+  CustomsRelease (cross-border, government-controlled release)
+  RegistryRetirement (carbon credits, permanent consumption)
+
+New AccessModel variants on DigitalGood:
+  EventAccess (perishable tickets, entry window, expiry at EventEnd)
+  DocumentaryCollection (trade finance, bank-held title documents)
+  CarbonCredit (verified environmental instrument, retirable)
+
+New PaymentTiming variants:
+  PostFulfillment (healthcare insurance adjudication after service)
+  DocumentsAgainstPayment (trade finance, document release on payment)
+  Net (B2B credit terms: Net30/Net60/Net90)
+  CommissionSplit (marketplace platforms, single and double-sided)
+
+New CommitmentCondition variants:
+  FinancingContingency (real estate, conditional on lender)
+  InspectionContingency (real estate, property condition gate)
+  PrescriptionRequired (healthcare, regulatory requirement)
+  RegistryVerification (carbon credits, title deeds)
+  ThresholdActivation (group buying, crowdfunding)
+  ComplianceDocumentation (government procurement)
+  NoReturnPolicy (healthcare, irreversible services)
+  EventCancellationPolicy (event commerce, force majeure)
+
+New CommitmentTerms:
+  CascadeCancellation (event cancellation propagates to children)
+  VolumePricing (wholesale, tiered pricing with year-end true-up)
+  LoyaltyEarnTerm (loyalty programs, point accrual on purchase)
+  RequiredDocuments (trade finance, documentary requirements)
+
+New ValueState:
+  Retired — terminal state for permanently consumed exclusive goods
+
+New Evidence types:
+  RegistryRecording (real estate, land registry recording)
+  MedicalRecord (healthcare, service delivery evidence)
+  RetirementCertificate (carbon credits, permanent retirement proof)
+
+New AuctionMechanism variant:
+  ScoredSelection (government procurement, weighted multi-criteria)
+
+New auxiliary record:
+  AwardProtest (government procurement challenge mechanism)
+
+Invariant 1 — fourth clause added:
+  Loyalty points and merchant-issued currency are the only ValueForm
+  where value creation (not transfer) is the primary operation.
+  Conservation applies to the issuer's total outstanding liability.
 
 ### v0.2 (2026-05-29) — Market-making commerce incorporated
 
