@@ -5,8 +5,8 @@
  * detail per violation.
  */
 
-import type { Money } from "./money.js";
-import { CurrencyMismatchError, moneyEquals } from "./money.js";
+import type { Money, MoneyBreakdown } from "./money.js";
+import { CurrencyMismatchError, moneyEquals, validateMoneyBreakdown } from "./money.js";
 import type { Commitment, Fulfillment, Party, PartyCapacity, PartyID, Value } from "./primitives.js";
 import { isValidCommitmentTransition } from "./transitions.js";
 
@@ -125,6 +125,32 @@ export function checkLoyaltyLiability(
     redemption_rate: redemption_value_per_point,
     sustainable: totalLiability <= issuer_revenue_capacity.amount,
   };
+}
+
+/**
+ * I-1, MoneyBreakdown extension — the canonical `money_breakdown_sum` rule
+ * (schema/behavior/invariants.json, invariant I-1). A MoneyBreakdown is clean
+ * when every component shares the total's currency and the component amounts
+ * sum to the total within the currency's minor-unit tolerance (a Discount
+ * component carries a negative amount and subtracts). This is the
+ * violations-returning checker form of `validateMoneyBreakdown` (money.ts),
+ * consistent with the other `checkI*` functions; both enforce the identical
+ * rule the Python binding enforces via `validate_money_breakdown`.
+ */
+export function checkI1MoneyBreakdownSum(breakdown: MoneyBreakdown): InvariantViolation[] {
+  try {
+    validateMoneyBreakdown(breakdown);
+    return [];
+  } catch (e) {
+    return [
+      {
+        invariant: "I-1",
+        name: "Value Conservation",
+        description: `MoneyBreakdown violates money_breakdown_sum: ${(e as Error).message}`,
+        fix: "Express every component in the total's currency (convert() first), and ensure the components — Discounts negative — sum to the total.",
+      },
+    ];
+  }
 }
 
 // --- I-2: State Monotonicity ----------------------------------------------

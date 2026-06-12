@@ -21,7 +21,7 @@ const ROOT = join(HERE, "..");
 const REPO = join(ROOT, "..");
 
 const ts = await import(join(REPO, "packages", "commerce-types", "dist", "index.js"));
-const { auditCommerce, isValidCommitmentTransition, isValidIntentTransition, isValidFulfillmentTransition, currencyDecimals } = ts;
+const { auditCommerce, isValidCommitmentTransition, isValidIntentTransition, isValidFulfillmentTransition, currencyDecimals, validateMoneyBreakdown } = ts;
 
 const loadJSON = (rel) => JSON.parse(readFileSync(join(ROOT, rel), "utf8"));
 const manifest = loadJSON("manifest.json");
@@ -60,8 +60,18 @@ for (const entry of manifest.fixtures) {
       }
       r.verdict = okAll ? "accept" : "reject";
     } else if (fx.kind === "money-breakdown") {
-      r.runnable = false;
-      r.note = "TS exposes no standalone MoneyBreakdown checker (I-1 money_breakdown_sum unimplemented in TS)";
+      // B-1 closed: TS now has validateMoneyBreakdown enforcing the same
+      // canonical money_breakdown_sum rule as Python's validate_money_breakdown.
+      const p = fx.payload;
+      try {
+        validateMoneyBreakdown({ total: p.total, components: p.components });
+        r.verdict = "accept";
+      } catch {
+        // CurrencyMismatchError (single-currency clause) or sum-clause Error —
+        // both are the canonical money_breakdown_sum expression of I-1.
+        r.verdict = "reject";
+        r.rules = ["money_breakdown_sum"];
+      }
     } else if (fx.kind === "state-catalog") {
       r.runnable = false;
       r.note = "structural only — covered by runner + JSON Schema";

@@ -10,7 +10,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
+  # --- Rust compiler / MCP crates ------------------------------------------
+  rust:
     name: fmt + clippy + test
     runs-on: ubuntu-latest
     steps:
@@ -36,3 +37,139 @@ jobs:
       # Restate is not available in CI.
       - name: Test
         run: cargo test --all
+
+  # --- TypeScript binding (@warp-lang/commerce-types) ----------------------
+  ts:
+    name: typescript binding
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/commerce-types
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/commerce-types/package-lock.json
+
+      - name: Install (clean, from lockfile)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Codegen-drift gate — regenerates from schema/ in --check mode and fails
+      # if the committed generated types differ. This is what keeps the schema
+      # the single source of truth: nobody can hand-edit generated output.
+      - name: Codegen drift gate
+        run: npm run codegen
+
+  # --- Python binding (warp-commerce-types) --------------------------------
+  python:
+    name: python binding
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/commerce-types-py
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: pip
+          cache-dependency-path: packages/commerce-types-py/pyproject.toml
+
+      # Upgrade pip first: PEP 660 editable installs of this pyproject-only
+      # package require a modern pip (the stock pip on some runners is too old).
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install with declared dev deps
+        run: pip install -e ".[dev]"
+
+      - name: Pytest
+        run: pytest
+
+      - name: Mypy
+        run: mypy .
+
+  # --- Schema spine (zero-dependency validator) ----------------------------
+  schema:
+    name: schema validator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # Validates that every schema parses, all $refs resolve, and the
+      # transition canary is intact. Self-contained — no npm install needed.
+      - name: Validate schema
+        run: node schema/validate.mjs
+
+  # --- Conformance suite (zero-dependency, validates against schema/) ------
+  conformance:
+    name: conformance suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Conformance runner (51 fixtures)
+        run: node conformance/runner/run.mjs
+
+      - name: Auxiliary-record coverage (5 records)
+        run: node conformance/case-studies/validate-aux.mjs
+
+  # --- Cross-binding parity: TS and Python must agree on every fixture -----
+  # Needs BOTH bindings: the TS package built (crosscheck-ts imports dist/) and
+  # the Python package importable (crosscheck-python imports warp_commerce_types).
+  crosscheck:
+    name: ts/python cross-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/commerce-types/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: pip
+          cache-dependency-path: packages/commerce-types-py/pyproject.toml
+
+      - name: Build TS binding
+        working-directory: packages/commerce-types
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Python binding
+        working-directory: packages/commerce-types-py
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      # Proves TS and Python produce the identical verdict on every fixture
+      # runnable in both (money-breakdown fixtures included since B-1). Exits
+      # non-zero on any disagreement.
+      - name: Cross-check
+        run: node conformance/tooling/crosscheck.mjs
