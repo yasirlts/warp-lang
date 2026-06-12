@@ -1,0 +1,48 @@
+{
+  "$schema": "warp-commerce-structure/1.0.0",
+  "module": "auction",
+  "doc": "AuctionProcess - the auxiliary coordination record for market-making commerce (Primitive 4). Manages the collection of Tendered Commitments and determines the winner when the auction closes.",
+  "definitions": {
+    "ScoredCriterion": {
+      "def": "object",
+      "fields": { "name": "string", "weight": "number", "max_points": "number" }
+    },
+    "AuctionMechanism": {
+      "def": "union",
+      "discriminator": "kind",
+      "variants": [
+        { "tag": "English", "fields": { "reserve_price": { "t": "Money", "optional": true }, "increment": { "t": "Money", "optional": true } } },
+        { "tag": "Dutch", "fields": { "start_price": "Money", "decrement": "Money", "interval_seconds": "number" } },
+        { "tag": "SealedBid", "fields": { "reserve_price": { "t": "Money", "optional": true }, "reveal_at": "datetime" } },
+        { "tag": "Vickrey", "fields": { "reserve_price": { "t": "Money", "optional": true } } },
+        { "tag": "ScoredSelection", "fields": { "criteria": { "t": { "array": "ScoredCriterion" }, "default": "list" }, "minimum_threshold": { "t": "number", "optional": true }, "evaluation_committee": { "t": { "array": "PartyID" }, "default": "list" }, "publication_required": "boolean" } }
+      ]
+    },
+    "AuctionCloseReason": {
+      "def": "enum",
+      "values": ["NormalClose", "ReserveNotMet", "BuyItNowExercised", "SellerCancelled", "AwardProtestUpheld"]
+    },
+    "AuctionState": {
+      "def": "union",
+      "discriminator": "type",
+      "variants": [
+        { "tag": "Scheduled" },
+        { "tag": "Open" },
+        { "tag": "Closed", "fields": { "winning_commitment": { "t": "CommitmentID", "optional": true }, "winning_price": { "t": "Money", "optional": true }, "reason": "AuctionCloseReason" } }
+      ]
+    },
+    "AuctionProcess": {
+      "def": "object",
+      "fields": {
+        "id": "string",
+        "subject": "ValueID",
+        "seller": "PartyID",
+        "mechanism": "AuctionMechanism",
+        "tendered_commitments": { "t": { "array": "CommitmentID" }, "default": "list" },
+        "opens_at": "datetime",
+        "closes_at": "datetime",
+        "state": "AuctionState"
+      }
+    }
+  }
+}

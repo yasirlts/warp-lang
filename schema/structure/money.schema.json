@@ -1,0 +1,37 @@
+{
+  "$schema": "warp-commerce-structure/1.0.0",
+  "module": "money",
+  "doc": "Money - the typed monetary value of the Warp Commerce Model (Primitive 2: Value -> ValueForm -> Money). Money ALWAYS carries its currency; there is no amount without a denomination. MoneyBreakdown decomposes a total into labelled components whose amounts must sum to the total (see behavior/invariants.json money_breakdown_sum).",
+  "definitions": {
+    "CurrencyCode": {
+      "def": "newtype",
+      "base": "string",
+      "doc": "ISO 4217 currency code (open set; also admits CurrencyCode::Custom loyalty/credit denominations like 'PTS')."
+    },
+    "Money": {
+      "def": "object",
+      "doc": "A monetary value. `currency` is required - always.",
+      "fields": {
+        "amount": "number",
+        "currency": "CurrencyCode"
+      }
+    },
+    "MoneyComponent": {
+      "def": "object",
+      "doc": "One labelled line of a MoneyBreakdown. Discount components carry a negative amount.",
+      "fields": {
+        "kind": "string",
+        "amount": "Money"
+      }
+    },
+    "MoneyBreakdown": {
+      "def": "object",
+      "validator": "money_breakdown_sum",
+      "doc": "A total decomposed into components (subtotal, tax, shipping, discount, ...). The component amounts must sum to `total` within the currency's minor-unit tolerance; discounts are negative; all share one currency.",
+      "fields": {
+        "components": { "t": { "array": "MoneyComponent" }, "default": "list" },
+        "total": "Money"
+      }
+    }
+  }
+}

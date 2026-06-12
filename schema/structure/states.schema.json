@@ -1,0 +1,198 @@
+{
+  "$schema": "warp-commerce-structure/1.0.0",
+  "module": "states",
+  "doc": "The state machines of the Warp Commerce Model. Each state is a discriminated union keyed on `type` (Evidence keys on `kind`). The legal transitions between these states live in behavior/transitions.json and are enforced by the transition functions.",
+  "definitions": {
+    "IntentState": {
+      "def": "union",
+      "discriminator": "type",
+      "doc": "Primitive 3 - Intent lifecycle.",
+      "variants": [
+        { "tag": "Active" },
+        { "tag": "Abandoned" },
+        { "tag": "Converted", "fields": { "commitment_id": "CommitmentID" } },
+        { "tag": "Expired" }
+      ]
+    },
+    "CommitmentState": {
+      "def": "union",
+      "discriminator": "type",
+      "doc": "Primitive 4 - the central primitive. All 11 variants.",
+      "variants": [
+        { "tag": "Draft" },
+        { "tag": "Proposed" },
+        {
+          "tag": "Tendered",
+          "fields": {
+            "offer_amount": "number",
+            "offer_currency": "string",
+            "closes_at": "datetime",
+            "superseded_by": { "t": "CommitmentID", "optional": true }
+          }
+        },
+        { "tag": "Accepted" },
+        { "tag": "Modified", "fields": { "modified_by": "PartyID", "reason": "string" } },
+        {
+          "tag": "PartiallyFulfilled",
+          "fields": {
+            "fulfilled_item_ids": { "t": { "array": "string" }, "default": "list" },
+            "remaining_item_ids": { "t": { "array": "string" }, "default": "list" }
+          }
+        },
+        { "tag": "Active" },
+        { "tag": "Fulfilled" },
+        { "tag": "Cancelled", "fields": { "by": "PartyID", "reason": "string", "at": "datetime" } },
+        { "tag": "Disputed", "fields": { "by": "PartyID", "reason": "string", "opened_at": "datetime" } },
+        { "tag": "Refunded", "fields": { "amount": "Money", "at": "datetime" } }
+      ]
+    },
+    "FulfillmentState": {
+      "def": "union",
+      "discriminator": "type",
+      "doc": "Primitive 5 - Fulfillment lifecycle.",
+      "variants": [
+        { "tag": "Planned" },
+        { "tag": "InProgress" },
+        { "tag": "Completed" },
+        { "tag": "Failed", "fields": { "reason": "string", "recoverable": "boolean" } },
+        { "tag": "Reversed", "fields": { "reason": "string", "initiated_by": "PartyID", "at": "datetime" } }
+      ]
+    },
+    "CommissionFee": {
+      "def": "object",
+      "fields": { "rate": "number", "paid_to": "PartyID" }
+    },
+    "CommissionStructure": {
+      "def": "union",
+      "discriminator": "type",
+      "doc": "v0.3 - how a marketplace platform takes commission.",
+      "variants": [
+        { "tag": "SingleSided", "fields": { "rate": "number", "paid_by": "string", "paid_to": "PartyID" } },
+        { "tag": "DoubleSided", "fields": { "buyer_fee": "CommissionFee", "seller_fee": "CommissionFee" } }
+      ]
+    },
+    "PostFulfillmentTrigger": {
+      "def": "union",
+      "discriminator": "type",
+      "doc": "v0.3 - the post-fulfillment event that must resolve before payment.",
+      "variants": [
+        {
+          "tag": "InsuranceAdjudication",
+          "fields": {
+            "adjudicator": "PartyID",
+            "claim_reference": { "t": "string", "optional": true },
+            "deadline": { "t": "datetime", "optional": true }
+          }
+        },
+        {
+          "tag": "InspectionCompletion",
+          "fields": { "inspector": "PartyID", "standard": { "t": "string", "optional": true } }
+        },
+        { "tag": "AcceptanceTest", "fields": { "tester": "PartyID", "criteria": "string" } }
+      ]
+    },
+    "PaymentTiming": {
+      "def": "union",
+      "discriminator": "type",
+      "doc": "When value moves in a Commitment (Primitive 4, terms.payment). Base timings are simple; v0.3 additions carry structured data.",
+      "variants": [
+        { "tag": "Immediate" },
+        { "tag": "Upfront" },
+        { "tag": "OnDelivery" },
+        { "tag": "OnServiceCompletion" },
+        { "tag": "AfterGoodsReceived" },
+        { "tag": "Installments" },
+        { "tag": "Milestone" },
+        { "tag": "Recurring" },
+        { "tag": "Simultaneous" },
+        { "tag": "Metered" },
+        { "tag": "PostFulfillment", "fields": { "trigger": "PostFulfillmentTrigger" } },
+        {
+          "tag": "DocumentsAgainstPayment",
+          "fields": { "documents_held_by": "PartyID", "release_condition": "string" }
+        },
+        {
+          "tag": "Net",
+          "fields": {
+            "days": { "enum": [30, 60, 90] },
+            "from": { "enum": ["InvoiceDate", "DeliveryDate", "EndOfMonth"] },
+            "early_payment_discount": { "t": "number", "optional": true }
+          }
+        },
+        { "tag": "CommissionSplit", "fields": { "structure": "CommissionStructure" } }
+      ]
+    },
+    "Evidence": {
+      "def": "union",
+      "discriminator": "kind",
+      "doc": "Proof a Fulfillment occurred (Primitive 5: Evidence). The complete union, keyed on `kind`.",
+      "variants": [
+        {
+          "tag": "ProofOfDelivery",
+          "fields": {
+            "photo_uri": { "t": "string", "optional": true },
+            "signature": { "t": "string", "optional": true },
+            "timestamp": "datetime",
+            "recipient": "PartyID"
+          }
+        },
+        {
+          "tag": "PaymentReceipt",
+          "fields": { "reference": "string", "amount": "Money", "timestamp": "datetime", "mechanism": "string" }
+        },
+        {
+          "tag": "AccessGrant",
+          "fields": { "token": "string", "granted_at": "datetime", "expires_at": { "t": "datetime", "optional": true } }
+        },
+        {
+          "tag": "ServiceCompletion",
+          "fields": { "confirmed_by": "PartyID", "timestamp": "datetime", "notes": { "t": "string", "optional": true } }
+        },
+        { "tag": "WarehouseReceipt", "fields": { "location": "string", "received_at": "datetime" } },
+        {
+          "tag": "BillOfLading",
+          "fields": {
+            "reference": "string",
+            "issued_by": "PartyID",
+            "origin_port": "string",
+            "destination_port": "string",
+            "issued_at": "datetime"
+          }
+        },
+        {
+          "tag": "CustomsClearance",
+          "fields": { "reference": "string", "cleared_at": "datetime", "jurisdiction": "string" }
+        },
+        { "tag": "TriggerVerification", "fields": { "trigger_type": "string", "timestamp": "datetime" } },
+        {
+          "tag": "RegistryRecording",
+          "fields": {
+            "registry": "string",
+            "reference": "string",
+            "recorded_at": "datetime",
+            "notary": { "t": "string", "optional": true }
+          }
+        },
+        {
+          "tag": "MedicalRecord",
+          "fields": {
+            "reference": "string",
+            "issued_by": "string",
+            "patient": "string",
+            "service_date": "datetime"
+          }
+        },
+        {
+          "tag": "RetirementCertificate",
+          "fields": {
+            "reference": "string",
+            "issued_by": "string",
+            "quantity": "number",
+            "retired_at": "datetime",
+            "project_id": "string"
+          }
+        }
+      ]
+    }
+  }
+}

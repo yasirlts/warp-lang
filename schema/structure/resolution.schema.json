@@ -1,0 +1,43 @@
+{
+  "$schema": "warp-commerce-structure/1.0.0",
+  "module": "resolution",
+  "doc": "ResolutionProcess - the substitution / cancellation workflow that opens for each unresolved item when a Commitment reaches PartiallyFulfilled (Primitive 4).",
+  "definitions": {
+    "CandidateState": { "def": "enum", "values": ["Pending", "Accepted", "Rejected"] },
+    "ResolutionCandidate": {
+      "def": "object",
+      "fields": {
+        "id": "string",
+        "proposed_by": "PartyID",
+        "substitute_description": "string",
+        "fulfilling_party": { "t": "PartyID", "optional": true },
+        "price_delta": "Money",
+        "new_total": "Money",
+        "original_window": "string",
+        "new_window": "string",
+        "state": "CandidateState"
+      }
+    },
+    "ResolutionState": {
+      "def": "union",
+      "discriminator": "type",
+      "variants": [
+        { "tag": "AwaitingCustomerDecision" },
+        { "tag": "Resolved", "fields": { "outcome": { "enum": ["SubstituteAccepted", "ItemCancelled"] }, "candidate_id": { "t": "string", "optional": true } } },
+        { "tag": "Expired" }
+      ]
+    },
+    "ResolutionProcess": {
+      "def": "object",
+      "fields": {
+        "id": "string",
+        "parent_commitment": "CommitmentID",
+        "unresolved_item": "ValueID",
+        "original_value": "Money",
+        "candidates": { "t": { "array": "ResolutionCandidate" }, "default": "list" },
+        "state": "ResolutionState",
+        "deadline": "datetime"
+      }
+    }
+  }
+}

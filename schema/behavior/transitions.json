@@ -1,0 +1,55 @@
+{
+  "$comment": "Canonical legal-transition tables for the Warp Commerce Model state machines. This file is the SINGLE data source for transition validity in every language binding (TypeScript @warp-lang/commerce-types and Python warp-commerce-types both read these edges), so the bindings agree by construction. Every (from -> to) pair NOT listed here is rejected. Enforces Invariant 2 (State Monotonicity).",
+  "version": "1.0.0",
+  "commitment": {
+    "discriminator": "type",
+    "doc": "The 26 valid commitment transitions. The Modified -> Accepted loop and Tendered -> Accepted (auction completion) are explicit. Cancelled and Refunded are terminal.",
+    "edges": {
+      "Draft": ["Proposed", "Tendered", "Cancelled"],
+      "Proposed": ["Accepted", "Cancelled", "Modified"],
+      "Tendered": ["Accepted", "Cancelled"],
+      "Accepted": ["Modified", "PartiallyFulfilled", "Active", "Cancelled", "Disputed"],
+      "Modified": ["Accepted", "Cancelled"],
+      "PartiallyFulfilled": ["Fulfilled", "Modified", "Cancelled"],
+      "Active": ["Modified", "Cancelled", "Disputed"],
+      "Fulfilled": ["Disputed", "Refunded"],
+      "Cancelled": [],
+      "Disputed": ["Fulfilled", "Refunded", "Cancelled"],
+      "Refunded": []
+    }
+  },
+  "intent": {
+    "discriminator": "type",
+    "doc": "An Active intent may be abandoned, converted, or expire. All non-Active states are terminal.",
+    "edges": {
+      "Active": ["Abandoned", "Converted", "Expired"],
+      "Abandoned": [],
+      "Converted": [],
+      "Expired": []
+    }
+  },
+  "fulfillment": {
+    "discriminator": "type",
+    "doc": "Fulfillment lifecycle. Failed is terminal in the plain table; Failed -> Planned is allowed ONLY when the failure was recoverable (see special_cases).",
+    "edges": {
+      "Planned": ["InProgress", "Failed"],
+      "InProgress": ["Completed", "Failed", "Reversed"],
+      "Completed": ["Reversed"],
+      "Failed": [],
+      "Reversed": []
+    },
+    "special_cases": [
+      {
+        "from": "Failed",
+        "to": "Planned",
+        "condition_field": "recoverable",
+        "doc": "A Failed fulfillment may retry to Planned only if its `recoverable` flag is true. This is the only edge gated on a payload field rather than the state type alone."
+      }
+    ]
+  },
+  "history": {
+    "append_only": true,
+    "timestamp_monotonic": true,
+    "doc": "Every applied transition appends one entry to the object's history; history is never rewritten and entry timestamps never move backward (equal is allowed). Enforces Invariant 4 (Temporal Integrity)."
+  }
+}

@@ -1,0 +1,134 @@
+{
+  "$schema": "warp-commerce-structure/1.0.0",
+  "module": "commerce_v03",
+  "doc": "Types introduced in Warp Commerce Model v0.3 that don't belong to an existing primitive file: cascade cancellation, volume pricing, loyalty earn terms, threshold activation (group commerce), the AwardProtest auxiliary record, and the v0.3 Evidence types.",
+  "definitions": {
+    "PartialRefund": {
+      "def": "object",
+      "fields": { "kind": { "literal": "PartialRefund" }, "rate": "number" }
+    },
+    "RefundAmount": {
+      "def": "alias",
+      "doc": "Either a full refund (the literal 'FullRefund') or a partial refund with a rate.",
+      "of": { "union": [{ "literal": "FullRefund" }, "PartialRefund"] }
+    },
+    "RefundPolicy": {
+      "def": "object",
+      "fields": { "amount": "RefundAmount", "deadline_days": { "t": "number", "optional": true } }
+    },
+    "CascadeTrigger": {
+      "def": "union",
+      "discriminator": "type",
+      "variants": [
+        { "tag": "ParentCancelled" },
+        { "tag": "ParentDisputed" },
+        { "tag": "ExternalEvent", "fields": { "event_type": "string" } }
+      ]
+    },
+    "CascadeScope": {
+      "def": "union",
+      "discriminator": "type",
+      "variants": [
+        { "tag": "AllChildren" },
+        { "tag": "ChildrenInState", "fields": { "states": { "t": { "array": "CommitmentStateType" }, "default": "list" } } }
+      ]
+    },
+    "CascadeCancellation": {
+      "def": "object",
+      "doc": "A parent's cancellation propagates to its children.",
+      "fields": {
+        "trigger": "CascadeTrigger",
+        "applies_to": "CascadeScope",
+        "child_transition": "CommitmentState",
+        "auto_refund": { "t": "RefundPolicy", "optional": true }
+      }
+    },
+    "VolumeTier": {
+      "def": "object",
+      "fields": { "min": "number", "max": { "t": "number", "optional": true }, "price_per_unit": "Money" }
+    },
+    "TrueUpPolicy": {
+      "def": "object",
+      "doc": "Year-end reconciliation when a buyer crosses into a cheaper tier.",
+      "fields": { "reconcile_at": "datetime", "applies_to_prior_units": "boolean" }
+    },
+    "VolumePricing": {
+      "def": "object",
+      "fields": { "tiers": { "t": { "array": "VolumeTier" }, "default": "list" }, "true_up": { "t": "TrueUpPolicy", "optional": true } }
+    },
+    "LoyaltyEarnTerm": {
+      "def": "object",
+      "doc": "Point accrual on purchase. `currency` is a CurrencyCode::Custom value (e.g. 'PTS').",
+      "fields": {
+        "program": "string",
+        "earn_rate": "number",
+        "points_earned": "number",
+        "credited_on": { "enum": ["FulfillmentComplete", "PaymentReceived"] },
+        "currency": "string"
+      }
+    },
+    "GroupPriceTier": {
+      "def": "object",
+      "fields": { "participants": "number", "price": "Money" }
+    },
+    "ThresholdActivation": {
+      "def": "object",
+      "doc": "Group buying / crowdfunding minimum-viable commitments.",
+      "fields": {
+        "minimum_participants": "number",
+        "maximum_participants": { "t": "number", "optional": true },
+        "activation_deadline": "datetime",
+        "if_threshold_not_met": "CommitmentStateType",
+        "if_threshold_met": "CommitmentStateType",
+        "price_tiers": { "t": { "array": "GroupPriceTier" }, "optional": true }
+      }
+    },
+    "AwardProtestState": {
+      "def": "union",
+      "discriminator": "type",
+      "variants": [
+        { "tag": "Filed" },
+        { "tag": "UnderReview", "fields": { "reviewer": "string" } },
+        { "tag": "Upheld", "fields": { "remedy": { "enum": ["ReEvaluation", "AwardToProtestant", "Cancellation"] } } },
+        { "tag": "Dismissed" }
+      ]
+    },
+    "AwardProtest": {
+      "def": "object",
+      "doc": "Government procurement challenge (auxiliary record). Challenges whether the correct Tendered Commitment was selected, before the award is final.",
+      "fields": {
+        "id": "string",
+        "filed_by": "string",
+        "against": "string",
+        "auction_process": "string",
+        "grounds": { "t": { "array": "string" }, "default": "list" },
+        "filed_at": "datetime",
+        "deadline_for_response": "datetime",
+        "reviewing_body": { "t": "string", "optional": true },
+        "state": "AwardProtestState"
+      }
+    },
+    "RegistryRecording": {
+      "def": "object",
+      "fields": { "type": { "literal": "RegistryRecording" }, "registry": "string", "reference": "string", "recorded_at": "datetime", "notary": { "t": "string", "optional": true } }
+    },
+    "MedicalRecord": {
+      "def": "object",
+      "fields": { "type": { "literal": "MedicalRecord" }, "reference": "string", "issued_by": "string", "patient": "string", "service_date": "datetime" }
+    },
+    "RetirementCertificate": {
+      "def": "object",
+      "fields": { "type": { "literal": "RetirementCertificate" }, "reference": "string", "issued_by": "string", "quantity": "number", "retired_at": "datetime", "project_id": "string" }
+    },
+    "EvidenceV03": {
+      "def": "union",
+      "discriminator": "type",
+      "doc": "Standalone v0.3 Evidence interfaces (parallel to the `kind`-keyed Evidence union in states).",
+      "variants": [
+        { "ref": "RegistryRecording" },
+        { "ref": "MedicalRecord" },
+        { "ref": "RetirementCertificate" }
+      ]
+    }
+  }
+}

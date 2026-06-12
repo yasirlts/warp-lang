@@ -1,0 +1,241 @@
+{
+  "$schema": "warp-commerce-structure/1.0.0",
+  "module": "primitives",
+  "doc": "The five primitives of the Warp Commerce Model: Party, Value, Intent, Commitment, Fulfillment - plus their branded identifiers. The state machines live in states; the transition rules in behavior/transitions.json.",
+  "definitions": {
+    "PartyID": { "def": "newtype", "base": "string", "doc": "Globally unique, immutable party identifier (Invariant 5)." },
+    "IntentID": { "def": "newtype", "base": "string" },
+    "CommitmentID": { "def": "newtype", "base": "string" },
+    "FulfillmentID": { "def": "newtype", "base": "string" },
+    "ValueID": { "def": "newtype", "base": "string" },
+
+    "PartyType": { "def": "enum", "values": ["Individual", "Organization", "System"] },
+    "PartyRole": { "def": "enum", "values": ["Initiator", "Counterparty", "Intermediary", "Fulfiller", "Guarantor"] },
+    "PartyLocale": {
+      "def": "object",
+      "fields": { "language": "string", "currency": "CurrencyCode", "jurisdiction": "string" }
+    },
+    "PartyCapacity": {
+      "def": "object",
+      "doc": "What a party is verified to do. The safe default is everything false (Invariant 3).",
+      "fields": {
+        "can_buy": "boolean",
+        "can_sell": "boolean",
+        "can_fulfill": "boolean",
+        "can_guarantee": "boolean",
+        "verified_at": "datetime"
+      }
+    },
+    "Party": {
+      "def": "object",
+      "fields": { "id": "PartyID", "party_type": "PartyType", "locale": "PartyLocale", "capacity": "PartyCapacity" }
+    },
+
+    "Condition": { "def": "enum", "values": ["New", "Used", "Refurbished", "Damaged", "RequiresInspection"] },
+    "ServiceDelivery": {
+      "def": "object",
+      "fields": {
+        "location": { "enum": ["Physical", "Remote", "Either"] },
+        "performer": { "t": "PartyID", "optional": true }
+      }
+    },
+    "AccessModel": {
+      "def": "union",
+      "discriminator": "kind",
+      "variants": [
+        {
+          "tag": "License",
+          "fields": {
+            "license_type": { "enum": ["Perpetual", "Subscription", "Trial", "OpenSource"] },
+            "seats": "number",
+            "transferable": "boolean"
+          }
+        },
+        { "tag": "Stream", "fields": { "simultaneous_streams": "number" } },
+        { "tag": "Download", "fields": { "redownloadable": "boolean" } },
+        { "tag": "APIAccess", "fields": { "calls_per_period": { "t": "number", "optional": true }, "endpoint": "string" } },
+        { "tag": "NFT", "fields": { "blockchain": "string", "contract_address": "string", "token_id": "string" } },
+        {
+          "tag": "EventAccess",
+          "fields": {
+            "event": "string",
+            "location": "string",
+            "date": "datetime",
+            "entry_window_start": "datetime",
+            "entry_window_end": "datetime",
+            "transferable": "boolean"
+          }
+        },
+        { "tag": "DocumentaryCollection", "fields": { "held_by": "string", "release_condition": "string" } },
+        {
+          "tag": "CarbonCredit",
+          "fields": {
+            "standard": "string",
+            "vintage": "number",
+            "project_id": "string",
+            "project_type": "string",
+            "location": "string",
+            "quantity": "number",
+            "retired": "boolean",
+            "additionality_verified": "boolean",
+            "verification_body": { "t": "string", "optional": true }
+          }
+        }
+      ]
+    },
+    "ValueForm": {
+      "def": "union",
+      "discriminator": "kind",
+      "doc": "Primitive 2 - the form value takes.",
+      "variants": [
+        {
+          "tag": "PhysicalGood",
+          "fields": { "sku": "string", "condition": "Condition", "location": { "t": "string", "optional": true } }
+        },
+        {
+          "tag": "DigitalGood",
+          "fields": {
+            "identifier": "string",
+            "exclusivity": { "enum": ["Exclusive", "NonExclusive"] },
+            "access_model": "AccessModel"
+          }
+        },
+        { "tag": "Service", "fields": { "identifier": "string", "delivery_model": "ServiceDelivery" } },
+        { "tag": "Money", "fields": { "money": "Money" } },
+        { "tag": "Nothing" },
+        {
+          "tag": "ContingentValue",
+          "fields": {
+            "trigger_type": "string",
+            "monitoring_period_start": { "t": "datetime", "optional": true },
+            "monitoring_period_end": { "t": "datetime", "optional": true },
+            "monitoring_party": { "t": "PartyID", "optional": true },
+            "if_triggered_description": "string",
+            "if_not_triggered_description": "string"
+          }
+        }
+      ]
+    },
+    "Quantity": {
+      "def": "object",
+      "doc": "A unit-bearing quantity (Primitive 2: Value.quantity carries a unit).",
+      "fields": { "amount": "number", "unit": { "t": "string", "optional": true } }
+    },
+    "ReservationBasis": {
+      "def": "enum",
+      "values": ["PhysicalStock", "ProductionCapacity", "TimeSlot", "RecurringTimeSlot", "DriverCapacity", "Speculative"]
+    },
+    "ValueState": {
+      "def": "union",
+      "discriminator": "type",
+      "variants": [
+        { "tag": "Available" },
+        { "tag": "Reserved", "fields": { "commitment_id": "CommitmentID", "basis": "ReservationBasis" } },
+        { "tag": "UnderAuction", "fields": { "auction_process_id": "string", "closes_at": "datetime" } },
+        { "tag": "Committed", "fields": { "commitment_id": "CommitmentID" } },
+        { "tag": "InTransit", "fields": { "fulfillment_id": "FulfillmentID" } },
+        { "tag": "Transferred", "fields": { "to": "PartyID", "at": "datetime" } },
+        { "tag": "Returned", "fields": { "from": "PartyID", "initiated_at": "datetime" } },
+        {
+          "tag": "Retired",
+          "doc": "v0.3 - terminal state for permanently consumed exclusive goods. No transition out of Retired is valid.",
+          "fields": {
+            "retired_at": "datetime",
+            "retired_by": "PartyID",
+            "reason": "string",
+            "certificate": { "t": "string", "optional": true }
+          }
+        }
+      ]
+    },
+    "Value": {
+      "def": "object",
+      "fields": { "id": "ValueID", "form": "ValueForm", "quantity": "number", "state": "ValueState" }
+    },
+
+    "IntentTransition": {
+      "def": "object",
+      "fields": {
+        "from": "IntentState",
+        "to": "IntentState",
+        "at": "datetime",
+        "actor": "PartyID",
+        "reason": { "t": "string", "optional": true }
+      }
+    },
+    "Intent": {
+      "def": "object",
+      "fields": {
+        "id": "IntentID",
+        "party": "PartyID",
+        "state": "IntentState",
+        "history": { "t": { "array": "IntentTransition" }, "default": "list" },
+        "created_at": "datetime",
+        "expires_at": { "t": "datetime", "optional": true },
+        "originated_from": { "t": "string", "optional": true }
+      }
+    },
+
+    "CommitmentParties": {
+      "def": "object",
+      "fields": {
+        "initiator": "PartyID",
+        "counterparty": "PartyID",
+        "intermediaries": { "t": { "array": "PartyID" }, "default": "list" }
+      }
+    },
+    "CommitmentSubject": {
+      "def": "object",
+      "fields": {
+        "offered": { "t": { "array": "Value" }, "default": "list" },
+        "requested": { "t": { "array": "Value" }, "default": "list" }
+      }
+    },
+    "CommitmentTransition": {
+      "def": "object",
+      "fields": {
+        "from": "CommitmentState",
+        "to": "CommitmentState",
+        "at": "datetime",
+        "actor": "PartyID",
+        "reason": { "t": "string", "optional": true }
+      }
+    },
+    "Commitment": {
+      "def": "object",
+      "doc": "Primitive 4 - the central primitive.",
+      "fields": {
+        "id": "CommitmentID",
+        "parties": "CommitmentParties",
+        "subject": "CommitmentSubject",
+        "state": "CommitmentState",
+        "history": { "t": { "array": "CommitmentTransition" }, "default": "list" },
+        "parent": { "t": "CommitmentID", "optional": true },
+        "children": { "t": { "array": "CommitmentID" }, "default": "list" },
+        "originated_from": { "t": "IntentID", "optional": true },
+        "created_at": "datetime",
+        "expires_at": { "t": "datetime", "optional": true },
+        "terms": { "t": "CommitmentTerms", "optional": true }
+      }
+    },
+
+    "FulfillmentTransition": {
+      "def": "object",
+      "fields": { "from": "FulfillmentState", "to": "FulfillmentState", "at": "datetime", "actor": "PartyID" }
+    },
+    "Fulfillment": {
+      "def": "object",
+      "doc": "Primitive 5.",
+      "fields": {
+        "id": "FulfillmentID",
+        "commitment": "CommitmentID",
+        "state": "FulfillmentState",
+        "history": { "t": { "array": "FulfillmentTransition" }, "default": "list" },
+        "planned_at": "datetime",
+        "started_at": { "t": "datetime", "optional": true },
+        "completed_at": { "t": "datetime", "optional": true },
+        "evidence": { "t": { "array": "Evidence" }, "optional": true }
+      }
+    }
+  }
+}

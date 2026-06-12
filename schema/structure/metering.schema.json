@@ -1,0 +1,22 @@
+{
+  "$schema": "warp-commerce-structure/1.0.0",
+  "module": "metering",
+  "doc": "EntitlementConsumption - a lightweight per-access measurement record for metered digital services (Primitive 5). A Fulfillment per API call would be architecturally wrong; this links a measured consumption event to its parent Commitment.",
+  "definitions": {
+    "EntitlementConsumption": {
+      "def": "object",
+      "fields": {
+        "id": "string",
+        "commitment": "string",
+        "entitlement": "string",
+        "consumed_this_event": "number",
+        "total_consumed_this_period": "number",
+        "total_allowed_this_period": "number",
+        "period_start": "datetime",
+        "period_end": "datetime",
+        "timestamp": "datetime",
+        "overage": "boolean"
+      }
+    }
+  }
+}

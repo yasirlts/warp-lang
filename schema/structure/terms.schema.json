@@ -1,0 +1,145 @@
+{
+  "$schema": "warp-commerce-structure/1.0.0",
+  "module": "terms",
+  "doc": "CommitmentTerms - the terms aggregate the model attaches to a Commitment (Primitive 4): delivery, payment, conditions, and the v0.3 term structures. Discriminated unions key on `kind`.",
+  "definitions": {
+    "CommitmentStateType": {
+      "def": "enum",
+      "doc": "The discriminant strings of CommitmentState - used by conditions that name a target state.",
+      "values": ["Draft", "Proposed", "Tendered", "Accepted", "Modified", "PartiallyFulfilled", "Active", "Fulfilled", "Cancelled", "Disputed", "Refunded"]
+    },
+    "DeliveryFlexibility": {
+      "def": "object",
+      "fields": { "min_per_delivery": "Quantity", "max_per_delivery": "Quantity" }
+    },
+    "DeliveryMethod": {
+      "def": "union",
+      "discriminator": "kind",
+      "doc": "How value moves under a Commitment. 11 base + 4 v0.3 variants.",
+      "variants": [
+        { "tag": "PhysicalDelivery", "fields": { "carrier": { "t": "PartyID", "optional": true }, "tracking": { "t": "string", "optional": true } } },
+        { "tag": "InPersonHandover", "fields": { "location": "string", "staff_id": { "t": "PartyID", "optional": true } } },
+        { "tag": "InterStoreTransfer", "fields": { "from": "string", "to": "string", "customer_pickup": "boolean" } },
+        { "tag": "InternalTransfer", "fields": { "from": "string", "to": "string" } },
+        { "tag": "ServicePerformance", "fields": { "performer": "PartyID", "location": "string", "scheduled_at": "datetime", "duration_minutes": { "t": "number", "optional": true } } },
+        { "tag": "DigitalDelivery", "fields": { "mechanism": "string", "delivered_at": { "t": "datetime", "optional": true }, "access_token": { "t": "string", "optional": true } } },
+        { "tag": "MoneyTransfer", "fields": { "mechanism": "string", "reference": { "t": "string", "optional": true }, "cleared_at": { "t": "datetime", "optional": true } } },
+        { "tag": "ContingentDelivery", "fields": { "trigger": "string" } },
+        { "tag": "WhiteGlove", "fields": { "carrier": "PartyID" } },
+        { "tag": "ReturnDelivery", "fields": { "pickup_address": { "t": "string", "optional": true }, "dropoff_address": { "t": "string", "optional": true } } },
+        { "tag": "TitleTransfer", "fields": { "mechanism": { "enum": ["NotarialDeed", "WarrantyDeed", "LandRegistration"] }, "registry": "string", "title_number": { "t": "string", "optional": true }, "notary": { "t": "PartyID", "optional": true } } },
+        { "tag": "RecurringDelivery", "fields": { "schedule": "string", "quantity_per_delivery": "Quantity", "first_delivery": "datetime", "last_delivery": { "t": "datetime", "optional": true }, "flexibility": { "t": "DeliveryFlexibility", "optional": true } } },
+        { "tag": "CustomsRelease", "fields": { "customs_reference": "string", "cleared_at": "datetime", "duties_paid": { "t": "Money", "optional": true }, "inspection_required": "boolean" } },
+        { "tag": "RegistryRetirement", "fields": { "registry": "PartyID", "retirement_reference": "string", "retired_on_behalf_of": "PartyID", "reason": "string" } }
+      ]
+    },
+    "RoyaltyBeneficiary": { "def": "object", "fields": { "to": "PartyID", "rate": "number" } },
+    "Prescription": {
+      "def": "object",
+      "fields": {
+        "reference": "string",
+        "issuer": "PartyID",
+        "issued_at": "datetime",
+        "valid_until": "datetime",
+        "medication": "string",
+        "quantity": "string",
+        "refills": "number"
+      }
+    },
+    "EventCancellationTerms": {
+      "def": "object",
+      "fields": { "amount": "RefundAmount", "deadline_days": "number" }
+    },
+    "CommitmentCondition": {
+      "def": "union",
+      "discriminator": "kind",
+      "doc": "Prerequisites gating specific transitions. 10 base + 8 v0.3 variants.",
+      "variants": [
+        { "tag": "QualityInspection", "fields": { "inspector": "PartyID", "standard": "string", "must_complete_before": "CommitmentStateType", "if_fail": "CommitmentStateType" } },
+        { "tag": "AuthenticationVerification", "fields": { "verifier": "PartyID", "must_complete_before": "CommitmentStateType" } },
+        { "tag": "DeliverableAcceptance", "fields": { "deliverable_id": "string", "accepted_by": "PartyID", "acceptance_window_days": "number", "if_rejected": "CommitmentStateType" } },
+        { "tag": "ConditionVerification", "fields": { "required_condition": "string", "inspector": "PartyID", "if_not_met": "CommitmentStateType" } },
+        { "tag": "InsuredEventMonitoring", "fields": { "event_type": "string", "monitoring_party": { "t": "PartyID", "optional": true } } },
+        { "tag": "GracePeriod", "fields": { "duration_days": "number", "if_not_restored": "CommitmentStateType" } },
+        { "tag": "RoyaltyDistribution", "fields": { "beneficiaries": { "t": { "array": "RoyaltyBeneficiary" }, "default": "list" } } },
+        { "tag": "StaffDiscount", "fields": { "rate": "number" } },
+        { "tag": "NoShowPolicy", "fields": { "grace_minutes": "number", "fee": "Money" } },
+        { "tag": "SimultaneousAccessLimit", "fields": { "max_concurrent": "number" } },
+        { "tag": "FinancingContingency", "fields": { "lender": { "t": "PartyID", "optional": true }, "amount": "Money", "rate_cap": { "t": "number", "optional": true }, "approval_deadline": "datetime", "if_not_met": "CommitmentStateType" } },
+        { "tag": "InspectionContingency", "fields": { "inspector": { "t": "PartyID", "optional": true }, "deadline": "datetime", "if_failed": "CommitmentStateType" } },
+        { "tag": "PrescriptionRequired", "fields": { "prescription": { "t": "Prescription", "optional": true }, "verified_by": { "t": "PartyID", "optional": true }, "must_verify_before": "CommitmentStateType" } },
+        { "tag": "RegistryVerification", "fields": { "registry": "PartyID", "must_verify_before": "CommitmentStateType", "verifies": { "t": { "array": "string" }, "default": "list" } } },
+        { "tag": "ThresholdActivation", "fields": { "minimum_participants": "number", "maximum_participants": { "t": "number", "optional": true }, "activation_deadline": "datetime", "if_threshold_not_met": "CommitmentStateType", "if_threshold_met": "CommitmentStateType" } },
+        { "tag": "ComplianceDocumentation", "fields": { "required_documents": { "t": { "array": "string" }, "default": "list" }, "submission_deadline": "datetime", "verified_by": "PartyID", "if_not_submitted": "CommitmentStateType" } },
+        { "tag": "NoReturnPolicy", "fields": { "basis": "string", "jurisdiction": "string" } },
+        { "tag": "EventCancellationPolicy", "fields": { "if_cancelled": "EventCancellationTerms" } }
+      ]
+    },
+    "PaymentSplitEntry": {
+      "def": "object",
+      "fields": { "method": "string", "amount": "Money", "reference": { "t": "string", "optional": true } }
+    },
+    "CurrencyConversion": {
+      "def": "object",
+      "fields": { "from": "CurrencyCode", "to": "CurrencyCode", "rate": "number", "customer_pays": "Money" }
+    },
+    "PaymentTerms": {
+      "def": "object",
+      "doc": "Wraps the PaymentTiming with method / split / conversion.",
+      "fields": {
+        "timing": "PaymentTiming",
+        "method": { "t": "string", "optional": true },
+        "split": { "t": { "array": "PaymentSplitEntry" }, "optional": true },
+        "currency_conversion": { "t": "CurrencyConversion", "optional": true }
+      }
+    },
+    "DeliveryWindow": {
+      "def": "object",
+      "fields": { "earliest": "datetime", "latest": "datetime" }
+    },
+    "DeliveryTerms": {
+      "def": "object",
+      "fields": {
+        "method": "DeliveryMethod",
+        "address": { "t": "string", "optional": true },
+        "window": { "t": "DeliveryWindow", "optional": true },
+        "incoterm": { "t": "string", "optional": true }
+      }
+    },
+    "RequiredDocuments": {
+      "def": "object",
+      "doc": "Trade-finance documentary requirements.",
+      "fields": {
+        "bill_of_lading": { "t": "boolean", "optional": true },
+        "commercial_invoice": { "t": "boolean", "optional": true },
+        "packing_list": { "t": "boolean", "optional": true },
+        "certificate_of_origin": { "t": "boolean", "optional": true },
+        "insurance_certificate": { "t": "boolean", "optional": true },
+        "customs_declaration": { "t": "boolean", "optional": true }
+      }
+    },
+    "CommitmentDuration": {
+      "def": "union",
+      "discriminator": "kind",
+      "variants": [
+        { "tag": "Fixed", "fields": { "ends_at": "datetime" } },
+        { "tag": "OpenEnded", "fields": { "minimum_term_days": { "t": "number", "optional": true }, "cancellation_notice_days": "number" } }
+      ]
+    },
+    "CommitmentTerms": {
+      "def": "object",
+      "doc": "The aggregate. Every field optional so a Commitment may carry as little or as much of its terms as the platform knows.",
+      "fields": {
+        "delivery": { "t": "DeliveryTerms", "optional": true },
+        "payment": { "t": "PaymentTerms", "optional": true },
+        "conditions": { "t": { "array": "CommitmentCondition" }, "optional": true },
+        "cascade": { "t": "CascadeCancellation", "optional": true },
+        "volume_pricing": { "t": "VolumePricing", "optional": true },
+        "loyalty": { "t": "LoyaltyEarnTerm", "optional": true },
+        "required_documents": { "t": "RequiredDocuments", "optional": true },
+        "jurisdiction": { "t": "string", "optional": true },
+        "duration": { "t": "CommitmentDuration", "optional": true }
+      }
+    }
+  }
+}

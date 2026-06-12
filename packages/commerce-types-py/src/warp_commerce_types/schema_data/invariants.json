@@ -1,0 +1,48 @@
+{
+  "$comment": "Canonical definitions of the six invariants of the Warp Commerce Model plus the money_breakdown_sum structural rule and the loyalty-liability (Invariant 1, fourth clause) rule. Names and fix hints are the single source for every language binding's runtime checkers, so the human-readable violation messages agree across languages.",
+  "version": "1.0.0",
+  "invariants": {
+    "I-1": {
+      "name": "Value Conservation",
+      "description": "Value is neither created nor destroyed by a transaction; it is transferred. A single commitment must not mix currencies in its subject without an explicit conversion.",
+      "fix": "Convert all monetary values to one currency with convert(), or record an explicit CurrencyConversion in the terms."
+    },
+    "I-2": {
+      "name": "State Monotonicity",
+      "description": "State machines only advance along the legal transition edges; a terminal state never moves backward. History timestamps never decrease.",
+      "fix": "Only the model's valid transitions are allowed; a reversal must be a new Commitment with parties exchanged."
+    },
+    "I-3": {
+      "name": "Capacity Verification",
+      "description": "A party must have the verified capacity for a role before a commitment depending on that capacity is Accepted (a buyer must have can_buy).",
+      "fix": "Verify party capacity (can_buy) before transitioning to Accepted."
+    },
+    "I-4": {
+      "name": "Temporal Integrity",
+      "description": "Commitments form before Fulfillments execute. A fulfillment cannot start before its commitment reached Accepted.",
+      "fix": "Commitments form before Fulfillments execute - accept the commitment first."
+    },
+    "I-5": {
+      "name": "Identity Permanence",
+      "description": "Every identifier is globally unique and never reused across the lifetime of the system.",
+      "fix": "IDs are globally unique and never reused; generate a fresh id."
+    },
+    "I-6": {
+      "name": "Commitment Tree Consistency",
+      "description": "A parent commitment's value equals the sum of its children's values (in one base currency), within minor-unit tolerance.",
+      "fix": "Child commitment values must sum to the parent; recalculate after any substitution or cancellation (use allocate() for exact splits)."
+    }
+  },
+  "money_breakdown_sum": {
+    "doc": "Structural rule for the MoneyBreakdown type: the component amounts must sum to the stated total, compared with the currency's minor-unit tolerance (half the smallest minor unit), not exact float equality. Discount components carry a negative amount. All components and the total must share one currency.",
+    "rule": "sum(components[].amount.amount) == total.amount",
+    "tolerance": "minor_unit_half",
+    "discounts_negative": true,
+    "single_currency": true
+  },
+  "loyalty_liability": {
+    "doc": "Invariant 1, fourth clause. Loyalty points / merchant currency are the only ValueForm where value CREATION is the primary operation. Conservation applies to the issuer's total outstanding liability pool: outstanding_points * redemption_value_per_point must not exceed the issuer's capacity to honor them. Liability and capacity must share one currency.",
+    "rule": "outstanding_points * redemption_value_per_point.amount <= issuer_revenue_capacity.amount",
+    "single_currency": true
+  }
+}
