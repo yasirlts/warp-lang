@@ -1,0 +1,77 @@
+{
+  "fixture": "i2-backward-transition",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "reject",
+  "title": "Backward transition recorded in history",
+  "doc": "A commitment whose history contains Fulfilled→Accepted — a backward move not in the model's 26-transition table. State Monotonicity (I-2) rejects it. (Initiator has can_buy so I-3 stays clean and the rejection is unambiguous.)",
+  "rule": "I-2",
+  "rule_name": "State Monotonicity",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:buyer",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:backward-1",
+        "parties": {
+          "initiator": "party:buyer",
+          "counterparty": "party:seller",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:money-10",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 100,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Accepted"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Fulfilled"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-01-02T08:00:00.000Z",
+            "actor": "party:buyer"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-01-02T08:00:00.000Z"
+      }
+    ],
+    "fulfillments": []
+  }
+}

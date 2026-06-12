@@ -1,0 +1,7 @@
+{
+  "fixture": "money-breakdown-currency-mixed",
+  "expect": "reject",
+  "rule": "money_breakdown_sum",
+  "rule_name": "MoneyBreakdown Sum (single-currency clause of I-1)",
+  "because": "A MoneyBreakdown whose components mix MAD and EUR. The canonical money_breakdown_sum rule (an expression of invariant I-1) requires every component to share the total's currency; mixing currencies without explicit conversion is rejected."
+}

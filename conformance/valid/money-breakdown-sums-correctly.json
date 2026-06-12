@@ -1,0 +1,44 @@
+{
+  "fixture": "money-breakdown-sums-correctly",
+  "schema": "1.0.0",
+  "kind": "money-breakdown",
+  "expect": "accept",
+  "title": "MoneyBreakdown whose components sum to the total",
+  "doc": "Base 80 + Tax 16 + Shipping 10 − Discount 6 = 100.00 MAD. One currency throughout; the Discount component is negative; the components sum to the total within minor-unit tolerance (money_breakdown_sum, an expression of invariant I-1). MoneyComponent.kind uses the canonical enum (Base/Tax/Discount/Shipping/Surcharge/Tip/Adjustment).",
+  "payload": {
+    "total": {
+      "amount": 100,
+      "currency": "MAD"
+    },
+    "components": [
+      {
+        "kind": "Base",
+        "amount": {
+          "amount": 80,
+          "currency": "MAD"
+        }
+      },
+      {
+        "kind": "Tax",
+        "amount": {
+          "amount": 16,
+          "currency": "MAD"
+        }
+      },
+      {
+        "kind": "Shipping",
+        "amount": {
+          "amount": 10,
+          "currency": "MAD"
+        }
+      },
+      {
+        "kind": "Discount",
+        "amount": {
+          "amount": -6,
+          "currency": "MAD"
+        }
+      }
+    ]
+  }
+}

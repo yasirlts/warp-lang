@@ -1,0 +1,29 @@
+{
+  "fixture": "intent-abandon",
+  "schema": "1.0.0",
+  "kind": "transition-sequence",
+  "expect": "accept",
+  "title": "Intent Active→Abandoned, then terminal rejection",
+  "doc": "Active→Abandoned is valid; Abandoned→Active is rejected (terminal, I-2).",
+  "payload": {
+    "primitive": "intent",
+    "initial": {
+      "type": "Active"
+    },
+    "steps": [
+      {
+        "to": {
+          "type": "Abandoned"
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "Active"
+        },
+        "expect": "reject",
+        "rule": "I-2"
+      }
+    ]
+  }
+}

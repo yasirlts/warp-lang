@@ -1,0 +1,30 @@
+{
+  "fixture": "intent-convert",
+  "schema": "1.0.0",
+  "kind": "transition-sequence",
+  "expect": "accept",
+  "title": "Intent Active→Converted, then terminal rejection",
+  "doc": "Active→Converted is valid; Converted→Expired is rejected (terminal, I-2).",
+  "payload": {
+    "primitive": "intent",
+    "initial": {
+      "type": "Active"
+    },
+    "steps": [
+      {
+        "to": {
+          "type": "Converted",
+          "commitment_id": "commitment:order-1"
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "Expired"
+        },
+        "expect": "reject",
+        "rule": "I-2"
+      }
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "fixture": "catalog-fulfillment-states",
+  "schema": "1.0.0",
+  "kind": "state-catalog",
+  "expect": "accept",
+  "title": "Every FulfillmentState variant (all 5)",
+  "doc": "One structurally-valid instance of each of the 5 fulfillment states.",
+  "payload": {
+    "primitive": "FulfillmentState",
+    "instances": [
+      {
+        "label": "Planned",
+        "value": {
+          "type": "Planned"
+        }
+      },
+      {
+        "label": "InProgress",
+        "value": {
+          "type": "InProgress"
+        }
+      },
+      {
+        "label": "Completed",
+        "value": {
+          "type": "Completed"
+        }
+      },
+      {
+        "label": "Failed",
+        "value": {
+          "type": "Failed",
+          "reason": "carrier lost parcel",
+          "recoverable": true
+        }
+      },
+      {
+        "label": "Reversed",
+        "value": {
+          "type": "Reversed",
+          "reason": "buyer refused",
+          "initiated_by": "party:seller",
+          "at": "2026-01-02T11:00:00.000Z"
+        }
+      }
+    ]
+  }
+}

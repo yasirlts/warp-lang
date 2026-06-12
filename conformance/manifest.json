@@ -1,0 +1,213 @@
+{
+  "schema": "1.0.0",
+  "contract": "warp-conformance",
+  "generated_by": "conformance/tooling/build.mjs",
+  "fixtures": [
+    {
+      "id": "order-paid-fulfilled",
+      "kind": "scene",
+      "path": "valid/order-paid-fulfilled.json",
+      "expect": "accept",
+      "regression": "bug-2-adapter-empty-history"
+    },
+    {
+      "id": "money-breakdown-single-currency",
+      "kind": "scene",
+      "path": "valid/money-breakdown-single-currency.json",
+      "expect": "accept"
+    },
+    {
+      "id": "commission-split-multiparty",
+      "kind": "scene",
+      "path": "valid/commission-split-multiparty.json",
+      "expect": "accept"
+    },
+    {
+      "id": "tree-parent-children-sum",
+      "kind": "scene",
+      "path": "valid/tree-parent-children-sum.json",
+      "expect": "accept"
+    },
+    {
+      "id": "tree-float-0.1-plus-0.2",
+      "kind": "scene",
+      "path": "valid/tree-float-0.1-plus-0.2.json",
+      "expect": "accept",
+      "regression": "bug-3-i6-float-equality"
+    },
+    {
+      "id": "catalog-commitment-states",
+      "kind": "state-catalog",
+      "path": "valid/catalog-commitment-states.json",
+      "expect": "accept"
+    },
+    {
+      "id": "catalog-fulfillment-states",
+      "kind": "state-catalog",
+      "path": "valid/catalog-fulfillment-states.json",
+      "expect": "accept"
+    },
+    {
+      "id": "catalog-intent-states",
+      "kind": "state-catalog",
+      "path": "valid/catalog-intent-states.json",
+      "expect": "accept"
+    },
+    {
+      "id": "catalog-value-states",
+      "kind": "state-catalog",
+      "path": "valid/catalog-value-states.json",
+      "expect": "accept"
+    },
+    {
+      "id": "catalog-value-forms",
+      "kind": "state-catalog",
+      "path": "valid/catalog-value-forms.json",
+      "expect": "accept"
+    },
+    {
+      "id": "catalog-party-types",
+      "kind": "state-catalog",
+      "path": "valid/catalog-party-types.json",
+      "expect": "accept"
+    },
+    {
+      "id": "money-roundtrip-minor-units",
+      "kind": "money-roundtrip",
+      "path": "valid/money-roundtrip-minor-units.json",
+      "expect": "accept",
+      "regression": "bug-1-tnd-three-decimal"
+    },
+    {
+      "id": "money-breakdown-sums-correctly",
+      "kind": "money-breakdown",
+      "path": "valid/money-breakdown-sums-correctly.json",
+      "expect": "accept"
+    },
+    {
+      "id": "money-breakdown-float-tolerance",
+      "kind": "money-breakdown",
+      "path": "valid/money-breakdown-float-tolerance.json",
+      "expect": "accept",
+      "regression": "bug-3-i6-float-equality"
+    },
+    {
+      "id": "money-breakdown-currency-mixed",
+      "kind": "money-breakdown",
+      "path": "invalid/money-breakdown-currency-mixed.json",
+      "expect": "reject",
+      "rule": "money_breakdown_sum",
+      "rule_name": "MoneyBreakdown Sum (single-currency clause of I-1)",
+      "expected": "invalid/money-breakdown-currency-mixed.expected.json"
+    },
+    {
+      "id": "money-breakdown-sum-mismatch",
+      "kind": "money-breakdown",
+      "path": "invalid/money-breakdown-sum-mismatch.json",
+      "expect": "reject",
+      "rule": "money_breakdown_sum",
+      "rule_name": "MoneyBreakdown Sum (sum clause of I-1)",
+      "expected": "invalid/money-breakdown-sum-mismatch.expected.json"
+    },
+    {
+      "id": "i1-currency-mixed",
+      "kind": "scene",
+      "path": "invalid/i1-currency-mixed.json",
+      "expect": "reject",
+      "rule": "I-1",
+      "rule_name": "Value Conservation",
+      "expected": "invalid/i1-currency-mixed.expected.json"
+    },
+    {
+      "id": "i2-backward-transition",
+      "kind": "scene",
+      "path": "invalid/i2-backward-transition.json",
+      "expect": "reject",
+      "rule": "I-2",
+      "rule_name": "State Monotonicity",
+      "expected": "invalid/i2-backward-transition.expected.json"
+    },
+    {
+      "id": "i3-accept-without-capacity",
+      "kind": "scene",
+      "path": "invalid/i3-accept-without-capacity.json",
+      "expect": "reject",
+      "rule": "I-3",
+      "rule_name": "Capacity Verification",
+      "expected": "invalid/i3-accept-without-capacity.expected.json"
+    },
+    {
+      "id": "i4-fulfillment-before-commitment",
+      "kind": "scene",
+      "path": "invalid/i4-fulfillment-before-commitment.json",
+      "expect": "reject",
+      "rule": "I-4",
+      "rule_name": "Temporal Integrity",
+      "expected": "invalid/i4-fulfillment-before-commitment.expected.json"
+    },
+    {
+      "id": "i4-empty-history-fulfilled",
+      "kind": "scene",
+      "path": "invalid/i4-empty-history-fulfilled.json",
+      "expect": "reject",
+      "rule": "I-4",
+      "rule_name": "Temporal Integrity",
+      "regression": "bug-2-adapter-empty-history",
+      "expected": "invalid/i4-empty-history-fulfilled.expected.json"
+    },
+    {
+      "id": "i5-duplicate-id",
+      "kind": "scene",
+      "path": "invalid/i5-duplicate-id.json",
+      "expect": "reject",
+      "rule": "I-5",
+      "rule_name": "Identity Permanence",
+      "expected": "invalid/i5-duplicate-id.expected.json"
+    },
+    {
+      "id": "i6-children-exceed-parent",
+      "kind": "scene",
+      "path": "invalid/i6-children-exceed-parent.json",
+      "expect": "reject",
+      "rule": "I-6",
+      "rule_name": "Commitment Tree Consistency",
+      "expected": "invalid/i6-children-exceed-parent.expected.json"
+    },
+    {
+      "id": "commitment-happy-path",
+      "kind": "transition-sequence",
+      "path": "transitions/commitment-happy-path.json",
+      "expect": "accept"
+    },
+    {
+      "id": "commitment-reject-backward",
+      "kind": "transition-sequence",
+      "path": "transitions/commitment-reject-backward.json",
+      "expect": "accept"
+    },
+    {
+      "id": "intent-abandon",
+      "kind": "transition-sequence",
+      "path": "transitions/intent-abandon.json",
+      "expect": "accept"
+    },
+    {
+      "id": "intent-convert",
+      "kind": "transition-sequence",
+      "path": "transitions/intent-convert.json",
+      "expect": "accept"
+    },
+    {
+      "id": "fulfillment-failed-recoverable",
+      "kind": "transition-sequence",
+      "path": "transitions/fulfillment-failed-recoverable.json",
+      "expect": "accept"
+    },
+    {
+      "id": "fulfillment-failed-nonrecoverable",
+      "kind": "transition-sequence",
+      "path": "transitions/fulfillment-failed-nonrecoverable.json",
+      "expect": "accept"
+    }
+  ]
+}

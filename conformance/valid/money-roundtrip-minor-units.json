@@ -1,0 +1,38 @@
+{
+  "fixture": "money-roundtrip-minor-units",
+  "schema": "1.0.0",
+  "kind": "money-roundtrip",
+  "expect": "accept",
+  "title": "Minor-unit round-trip across 0/2/3-decimal currencies (TND 10x guard)",
+  "doc": "Decimal ↔ minor-unit conversion must use each currency's real precision: 3 decimals for TND/BHD (×1000), 0 for JPY (×1), 2 for USD/MAD (×100). Regression for BUG 1: TND was treated as two-decimal, making every TND amount 10× wrong.",
+  "regression": "bug-1-tnd-three-decimal",
+  "payload": {
+    "cases": [
+      {
+        "minor_amount": 1500,
+        "currency": "TND",
+        "decimal_amount": 1.5
+      },
+      {
+        "minor_amount": 1500,
+        "currency": "BHD",
+        "decimal_amount": 1.5
+      },
+      {
+        "minor_amount": 1500,
+        "currency": "JPY",
+        "decimal_amount": 1500
+      },
+      {
+        "minor_amount": 1500,
+        "currency": "USD",
+        "decimal_amount": 15
+      },
+      {
+        "minor_amount": 10000,
+        "currency": "MAD",
+        "decimal_amount": 100
+      }
+    ]
+  }
+}

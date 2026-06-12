@@ -1,0 +1,136 @@
+{
+  "fixture": "tree-float-0.1-plus-0.2",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "title": "Float guard — 0.1 + 0.2 children vs 0.3 parent (I-6 must NOT fail)",
+  "doc": "Children of 0.10 MAD and 0.20 MAD reconcile against a 0.30 MAD parent. Exact float equality would falsely flag this (0.1 + 0.2 !== 0.3 in IEEE-754); the model compares within half a minor unit. Regression for BUG 3.",
+  "regression": "bug-3-i6-float-equality",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:buyer",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:float-parent",
+        "parties": {
+          "initiator": "party:buyer",
+          "counterparty": "party:seller",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:float-total",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 0.3,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Draft"
+        },
+        "history": [],
+        "children": [
+          "commitment:float-c1",
+          "commitment:float-c2"
+        ],
+        "created_at": "2026-01-02T08:00:00.000Z"
+      },
+      {
+        "id": "commitment:float-c1",
+        "parties": {
+          "initiator": "party:buyer",
+          "counterparty": "party:seller",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:money-6",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 0.1,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Draft"
+        },
+        "history": [],
+        "children": [],
+        "created_at": "2026-01-02T08:00:00.000Z",
+        "parent": "commitment:float-parent"
+      },
+      {
+        "id": "commitment:float-c2",
+        "parties": {
+          "initiator": "party:buyer",
+          "counterparty": "party:seller",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:money-7",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 0.2,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Draft"
+        },
+        "history": [],
+        "children": [],
+        "created_at": "2026-01-02T08:00:00.000Z",
+        "parent": "commitment:float-parent"
+      }
+    ],
+    "fulfillments": []
+  }
+}

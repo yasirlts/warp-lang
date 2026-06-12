@@ -1,0 +1,7 @@
+{
+  "fixture": "i1-currency-mixed",
+  "expect": "reject",
+  "rule": "I-1",
+  "rule_name": "Value Conservation",
+  "because": "A commitment subject mixing MAD and EUR with no explicit conversion. Value Conservation (I-1) forbids implicit FX."
+}

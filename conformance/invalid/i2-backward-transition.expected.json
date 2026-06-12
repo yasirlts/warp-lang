@@ -1,0 +1,7 @@
+{
+  "fixture": "i2-backward-transition",
+  "expect": "reject",
+  "rule": "I-2",
+  "rule_name": "State Monotonicity",
+  "because": "A commitment whose history contains Fulfilled→Accepted — a backward move not in the model's 26-transition table. State Monotonicity (I-2) rejects it. (Initiator has can_buy so I-3 stays clean and the rejection is unambiguous.)"
+}

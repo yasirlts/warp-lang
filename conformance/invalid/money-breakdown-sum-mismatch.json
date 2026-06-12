@@ -1,0 +1,32 @@
+{
+  "fixture": "money-breakdown-sum-mismatch",
+  "schema": "1.0.0",
+  "kind": "money-breakdown",
+  "expect": "reject",
+  "title": "MoneyBreakdown components do not sum to total",
+  "doc": "Components sum to 96.00 MAD but the total claims 100.00 MAD — a 4.00 MAD discrepancy, far above minor-unit tolerance. The canonical money_breakdown_sum rule (an expression of invariant I-1) rejects it.",
+  "rule": "money_breakdown_sum",
+  "rule_name": "MoneyBreakdown Sum (sum clause of I-1)",
+  "payload": {
+    "total": {
+      "amount": 100,
+      "currency": "MAD"
+    },
+    "components": [
+      {
+        "kind": "Base",
+        "amount": {
+          "amount": 80,
+          "currency": "MAD"
+        }
+      },
+      {
+        "kind": "Tax",
+        "amount": {
+          "amount": 16,
+          "currency": "MAD"
+        }
+      }
+    ]
+  }
+}

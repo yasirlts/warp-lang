@@ -1,0 +1,250 @@
+{
+  "fixture": "commission-split-multiparty",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "title": "Multi-party commission split summing to parent (I-6 clean)",
+  "doc": "A marketplace commitment (buyer↔seller, platform intermediary) with a DoubleSided CommissionSplit payment timing, decomposed into a 95.00 MAD seller payout and a 5.00 MAD platform commission. Children sum exactly to the 100.00 MAD parent — Commitment Tree Consistency (I-6) holds.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:buyer",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:seller",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:platform",
+        "party_type": "System",
+        "locale": {
+          "language": "en",
+          "currency": "USD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:mkt-1",
+        "parties": {
+          "initiator": "party:buyer",
+          "counterparty": "party:seller",
+          "intermediaries": [
+            "party:platform"
+          ]
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:mkt-total",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 100,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Accepted"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-01-02T08:00:00.000Z",
+            "actor": "party:buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-01-02T09:00:00.000Z",
+            "actor": "party:seller"
+          }
+        ],
+        "children": [
+          "commitment:mkt-payout",
+          "commitment:mkt-commission"
+        ],
+        "created_at": "2026-01-02T08:00:00.000Z",
+        "terms": {
+          "payment": {
+            "timing": {
+              "type": "CommissionSplit",
+              "structure": {
+                "type": "DoubleSided",
+                "buyer_fee": {
+                  "rate": 0.02,
+                  "paid_to": "party:platform"
+                },
+                "seller_fee": {
+                  "rate": 0.05,
+                  "paid_to": "party:platform"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "commitment:mkt-payout",
+        "parties": {
+          "initiator": "party:buyer",
+          "counterparty": "party:seller",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:mkt-payout",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 95,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Accepted"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-01-02T08:00:00.000Z",
+            "actor": "party:buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-01-02T09:00:00.000Z",
+            "actor": "party:seller"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-01-02T08:00:00.000Z",
+        "parent": "commitment:mkt-1"
+      },
+      {
+        "id": "commitment:mkt-commission",
+        "parties": {
+          "initiator": "party:buyer",
+          "counterparty": "party:platform",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:mkt-commission",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 5,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Accepted"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-01-02T08:00:00.000Z",
+            "actor": "party:buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-01-02T09:00:00.000Z",
+            "actor": "party:platform"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-01-02T08:00:00.000Z",
+        "parent": "commitment:mkt-1"
+      }
+    ],
+    "fulfillments": []
+  }
+}

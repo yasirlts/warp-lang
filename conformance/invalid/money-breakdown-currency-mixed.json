@@ -1,0 +1,32 @@
+{
+  "fixture": "money-breakdown-currency-mixed",
+  "schema": "1.0.0",
+  "kind": "money-breakdown",
+  "expect": "reject",
+  "title": "Currency-mixed MoneyBreakdown",
+  "doc": "A MoneyBreakdown whose components mix MAD and EUR. The canonical money_breakdown_sum rule (an expression of invariant I-1) requires every component to share the total's currency; mixing currencies without explicit conversion is rejected.",
+  "rule": "money_breakdown_sum",
+  "rule_name": "MoneyBreakdown Sum (single-currency clause of I-1)",
+  "payload": {
+    "total": {
+      "amount": 100,
+      "currency": "MAD"
+    },
+    "components": [
+      {
+        "kind": "Base",
+        "amount": {
+          "amount": 80,
+          "currency": "MAD"
+        }
+      },
+      {
+        "kind": "Tax",
+        "amount": {
+          "amount": 20,
+          "currency": "EUR"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "fixture": "fulfillment-failed-recoverable",
+  "schema": "1.0.0",
+  "kind": "transition-sequence",
+  "expect": "accept",
+  "title": "Failed (recoverable) → Planned retry → Completed",
+  "doc": "Planned→InProgress→Failed(recoverable:true)→Planned→InProgress→Completed. A recoverable failure may retry to Planned.",
+  "payload": {
+    "primitive": "fulfillment",
+    "initial": {
+      "type": "Planned"
+    },
+    "steps": [
+      {
+        "to": {
+          "type": "InProgress"
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "Failed",
+          "reason": "carrier delay",
+          "recoverable": true
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "Planned"
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "InProgress"
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "Completed"
+        },
+        "expect": "accept"
+      }
+    ]
+  }
+}

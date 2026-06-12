@@ -1,0 +1,87 @@
+{
+  "fixture": "i3-accept-without-capacity",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "reject",
+  "title": "Commitment Accepted without buyer capacity",
+  "doc": "A commitment reaches Accepted but its initiator's capacity has can_buy=false. Capacity Verification (I-3) requires verified capacity before acceptance.",
+  "rule": "I-3",
+  "rule_name": "Capacity Verification",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:buyer",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": false,
+          "can_sell": false,
+          "can_fulfill": false,
+          "can_guarantee": false,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:nocap-1",
+        "parties": {
+          "initiator": "party:buyer",
+          "counterparty": "party:seller",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:money-11",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 100,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Accepted"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-01-02T08:00:00.000Z",
+            "actor": "party:buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-01-02T09:00:00.000Z",
+            "actor": "party:seller"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-01-02T08:00:00.000Z"
+      }
+    ],
+    "fulfillments": []
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "fixture": "catalog-intent-states",
+  "schema": "1.0.0",
+  "kind": "state-catalog",
+  "expect": "accept",
+  "title": "Every IntentState variant (all 4)",
+  "doc": "One structurally-valid instance of each of the 4 intent states.",
+  "payload": {
+    "primitive": "IntentState",
+    "instances": [
+      {
+        "label": "Active",
+        "value": {
+          "type": "Active"
+        }
+      },
+      {
+        "label": "Abandoned",
+        "value": {
+          "type": "Abandoned"
+        }
+      },
+      {
+        "label": "Converted",
+        "value": {
+          "type": "Converted",
+          "commitment_id": "commitment:order-1"
+        }
+      },
+      {
+        "label": "Expired",
+        "value": {
+          "type": "Expired"
+        }
+      }
+    ]
+  }
+}
