@@ -7,7 +7,7 @@ Deciders: Yasir Ahmad (CTO)
 
 ## Context
 
-[CONTRACTS.md](../../CONTRACTS.md) C-06 forbids the AI builder from
+CONTRACTS.md C-06 forbids the AI builder from
 showing a non-compiling workflow to the merchant. The compiler is
 the safety net. But the AI will fail to compile sometimes — the
 question is what happens then.
@@ -53,7 +53,7 @@ goes live:
   and explicitly approves it.
 
 The summary gate is the topic of this ADR. C-06 is settled by
-[CONTRACTS.md](../../CONTRACTS.md).
+CONTRACTS.md.
 
 ### Round budget: 3
 

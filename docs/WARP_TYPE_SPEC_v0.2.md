@@ -125,8 +125,8 @@ input would force every adapter to add a normalization step Warp
 could centralize. Warp accepts any case on input and normalizes on
 output; the contract is "lowercase emitted, anything accepted."
 
-Two helpers in
-[`acp_client.rs`](../crates/warp-catalog/src/commerce/intelligence/acp_client.rs)
+Two helpers in `acp_client.rs` (in the `warp-catalog` crate — part of
+Warp's commercial distribution, not included in this open-source repository)
 demonstrate the boundary pattern:
 `parse_acp_language(&str) -> Language` and
 `parse_acp_channel(&str) -> Channel`. Both fall back to a safe default
@@ -818,8 +818,8 @@ second.
 **Implementations.** Warp ships five adapters that implement this
 contract today: Agora (native event bus, no webhook), Shopify,
 WooCommerce, OpenCart, and Odoo. The five reference implementations
-are public — see
-[`crates/warp-catalog/src/adapters/`](../crates/warp-catalog/src/adapters/).
+live in `crates/warp-catalog/src/adapters/` — part of Warp's commercial
+distribution, not included in this open-source repository.
 
 ---
 

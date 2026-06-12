@@ -127,7 +127,8 @@ and `data.to_Item` (length only). Everything else is ignored at v0.1.
 Concretely, the adapter constructs a `Translated::OrderPlaced` from
 the envelope as follows. Each row maps a SAP field to a Warp construction
 call — the same shape the Odoo adapter follows in
-[`crates/warp-catalog/src/adapters/odoo/event_bridge.rs`](../../crates/warp-catalog/src/adapters/odoo/event_bridge.rs).
+`crates/warp-catalog/src/adapters/odoo/event_bridge.rs` (part of Warp's
+commercial distribution, not included in this open-source repository).
 
 | Warp field                | Construction                                                                                  | Notes                                                            |
 |---------------------------|-----------------------------------------------------------------------------------------------|------------------------------------------------------------------|
@@ -253,7 +254,7 @@ deliberate so an unsupported platform fails at compile time.
 
 ## Compatibility surface
 
-Following the [WARP_COMPATIBLE_GUIDE](../WARP_COMPATIBLE_GUIDE.md):
+Following the [WARP_COMPATIBLE_GUIDE](../../spec/COMPATIBLE_GUIDE.md):
 
 - **Rule 1 (namespace ids):** every SAP id prefixed `sap_` /
   `sap_customer_` at the adapter boundary.
@@ -312,11 +313,12 @@ and the SAP-flavored field-mapping in `translate_sap_event`.
 ## References
 
 - [SAP Business Eventing documentation](https://help.sap.com/docs/SAP_S4HANA_CLOUD/0f69f8fb28ac4bf48d2b57b9637e81fa/) — SAP-side specification.
-- [Warp adapter contract](../WARP_COMPATIBLE_GUIDE.md) — the five rules
+- [Warp adapter contract](../../spec/COMPATIBLE_GUIDE.md) — the five rules
   every Warp adapter implements.
 - [Warp Type Spec v0.1](../WARP_TYPE_SPEC_v0.1.md) — the typed
   vocabulary the adapter emits.
-- [Odoo adapter](../../crates/warp-catalog/src/adapters/odoo/event_bridge.rs) —
+- Odoo adapter (`crates/warp-catalog/src/adapters/odoo/event_bridge.rs`, part
+  of Warp's commercial distribution, not included in this open-source repository) —
   the nearest reference implementation. Read this first when starting
   the SAP adapter — the shape and the tests transfer almost line-by-line.
 - [ADR-0003 platform adapter interface](../adr/0003-platform-adapter-interface.md) —

@@ -1,5 +1,7 @@
 # ADR-0002: Multi-Tenancy Implementation Strategy
 
+> Note: this ADR references the warp-storage and warp-catalog crates, which are part of Warp's commercial distribution and not included in this open-source repository. The rationale is published for transparency.
+
 Date: 2026-05-22
 Status: ACCEPTED
 Accepted: 2026-05-22
@@ -7,7 +9,7 @@ Deciders: Yasir Ahmad (CTO)
 
 ## Context
 
-[CONTRACTS.md](../../CONTRACTS.md) C-03 requires `tenant_id` on every
+CONTRACTS.md C-03 requires `tenant_id` on every
 execution, every workflow, every node config, every storage row,
 every log line. No single-tenant shortcuts.
 

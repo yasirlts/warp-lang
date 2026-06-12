@@ -1,5 +1,7 @@
 # ADR-0003: Platform Adapter Interface
 
+> Note: this ADR references the warp-storage and warp-catalog crates, which are part of Warp's commercial distribution and not included in this open-source repository. The rationale is published for transparency.
+
 Date: 2026-05-22
 Status: ACCEPTED
 Accepted: 2026-05-22
@@ -18,7 +20,7 @@ trait CommerceAdapter {
 }
 ```
 
-[CONTRACTS.md](../../CONTRACTS.md) C-04 forbids `warp-core` from
+CONTRACTS.md C-04 forbids `warp-core` from
 depending on any specific adapter. The trait is the only contract.
 
 This interface must be locked down **before** the Agora adapter is
