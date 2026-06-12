@@ -1,0 +1,64 @@
+{
+  "fixture": "commitment-happy-path",
+  "schema": "1.0.0",
+  "kind": "transition-sequence",
+  "expect": "accept",
+  "title": "Commitment lifecycle to Refunded, then a rejected backward move",
+  "doc": "Draft→Proposed→Accepted→PartiallyFulfilled→Fulfilled→Refunded (all valid), then Refunded→Accepted rejected (terminal, I-2).",
+  "payload": {
+    "primitive": "commitment",
+    "initial": {
+      "type": "Draft"
+    },
+    "steps": [
+      {
+        "to": {
+          "type": "Proposed"
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "Accepted"
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "PartiallyFulfilled",
+          "fulfilled_item_ids": [
+            "item:1"
+          ],
+          "remaining_item_ids": [
+            "item:2"
+          ]
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "Fulfilled"
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "Refunded",
+          "amount": {
+            "amount": 100,
+            "currency": "MAD"
+          },
+          "at": "2026-01-02T12:00:00.000Z"
+        },
+        "expect": "accept"
+      },
+      {
+        "to": {
+          "type": "Accepted"
+        },
+        "expect": "reject",
+        "rule": "I-2"
+      }
+    ]
+  }
+}

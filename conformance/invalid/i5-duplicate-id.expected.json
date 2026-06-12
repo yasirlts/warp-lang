@@ -1,0 +1,7 @@
+{
+  "fixture": "i5-duplicate-id",
+  "expect": "reject",
+  "rule": "I-5",
+  "rule_name": "Identity Permanence",
+  "because": "Two distinct commitments share the id commitment:dup. Identity Permanence (I-5): ids are globally unique and never reused."
+}

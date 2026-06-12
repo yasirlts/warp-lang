@@ -1,0 +1,7 @@
+{
+  "fixture": "money-breakdown-sum-mismatch",
+  "expect": "reject",
+  "rule": "money_breakdown_sum",
+  "rule_name": "MoneyBreakdown Sum (sum clause of I-1)",
+  "because": "Components sum to 96.00 MAD but the total claims 100.00 MAD — a 4.00 MAD discrepancy, far above minor-unit tolerance. The canonical money_breakdown_sum rule (an expression of invariant I-1) rejects it."
+}

@@ -1,0 +1,70 @@
+{
+  "fixture": "catalog-value-forms",
+  "schema": "1.0.0",
+  "kind": "state-catalog",
+  "expect": "accept",
+  "title": "Every ValueForm variant (all 6)",
+  "doc": "One structurally-valid instance of each of the 6 value forms (Primitive 2: Value).",
+  "payload": {
+    "primitive": "ValueForm",
+    "instances": [
+      {
+        "label": "PhysicalGood",
+        "value": {
+          "kind": "PhysicalGood",
+          "sku": "SKU-1",
+          "condition": "New",
+          "location": "Casablanca"
+        }
+      },
+      {
+        "label": "DigitalGood",
+        "value": {
+          "kind": "DigitalGood",
+          "identifier": "ebook-1",
+          "exclusivity": "NonExclusive",
+          "access_model": {
+            "kind": "Download",
+            "redownloadable": true
+          }
+        }
+      },
+      {
+        "label": "Service",
+        "value": {
+          "kind": "Service",
+          "identifier": "consult-1",
+          "delivery_model": {
+            "location": "Remote",
+            "performer": "party:seller"
+          }
+        }
+      },
+      {
+        "label": "Money",
+        "value": {
+          "kind": "Money",
+          "money": {
+            "amount": 100,
+            "currency": "MAD"
+          }
+        }
+      },
+      {
+        "label": "Nothing",
+        "value": {
+          "kind": "Nothing"
+        }
+      },
+      {
+        "label": "ContingentValue",
+        "value": {
+          "kind": "ContingentValue",
+          "trigger_type": "FlightDelay",
+          "if_triggered_description": "payout 500 MAD",
+          "if_not_triggered_description": "Nothing"
+        }
+      }
+    ]
+  }
+}

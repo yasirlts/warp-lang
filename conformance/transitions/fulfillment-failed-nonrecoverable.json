@@ -1,0 +1,35 @@
+{
+  "fixture": "fulfillment-failed-nonrecoverable",
+  "schema": "1.0.0",
+  "kind": "transition-sequence",
+  "expect": "accept",
+  "title": "Failed (non-recoverable) cannot retry to Planned",
+  "doc": "From Failed(recoverable:false): →Planned is rejected and →Reversed is rejected (Failed is terminal unless the failure was recoverable). I-2.",
+  "payload": {
+    "primitive": "fulfillment",
+    "initial": {
+      "type": "Failed",
+      "reason": "package destroyed",
+      "recoverable": false
+    },
+    "steps": [
+      {
+        "to": {
+          "type": "Planned"
+        },
+        "expect": "reject",
+        "rule": "I-2"
+      },
+      {
+        "to": {
+          "type": "Reversed",
+          "reason": "n/a",
+          "initiated_by": "party:seller",
+          "at": "2026-01-02T11:00:00.000Z"
+        },
+        "expect": "reject",
+        "rule": "I-2"
+      }
+    ]
+  }
+}

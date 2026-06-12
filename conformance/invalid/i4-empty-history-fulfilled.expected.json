@@ -1,0 +1,8 @@
+{
+  "fixture": "i4-empty-history-fulfilled",
+  "expect": "reject",
+  "rule": "I-4",
+  "rule_name": "Temporal Integrity",
+  "because": "A Fulfilled commitment with an empty history and a Completed fulfillment. With no recorded Accepted transition the auditor cannot place fulfillment after commitment, so I-4 rejects it. This is exactly the un-synthesized adapter output BUG 2 fixed by replaying a real history (see valid/order-paid-fulfilled).",
+  "regression": "bug-2-adapter-empty-history"
+}

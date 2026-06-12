@@ -1,0 +1,70 @@
+{
+  "fixture": "catalog-party-types",
+  "schema": "1.0.0",
+  "kind": "state-catalog",
+  "expect": "accept",
+  "title": "Every PartyType variant (all 3)",
+  "doc": "One structurally-valid instance of each of the 3 party types (Primitive 1: Party).",
+  "payload": {
+    "primitive": "Party",
+    "instances": [
+      {
+        "label": "Individual",
+        "value": {
+          "id": "party:buyer",
+          "party_type": "Individual",
+          "locale": {
+            "language": "fr-MA",
+            "currency": "MAD",
+            "jurisdiction": "MA"
+          },
+          "capacity": {
+            "can_buy": false,
+            "can_sell": false,
+            "can_fulfill": false,
+            "can_guarantee": false,
+            "verified_at": "2026-01-01T00:00:00.000Z"
+          }
+        }
+      },
+      {
+        "label": "Organization",
+        "value": {
+          "id": "party:seller",
+          "party_type": "Organization",
+          "locale": {
+            "language": "fr-MA",
+            "currency": "MAD",
+            "jurisdiction": "MA"
+          },
+          "capacity": {
+            "can_buy": true,
+            "can_sell": true,
+            "can_fulfill": true,
+            "can_guarantee": true,
+            "verified_at": "2026-01-01T00:00:00.000Z"
+          }
+        }
+      },
+      {
+        "label": "System",
+        "value": {
+          "id": "party:platform",
+          "party_type": "System",
+          "locale": {
+            "language": "en",
+            "currency": "USD",
+            "jurisdiction": "MA"
+          },
+          "capacity": {
+            "can_buy": true,
+            "can_sell": true,
+            "can_fulfill": true,
+            "can_guarantee": true,
+            "verified_at": "2026-01-01T00:00:00.000Z"
+          }
+        }
+      }
+    ]
+  }
+}

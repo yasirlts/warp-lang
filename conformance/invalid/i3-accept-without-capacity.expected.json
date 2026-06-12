@@ -1,0 +1,7 @@
+{
+  "fixture": "i3-accept-without-capacity",
+  "expect": "reject",
+  "rule": "I-3",
+  "rule_name": "Capacity Verification",
+  "because": "A commitment reaches Accepted but its initiator's capacity has can_buy=false. Capacity Verification (I-3) requires verified capacity before acceptance."
+}

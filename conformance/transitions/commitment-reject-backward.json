@@ -1,0 +1,39 @@
+{
+  "fixture": "commitment-reject-backward",
+  "schema": "1.0.0",
+  "kind": "transition-sequence",
+  "expect": "accept",
+  "title": "Backward commitment transitions rejected; forward still allowed",
+  "doc": "From Fulfilled: →Accepted and →Draft are rejected (I-2); →Disputed is accepted (Fulfilled→Disputed is valid).",
+  "payload": {
+    "primitive": "commitment",
+    "initial": {
+      "type": "Fulfilled"
+    },
+    "steps": [
+      {
+        "to": {
+          "type": "Accepted"
+        },
+        "expect": "reject",
+        "rule": "I-2"
+      },
+      {
+        "to": {
+          "type": "Draft"
+        },
+        "expect": "reject",
+        "rule": "I-2"
+      },
+      {
+        "to": {
+          "type": "Disputed",
+          "by": "party:buyer",
+          "reason": "item damaged",
+          "opened_at": "2026-01-02T10:00:00.000Z"
+        },
+        "expect": "accept"
+      }
+    ]
+  }
+}

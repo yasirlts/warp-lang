@@ -1,0 +1,31 @@
+{
+  "fixture": "money-breakdown-float-tolerance",
+  "schema": "1.0.0",
+  "kind": "money-breakdown",
+  "expect": "accept",
+  "title": "MoneyBreakdown float tolerance — 0.10 + 0.20 = 0.30",
+  "doc": "Components of 0.10 and 0.20 MAD against a 0.30 MAD total. Exact float equality would falsely fail (0.1 + 0.2 !== 0.3); money_breakdown_sum compares within half a minor unit. Canonical enum kinds (Base + Adjustment).",
+  "regression": "bug-3-i6-float-equality",
+  "payload": {
+    "total": {
+      "amount": 0.3,
+      "currency": "MAD"
+    },
+    "components": [
+      {
+        "kind": "Base",
+        "amount": {
+          "amount": 0.1,
+          "currency": "MAD"
+        }
+      },
+      {
+        "kind": "Adjustment",
+        "amount": {
+          "amount": 0.2,
+          "currency": "MAD"
+        }
+      }
+    ]
+  }
+}

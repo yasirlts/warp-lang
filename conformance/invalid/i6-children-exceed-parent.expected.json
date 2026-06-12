@@ -1,0 +1,7 @@
+{
+  "fixture": "i6-children-exceed-parent",
+  "expect": "reject",
+  "rule": "I-6",
+  "rule_name": "Commitment Tree Consistency",
+  "because": "A 100.00 MAD parent split into 80.00 + 40.00 = 120.00 MAD children. Commitment Tree Consistency (I-6): child values must sum to the parent."
+}

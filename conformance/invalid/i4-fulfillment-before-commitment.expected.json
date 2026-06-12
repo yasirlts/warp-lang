@@ -1,0 +1,7 @@
+{
+  "fixture": "i4-fulfillment-before-commitment",
+  "expect": "reject",
+  "rule": "I-4",
+  "rule_name": "Temporal Integrity",
+  "because": "A Completed fulfillment whose commitment is only Proposed (never reached Accepted). Temporal Integrity (I-4): commitments form before fulfillments execute."
+}
