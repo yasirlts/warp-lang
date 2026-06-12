@@ -6,20 +6,8 @@
  * When `total_consumed_this_period` exceeds the allowance, an overage child
  * Commitment is created (priced at the metered rate).
  *
- * Derived from WARP_COMMERCE_MODEL.md v0.3.
+ * Generated from `schema/structure/auxiliary.schema.json` — see
+ * `./generated/types.generated.ts` — and re-exported here.
  */
 
-export interface EntitlementConsumption {
-  id: string;
-  /** The parent CommitmentID this consumption belongs to. */
-  commitment: string;
-  /** What is being metered, e.g. "api-calls", "executions-per-month". */
-  entitlement: string;
-  consumed_this_event: number;
-  total_consumed_this_period: number;
-  total_allowed_this_period: number;
-  period_start: string;
-  period_end: string;
-  timestamp: string;
-  overage: boolean;
-}
+export type { EntitlementConsumption } from "./generated/types.generated.js";

@@ -57,6 +57,8 @@
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "generate": "node scripts/generate-from-schema.mjs",
+    "codegen": "node scripts/generate-from-schema.mjs --check",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

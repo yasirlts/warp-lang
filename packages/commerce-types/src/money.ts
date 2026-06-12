@@ -3,38 +3,23 @@
  * Value → ValueForm → Money). Money ALWAYS carries its currency; there is no
  * amount without a denomination. This is how accidental currency mixing is
  * caught rather than silently allowed: you cannot add MAD to EUR.
+ *
+ * `CurrencyCode` and `Money` — together with the `MoneyBreakdown` family — are
+ * generated from `schema/structure/money.schema.json` (see
+ * `./generated/types.generated.ts`). This module re-exports them and adds the
+ * hand-written money arithmetic that the schema deliberately does not carry.
  */
 
-/**
- * ISO 4217 currency code. The common set is enumerated for autocomplete; the
- * `(string & {})` member keeps the type open to any other ISO code (and to
- * `CurrencyCode::Custom` loyalty/credit denominations) without losing the
- * literal suggestions.
- */
-export type CurrencyCode =
-  | "MAD"
-  | "EUR"
-  | "USD"
-  | "GBP"
-  | "DZD"
-  | "TND"
-  | "AED"
-  | "SAR"
-  | "EGP"
-  | "JPY"
-  | "CAD"
-  | "AUD"
-  | "CHF"
-  | "CNY"
-  | "INR"
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  | (string & {});
+import type { CurrencyCode, Money } from "./generated/types.generated.js";
 
-/** A monetary value. `currency` is required — always. */
-export interface Money {
-  readonly amount: number;
-  readonly currency: CurrencyCode;
-}
+export type {
+  CurrencyCode,
+  Money,
+  MoneyComponentKind,
+  MoneyComponent,
+  MoneyBreakdown,
+  MoneyOrBreakdown,
+} from "./generated/types.generated.js";
 
 /** Thrown when an operation would combine two different currencies. */
 export class CurrencyMismatchError extends Error {

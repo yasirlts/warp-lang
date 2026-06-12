@@ -81,6 +81,23 @@ const commitment = fromShopifyOrder(shopifyOrder); // Order → Commitment, stat
 5. **Identity Permanence** — IDs are unique and never reused.
 6. **Commitment Tree Consistency** — child order values sum to their parent.
 
+## Generated from the canonical schema
+
+The structural types and the state-transition tables are **generated from the
+[canonical schema spine](https://github.com/yasirlts/warp-lang/tree/main/schema)**
+(`schema/structure/*.schema.json` + `schema/behavior/transitions.json`), not
+hand-authored. The generator lives at
+[`scripts/generate-from-schema.mjs`](scripts/generate-from-schema.mjs) and emits
+[`src/generated/`](src/generated/); the brand types (`PartyID`, …) and the open
+`CurrencyCode` union — which JSON Schema cannot express — are re-applied by the
+generator. The runtime (money math, transition functions, invariant checkers,
+platform adapters) is hand-written and consumes the generated types.
+
+```
+npm run generate   # regenerate src/generated/ from ../../schema
+npm run codegen    # CI: fail if the generated output drifts from the schema
+```
+
 ## Scope (v0.1)
 
 This release covers the five primitives, the three state machines with their

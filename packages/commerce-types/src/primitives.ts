@@ -2,25 +2,75 @@
  * The five primitives of the Warp Commerce Model: Party, Value, Intent,
  * Commitment, Fulfillment — plus their branded identifiers and constructors.
  *
- * Derived from WARP_COMMERCE_MODEL.md v0.2. The state machines live in
- * `states.ts`; the transition rules live in `transitions.ts`.
+ * The TYPES are generated from the canonical schema
+ * (`schema/structure/party|value|intent|commitment|fulfillment.schema.json`) —
+ * see `./generated/types.generated.ts`. This module re-exports them under the
+ * names the package has always used and keeps the hand-written constructors and
+ * id helpers, which the schema deliberately does not carry. The state machines
+ * live in `states.ts`; the transition rules live in `transitions.ts`.
  */
 
-import type { CurrencyCode, Money } from "./money.js";
-import type { CommitmentState, Evidence, FulfillmentState, IntentState } from "./states.js";
-// Type-only import — `terms.ts` imports back from this module (PartyID,
-// Quantity), so this is a type-only cycle (erased at compile, no runtime cycle).
-import type { CommitmentTerms } from "./terms.js";
+import type {
+  Commitment,
+  CommitmentID,
+  CommitmentSubject,
+  Fulfillment,
+  FulfillmentID,
+  Intent,
+  IntentID,
+  Party,
+  PartyCapacity,
+  PartyID,
+  PartyLocale,
+  ValueID,
+} from "./generated/types.generated.js";
+
+// Re-export every primitive type the package exposes — generated from schema,
+// branded ids re-applied by the generator (Invariant 5).
+export type {
+  // Branded identifiers — globally unique, immutable (Invariant 5).
+  PartyID,
+  IntentID,
+  CommitmentID,
+  FulfillmentID,
+  ValueID,
+  // Primitive 1 — Party
+  PartyType,
+  PartyRole,
+  PartyLocale,
+  PartyCapacity,
+  Party,
+  // Primitive 2 — Value
+  Condition,
+  PhysicalGood,
+  AccessModel,
+  DigitalGood,
+  ServiceDelivery,
+  ServiceValue,
+  MoneyValue,
+  NothingValue,
+  ContingentValue,
+  ValueForm,
+  Quantity,
+  ReservationBasis,
+  ValueState,
+  Value,
+  // Primitive 3 — Intent
+  IntentTransition,
+  Intent,
+  // Primitive 4 — Commitment
+  CommitmentParties,
+  CommitmentSubject,
+  CommitmentTransition,
+  Commitment,
+  // Primitive 5 — Fulfillment
+  FulfillmentTransition,
+  Fulfillment,
+} from "./generated/types.generated.js";
 
 // ---------------------------------------------------------------------------
-// Branded identifiers — globally unique, immutable (Invariant 5).
+// Branded-identifier constructors — globally unique, immutable (Invariant 5).
 // ---------------------------------------------------------------------------
-
-export type PartyID = string & { readonly __brand: "PartyID" };
-export type IntentID = string & { readonly __brand: "IntentID" };
-export type CommitmentID = string & { readonly __brand: "CommitmentID" };
-export type FulfillmentID = string & { readonly __brand: "FulfillmentID" };
-export type ValueID = string & { readonly __brand: "ValueID" };
 
 function uuid(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
@@ -75,33 +125,8 @@ export function valueId(value?: string): ValueID {
 }
 
 // ---------------------------------------------------------------------------
-// Primitive 1 — Party
+// Primitive 1 — Party constructors
 // ---------------------------------------------------------------------------
-
-export type PartyType = "Individual" | "Organization" | "System";
-
-export type PartyRole = "Initiator" | "Counterparty" | "Intermediary" | "Fulfiller" | "Guarantor";
-
-export interface PartyLocale {
-  language: string; // BCP 47, e.g. "fr-MA"
-  currency: CurrencyCode; // ISO 4217
-  jurisdiction: string; // ISO 3166-1 alpha-2, e.g. "MA"
-}
-
-export interface PartyCapacity {
-  can_buy: boolean;
-  can_sell: boolean;
-  can_fulfill: boolean;
-  can_guarantee: boolean;
-  verified_at: string;
-}
-
-export interface Party {
-  id: PartyID;
-  party_type: PartyType;
-  locale: PartyLocale;
-  capacity: PartyCapacity;
-}
 
 /** Capacity with nothing verified yet — the safe default (Invariant 3). */
 export function unverifiedCapacity(): PartyCapacity {
@@ -132,208 +157,16 @@ export function system(id: PartyID): Party {
 }
 
 // ---------------------------------------------------------------------------
-// Primitive 2 — Value
+// Primitive 3 — Intent constructor
 // ---------------------------------------------------------------------------
-
-export type Condition = "New" | "Used" | "Refurbished" | "Damaged" | "RequiresInspection";
-
-export interface PhysicalGood {
-  kind: "PhysicalGood";
-  sku: string;
-  condition: Condition;
-  location?: string;
-}
-
-export type AccessModel =
-  | { kind: "License"; license_type: "Perpetual" | "Subscription" | "Trial" | "OpenSource"; seats: number; transferable: boolean }
-  | { kind: "Stream"; simultaneous_streams: number }
-  | { kind: "Download"; redownloadable: boolean }
-  | { kind: "APIAccess"; calls_per_period?: number; endpoint: string }
-  | { kind: "NFT"; blockchain: string; contract_address: string; token_id: string }
-  // v0.3 — perishable event ticket; value expires when the event ends.
-  | {
-      kind: "EventAccess";
-      event: string;
-      location: string;
-      date: string;
-      entry_window_start: string;
-      entry_window_end: string;
-      transferable: boolean;
-    }
-  // v0.3 — trade finance title documents held by a bank, released on payment.
-  | { kind: "DocumentaryCollection"; held_by: string; release_condition: string }
-  // v0.3 — verified environmental instrument; retirable (ValueState::Retired).
-  | {
-      kind: "CarbonCredit";
-      standard: string;
-      vintage: number;
-      project_id: string;
-      project_type: string;
-      location: string;
-      quantity: number;
-      retired: boolean;
-      additionality_verified: boolean;
-      verification_body?: string;
-    };
-
-export interface DigitalGood {
-  kind: "DigitalGood";
-  identifier: string;
-  exclusivity: "Exclusive" | "NonExclusive";
-  access_model: AccessModel;
-}
-
-export interface ServiceDelivery {
-  location: "Physical" | "Remote" | "Either";
-  performer?: PartyID;
-}
-
-export interface ServiceValue {
-  kind: "Service";
-  identifier: string;
-  delivery_model: ServiceDelivery;
-}
-
-export interface MoneyValue {
-  kind: "Money";
-  money: Money;
-}
-
-export interface NothingValue {
-  kind: "Nothing";
-}
-
-/**
- * Value that depends on a trigger firing (insurance, prediction markets,
- * options) — model Primitive 2: ValueForm::ContingentValue. The model's
- * `if_triggered` / `if_not_triggered` are themselves `Value`s; to avoid a
- * recursive type explosion the package carries lightweight descriptions
- * (`if_not_triggered` is often the model's `Nothing`).
- */
-export interface ContingentValue {
-  kind: "ContingentValue";
-  trigger_type: string;
-  monitoring_period_start?: string;
-  monitoring_period_end?: string;
-  monitoring_party?: PartyID;
-  if_triggered_description: string;
-  if_not_triggered_description: string; // often "Nothing"
-}
-
-export type ValueForm =
-  | PhysicalGood
-  | DigitalGood
-  | ServiceValue
-  | MoneyValue
-  | NothingValue
-  | ContingentValue;
-
-/**
- * A unit-bearing quantity (model Primitive 2: `Value.quantity` carries a unit,
- * e.g. "hours", "kg"). `Value.quantity` itself stays a bare `number` for
- * backward compatibility; `Quantity` is used where the model needs the unit
- * (e.g. wholesale `RecurringDelivery`).
- */
-export interface Quantity {
-  amount: number;
-  unit?: string;
-}
-
-export type ReservationBasis =
-  | "PhysicalStock"
-  | "ProductionCapacity"
-  | "TimeSlot"
-  | "RecurringTimeSlot"
-  | "DriverCapacity"
-  | "Speculative";
-
-export type ValueState =
-  | { type: "Available" }
-  | { type: "Reserved"; commitment_id: CommitmentID; basis: ReservationBasis }
-  | { type: "UnderAuction"; auction_process_id: string; closes_at: string }
-  | { type: "Committed"; commitment_id: CommitmentID }
-  | { type: "InTransit"; fulfillment_id: FulfillmentID }
-  | { type: "Transferred"; to: PartyID; at: string }
-  | { type: "Returned"; from: PartyID; initiated_at: string }
-  // v0.3 — terminal state for permanently consumed exclusive goods (carbon
-  // credits after offset use, redeemed gift certificates, used coupons).
-  // No transition out of Retired is valid.
-  | { type: "Retired"; retired_at: string; retired_by: PartyID; reason: string; certificate?: string };
-
-export interface Value {
-  id: ValueID;
-  form: ValueForm;
-  quantity: number;
-  state: ValueState;
-}
-
-// ---------------------------------------------------------------------------
-// Primitive 3 — Intent
-// ---------------------------------------------------------------------------
-
-export interface IntentTransition {
-  from: IntentState;
-  to: IntentState;
-  at: string;
-  actor: PartyID;
-  reason?: string;
-}
-
-export interface Intent {
-  id: IntentID;
-  party: PartyID;
-  state: IntentState;
-  history: IntentTransition[];
-  created_at: string;
-  expires_at?: string;
-  originated_from?: string;
-}
 
 export function newIntent(party: PartyID): Intent {
   return { id: intentId(), party, state: { type: "Active" }, history: [], created_at: now() };
 }
 
 // ---------------------------------------------------------------------------
-// Primitive 4 — Commitment
+// Primitive 4 — Commitment constructor
 // ---------------------------------------------------------------------------
-
-export interface CommitmentParties {
-  initiator: PartyID;
-  counterparty: PartyID;
-  intermediaries: PartyID[];
-}
-
-export interface CommitmentSubject {
-  offered: Value[];
-  requested: Value[];
-}
-
-export interface CommitmentTransition {
-  from: CommitmentState;
-  to: CommitmentState;
-  at: string;
-  actor: PartyID;
-  reason?: string;
-}
-
-export interface Commitment {
-  id: CommitmentID;
-  parties: CommitmentParties;
-  subject: CommitmentSubject;
-  state: CommitmentState;
-  history: CommitmentTransition[];
-  parent?: CommitmentID;
-  children: CommitmentID[];
-  originated_from?: IntentID;
-  created_at: string;
-  expires_at?: string;
-  /**
-   * The terms governing this Commitment — delivery, payment, conditions, and
-   * the v0.3 term structures (model Primitive 4: `Commitment.terms`). Optional
-   * so existing object literals and `newCommitment()` callers are unchanged.
-   */
-  terms?: CommitmentTerms;
-}
 
 export function newCommitment(
   initiator: PartyID,
@@ -352,30 +185,8 @@ export function newCommitment(
 }
 
 // ---------------------------------------------------------------------------
-// Primitive 5 — Fulfillment
+// Primitive 5 — Fulfillment constructor
 // ---------------------------------------------------------------------------
-
-export interface FulfillmentTransition {
-  from: FulfillmentState;
-  to: FulfillmentState;
-  at: string;
-  actor: PartyID;
-}
-
-export interface Fulfillment {
-  id: FulfillmentID;
-  commitment: CommitmentID;
-  state: FulfillmentState;
-  history: FulfillmentTransition[];
-  planned_at: string;
-  started_at?: string;
-  completed_at?: string;
-  /**
-   * Proof the Fulfillment occurred (model Primitive 5: `Fulfillment.evidence`).
-   * Optional so existing literals and `newFulfillment()` callers are unchanged.
-   */
-  evidence?: Evidence[];
-}
 
 export function newFulfillment(commitment: CommitmentID): Fulfillment {
   return {
