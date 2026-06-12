@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warp-lang.dev/schema/1.0.0/structure/fulfillment.schema.json",
+  "title": "Warp Commerce Model — Fulfillment (Primitive 5)",
+  "description": "A Fulfillment is the execution of a Commitment — the actual movement of value, or the grant of access to digital value. A Commitment describes what will happen; a Fulfillment records what did happen. One Commitment produces many Fulfillments.",
+  "x-warp-schema-version": "1.0.0",
+  "$defs": {
+    "FulfillmentID": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Branded string identifier (brand: FulfillmentID). Globally unique, immutable, never reused (Invariant 5). The TypeScript generator re-applies the brand as `string & { __brand: 'FulfillmentID' }`."
+    },
+    "FulfillmentState": {
+      "description": "The lifecycle of a Fulfillment. Discriminated on `type`. Failed carries `recoverable`: a Failed fulfillment may transition back to Planned ONLY when recoverable is true (see behavior/transitions.json fulfillment note).",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Scheduled, not yet started.",
+          "properties": { "type": { "const": "Planned" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Movement or service delivery has begun.",
+          "properties": { "type": { "const": "InProgress" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Value received by destination, evidence recorded.",
+          "properties": { "type": { "const": "Completed" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Fulfillment failed. `recoverable` distinguishes a retryable failure (Failed -> Planned valid) from a terminal one.",
+          "properties": {
+            "type": { "const": "Failed" },
+            "reason": { "type": "string" },
+            "recoverable": { "type": "boolean" }
+          },
+          "required": ["type", "reason", "recoverable"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Return or refund — value moving back.",
+          "properties": {
+            "type": { "const": "Reversed" },
+            "reason": { "type": "string" },
+            "initiated_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "at": { "type": "string" }
+          },
+          "required": ["type", "reason", "initiated_by", "at"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Evidence": {
+      "description": "Proof a Fulfillment occurred. Discriminated on `kind`. Includes the base types plus the three v0.3 types (RegistryRecording, MedicalRecord, RetirementCertificate).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "ProofOfDelivery" },
+            "photo_uri": { "type": "string" },
+            "signature": { "type": "string" },
+            "timestamp": { "type": "string" },
+            "recipient": { "$ref": "party.schema.json#/$defs/PartyID" }
+          },
+          "required": ["kind", "timestamp", "recipient"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "PaymentReceipt" },
+            "reference": { "type": "string" },
+            "amount": { "$ref": "money.schema.json#/$defs/Money" },
+            "timestamp": { "type": "string" },
+            "mechanism": { "type": "string" }
+          },
+          "required": ["kind", "reference", "amount", "timestamp", "mechanism"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "AccessGrant" },
+            "token": { "type": "string" },
+            "granted_at": { "type": "string" },
+            "expires_at": { "type": "string" }
+          },
+          "required": ["kind", "token", "granted_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "ServiceCompletion" },
+            "confirmed_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "timestamp": { "type": "string" },
+            "notes": { "type": "string" }
+          },
+          "required": ["kind", "confirmed_by", "timestamp"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "WarehouseReceipt" },
+            "location": { "type": "string" },
+            "received_at": { "type": "string" }
+          },
+          "required": ["kind", "location", "received_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "BillOfLading" },
+            "reference": { "type": "string" },
+            "issued_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "origin_port": { "type": "string" },
+            "destination_port": { "type": "string" },
+            "issued_at": { "type": "string" }
+          },
+          "required": ["kind", "reference", "issued_by", "origin_port", "destination_port", "issued_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "CustomsClearance" },
+            "reference": { "type": "string" },
+            "cleared_at": { "type": "string" },
+            "jurisdiction": { "type": "string" }
+          },
+          "required": ["kind", "reference", "cleared_at", "jurisdiction"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "TriggerVerification" },
+            "trigger_type": { "type": "string" },
+            "timestamp": { "type": "string" }
+          },
+          "required": ["kind", "trigger_type", "timestamp"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — real estate title registration.",
+          "properties": {
+            "kind": { "const": "RegistryRecording" },
+            "registry": { "type": "string" },
+            "reference": { "type": "string" },
+            "recorded_at": { "type": "string" },
+            "notary": { "type": "string" }
+          },
+          "required": ["kind", "registry", "reference", "recorded_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — healthcare service evidence.",
+          "properties": {
+            "kind": { "const": "MedicalRecord" },
+            "reference": { "type": "string" },
+            "issued_by": { "type": "string" },
+            "patient": { "type": "string" },
+            "service_date": { "type": "string" }
+          },
+          "required": ["kind", "reference", "issued_by", "patient", "service_date"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — carbon credit retirement proof.",
+          "properties": {
+            "kind": { "const": "RetirementCertificate" },
+            "reference": { "type": "string" },
+            "issued_by": { "type": "string" },
+            "quantity": { "type": "number" },
+            "retired_at": { "type": "string" },
+            "project_id": { "type": "string" }
+          },
+          "required": ["kind", "reference", "issued_by", "quantity", "retired_at", "project_id"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "FulfillmentTransition": {
+      "type": "object",
+      "description": "An append-only, immutable record of one Fulfillment state transition (Invariant 4).",
+      "properties": {
+        "from": { "$ref": "fulfillment.schema.json#/$defs/FulfillmentState" },
+        "to": { "$ref": "fulfillment.schema.json#/$defs/FulfillmentState" },
+        "at": { "type": "string" },
+        "actor": { "$ref": "party.schema.json#/$defs/PartyID" }
+      },
+      "required": ["from", "to", "at", "actor"],
+      "additionalProperties": false
+    },
+    "Fulfillment": {
+      "type": "object",
+      "description": "Primitive 5 — Fulfillment.",
+      "properties": {
+        "id": { "$ref": "fulfillment.schema.json#/$defs/FulfillmentID" },
+        "commitment": { "$ref": "commitment.schema.json#/$defs/CommitmentID" },
+        "state": { "$ref": "fulfillment.schema.json#/$defs/FulfillmentState" },
+        "history": {
+          "type": "array",
+          "items": { "$ref": "fulfillment.schema.json#/$defs/FulfillmentTransition" }
+        },
+        "planned_at": { "type": "string" },
+        "started_at": { "type": "string" },
+        "completed_at": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "fulfillment.schema.json#/$defs/Evidence" }
+        }
+      },
+      "required": ["id", "commitment", "state", "history", "planned_at"],
+      "additionalProperties": false
+    }
+  }
+}

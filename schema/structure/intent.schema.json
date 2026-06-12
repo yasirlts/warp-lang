@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warp-lang.dev/schema/1.0.0/structure/intent.schema.json",
+  "title": "Warp Commerce Model — Intent (Primitive 3)",
+  "description": "An Intent is a party's expressed desire to engage in commerce. It exists before any Commitment. A first-class primitive — cart abandonment is the formal state transition Active -> Abandoned.",
+  "x-warp-schema-version": "1.0.0",
+  "$defs": {
+    "IntentID": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Branded string identifier (brand: IntentID). Globally unique, immutable, never reused (Invariant 5). The TypeScript generator re-applies the brand as `string & { __brand: 'IntentID' }`."
+    },
+    "IntentState": {
+      "description": "The lifecycle of an Intent. Discriminated on `type`.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Party is engaged, intent is open.",
+          "properties": { "type": { "const": "Active" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Party stopped without committing (a cart abandonment is Active -> Abandoned).",
+          "properties": { "type": { "const": "Abandoned" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "The Intent became a Commitment.",
+          "properties": {
+            "type": { "const": "Converted" },
+            "commitment_id": { "$ref": "commitment.schema.json#/$defs/CommitmentID" }
+          },
+          "required": ["type", "commitment_id"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Time limit reached without conversion.",
+          "properties": { "type": { "const": "Expired" } },
+          "required": ["type"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "IntentTransition": {
+      "type": "object",
+      "description": "An append-only, immutable record of one Intent state transition (Invariant 4).",
+      "properties": {
+        "from": { "$ref": "intent.schema.json#/$defs/IntentState" },
+        "to": { "$ref": "intent.schema.json#/$defs/IntentState" },
+        "at": { "type": "string", "description": "ISO 8601 timestamp." },
+        "actor": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "reason": { "type": "string" }
+      },
+      "required": ["from", "to", "at", "actor"],
+      "additionalProperties": false
+    },
+    "Intent": {
+      "type": "object",
+      "description": "Primitive 3 — Intent.",
+      "properties": {
+        "id": { "$ref": "intent.schema.json#/$defs/IntentID" },
+        "party": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "state": { "$ref": "intent.schema.json#/$defs/IntentState" },
+        "history": {
+          "type": "array",
+          "items": { "$ref": "intent.schema.json#/$defs/IntentTransition" }
+        },
+        "created_at": { "type": "string" },
+        "expires_at": { "type": "string" },
+        "originated_from": { "type": "string" }
+      },
+      "required": ["id", "party", "state", "history", "created_at"],
+      "additionalProperties": false
+    }
+  }
+}

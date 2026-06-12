@@ -1,0 +1,196 @@
+{
+  "x-warp-schema-version": "1.0.0",
+  "description": "The six invariants of the Warp Commerce Model as structured metadata. `enforcement_kind` tells a generator HOW the invariant is enforced. `rule` is a machine-readable expression where the invariant is datafiable (sums, uniqueness, ordering, table membership); where the invariant needs real logic, `prose_spec` is the precise specification each per-language generator implements, and `fixtures` lists the conformance scenarios that — not hand-written code — are the cross-language guarantee. Reference implementation: packages/commerce-types/src/invariants.ts.",
+  "source_of_truth": "spec/COMMERCE_MODEL.md — The Six Invariants",
+  "enforcement_kinds": {
+    "structural": "Checkable from shape / arithmetic (a sum, a decomposition). E.g. I-1 conservation sums, MoneyBreakdown sum, I-6 tree sum.",
+    "transition": "Enforced by the transition table in behavior/transitions.json. E.g. I-2.",
+    "sequence": "An ordering rule over timestamps / causal order. E.g. I-4.",
+    "uniqueness": "An identifier-uniqueness rule. E.g. I-5.",
+    "precondition": "A predicate that must hold before a specific transition is allowed. E.g. I-3 capacity before Accepted."
+  },
+  "invariants": [
+    {
+      "id": "I-1",
+      "name": "Value Conservation",
+      "description": "Value is never created or destroyed by a commerce operation; it transfers (the originating party no longer holds it). Conservation has four clauses by ValueForm: physical/money (transfer), non-exclusive digital (access rights granted/revoked, provider retains copy, cannot grant more than licensed), exclusive digital (ownership transfers like physical; Retired extinguishes by mutual agreement), and loyalty/merchant-issued currency (value CREATION bounded by the issuer's total outstanding liability).",
+      "enforcement_kind": "structural",
+      "rule": {
+        "datafiable": true,
+        "expressions": [
+          {
+            "id": "no_currency_mixing",
+            "applies_to": "Commitment.subject (offered + requested)",
+            "expression": "distinct_currencies(money_values(subject.offered ++ subject.requested)).count <= 1  unless an explicit CurrencyConversion is recorded in terms.payment.currency_conversion",
+            "reference_impl": "checkI1ValueConservation"
+          },
+          {
+            "id": "money_breakdown_sum",
+            "applies_to": "MoneyBreakdown (money.schema.json)",
+            "expression": "for breakdown b: all(c.amount.currency == b.total.currency for c in b.components) AND money_equals(sum(c.amount.amount for c in b.components), b.total.amount, b.total.currency)",
+            "notes": "Discount components carry a negative amount and therefore subtract. Equality is checked to within the currency's minor-unit tolerance (moneyEpsilon), not exact float equality. This rule is the explicit extension of I-1 to MoneyBreakdown."
+          },
+          {
+            "id": "loyalty_liability_bound",
+            "applies_to": "Loyalty point issuance (CurrencyCode::Custom)",
+            "expression": "outstanding_points * redemption_value_per_point <= issuer_revenue_capacity  (same currency)",
+            "reference_impl": "checkLoyaltyLiability"
+          }
+        ]
+      },
+      "prose_spec": "Conservation logic that is NOT a single sum (cross-transfer-type reasoning) must be implemented per language exactly as: (1) physical goods & money — after a Transferred transition the source party's holding decreases by exactly the quantity the destination's increases; nothing appears or vanishes. (2) non-exclusive digital — granting access does not reduce the provider's copy; a provider must never grant more concurrent/seat access than the license permits it to sub-license. (3) exclusive digital (NFT, unique certificate, carbon credit pre-retirement) — transfer follows the physical rule (originator loses the token); Retired is permanent consumption recorded by mutual agreement, NOT a transfer. (4) loyalty/merchant currency — issuance is controlled value CREATION; conservation applies to the issuer's aggregate outstanding liability, and redeemed points transfer normally (customer -> merchant) and are then extinguished.",
+      "fixtures": [
+        "physical_good_transfer_conserves_quantity",
+        "money_transfer_conserves_amount",
+        "non_exclusive_license_grant_retains_provider_copy",
+        "provider_cannot_grant_more_seats_than_licensed",
+        "exclusive_nft_transfer_originator_loses_token",
+        "carbon_credit_retirement_extinguishes_no_transfer",
+        "loyalty_points_creation_within_issuer_liability_is_sustainable",
+        "loyalty_points_over_issuance_is_unsustainable",
+        "mixed_currency_subject_without_conversion_is_flagged",
+        "mixed_currency_subject_with_explicit_conversion_is_ok",
+        "money_breakdown_components_sum_to_total_passes",
+        "money_breakdown_with_discount_negative_component_sums_to_total",
+        "money_breakdown_wrong_sum_is_rejected",
+        "money_breakdown_mixed_currency_component_is_rejected"
+      ]
+    },
+    {
+      "id": "I-2",
+      "name": "State Monotonicity",
+      "description": "CommitmentState and FulfillmentState transitions follow directed paths. A Fulfilled Commitment cannot return to Accepted; a Cancelled Commitment cannot become Fulfilled. The only apparent reversal (returning goods/money) is a NEW forward-moving Commitment with the parties exchanged, not a state change on the original.",
+      "enforcement_kind": "transition",
+      "rule": {
+        "datafiable": true,
+        "expressions": [
+          {
+            "id": "commitment_transition_in_table",
+            "expression": "for each history entry h on a Commitment: h.to.type in transitions.commitment[h.from.type]",
+            "reference_impl": "isValidCommitmentTransition / checkI2StateMonotonicity"
+          },
+          {
+            "id": "intent_transition_in_table",
+            "expression": "for each Intent transition: to.type in transitions.intent[from.type]",
+            "reference_impl": "isValidIntentTransition"
+          },
+          {
+            "id": "fulfillment_transition_in_table",
+            "expression": "for each Fulfillment transition: to.type in transitions.fulfillment[from.type], EXCEPT Failed -> Planned which is valid iff from.recoverable === true",
+            "reference_impl": "isValidFulfillmentTransition"
+          }
+        ],
+        "table_ref": "behavior/transitions.json"
+      },
+      "prose_spec": "Enforced entirely by membership in behavior/transitions.json plus the documented Failed->Planned recoverable special case. No additional logic.",
+      "fixtures": [
+        "fulfilled_to_accepted_is_rejected",
+        "cancelled_to_fulfilled_is_rejected",
+        "draft_to_proposed_is_accepted",
+        "every_one_of_the_26_commitment_edges_is_accepted",
+        "fulfillment_failed_to_planned_allowed_when_recoverable",
+        "fulfillment_failed_to_planned_rejected_when_not_recoverable",
+        "return_is_modeled_as_new_reversed_commitment_not_backward_transition"
+      ]
+    },
+    {
+      "id": "I-3",
+      "name": "Capacity Verification",
+      "description": "A Commitment cannot reach Accepted unless the capacity of all parties for their roles has been verified. Physical goods: inventory Available or Reserved with a verified basis (PhysicalStock/ProductionCapacity, not Speculative). Services: time slot confirmed. Digital: license entitlement verified. Financial: creditworthiness/guarantee confirmed. A Commitment MAY reach Accepted with Speculative reservation, but the basis MUST be recorded explicitly so capacity risk is computable.",
+      "enforcement_kind": "precondition",
+      "rule": {
+        "datafiable": true,
+        "expressions": [
+          {
+            "id": "capacity_before_accepted",
+            "expression": "if reached_accepted(commitment) then initiator.capacity.can_buy === true (and the relevant role capacity for each party)",
+            "reference_impl": "checkI3CapacityVerification"
+          }
+        ]
+      },
+      "prose_spec": "Precondition on the transition into Accepted. Generators must check the role-appropriate capacity flag(s) (can_buy for the initiator/buyer; can_sell/can_fulfill for the counterparty/fulfiller; can_guarantee for a guarantor) are true at the moment of acceptance. Speculative reservation is permitted at Accepted but the ReservationBasis must be present on the Reserved ValueState so downstream systems can compute capacity risk.",
+      "fixtures": [
+        "accepted_without_buyer_capacity_is_rejected",
+        "accepted_with_verified_capacity_passes",
+        "accepted_with_speculative_basis_recorded_passes",
+        "accepted_with_reserved_but_missing_basis_is_rejected"
+      ]
+    },
+    {
+      "id": "I-4",
+      "name": "Temporal Integrity",
+      "description": "Every state transition is recorded with a timestamp. No transition can have a timestamp earlier than any previous transition on the same object. History is append-only and immutable; corrections are new superseding entries, not modifications. Fulfillments execute only after their Commitment is Accepted.",
+      "enforcement_kind": "sequence",
+      "rule": {
+        "datafiable": true,
+        "expressions": [
+          {
+            "id": "history_non_decreasing",
+            "expression": "for each object O and consecutive history entries h[i-1], h[i]: timestamp(h[i].at) >= timestamp(h[i-1].at)",
+            "reference_impl": "transitionCommitment/Intent/Fulfillment timestamp guard"
+          },
+          {
+            "id": "fulfillment_after_accepted",
+            "expression": "for each Fulfillment f of commitment c that is InProgress or Completed: accepted_at(c) is not null AND (f.started_at is null OR f.started_at >= accepted_at(c))",
+            "reference_impl": "checkI4TemporalIntegrity"
+          }
+        ]
+      },
+      "prose_spec": "Ordering rule over ISO-8601 timestamps. Append-only history means a generator never mutates an existing entry; a correction is a new entry. Equal timestamps are allowed (>=, not >).",
+      "fixtures": [
+        "backward_dated_transition_is_rejected",
+        "equal_timestamps_are_allowed",
+        "fulfillment_executing_before_accepted_is_rejected",
+        "fulfillment_started_before_accepted_timestamp_is_rejected",
+        "well_ordered_history_passes"
+      ]
+    },
+    {
+      "id": "I-5",
+      "name": "Identity Permanence",
+      "description": "CommitmentID, FulfillmentID, IntentID, PartyID, and ValueID are globally unique and never reused. A platform's native order ID maps to exactly one CommitmentID; the mapping is established at creation and never changes.",
+      "enforcement_kind": "uniqueness",
+      "rule": {
+        "datafiable": true,
+        "expressions": [
+          {
+            "id": "ids_globally_unique",
+            "expression": "no identifier value appears more than once across the set of all PartyID, ValueID, IntentID, CommitmentID, FulfillmentID in scope",
+            "reference_impl": "checkI5IdentityPermanence"
+          }
+        ]
+      },
+      "prose_spec": "Uniqueness over the union of all identifiers. Reuse of any id (even across different primitive types, since ids are globally unique) is a violation.",
+      "fixtures": [
+        "duplicate_commitment_id_is_flagged",
+        "duplicate_id_across_primitive_types_is_flagged",
+        "all_unique_ids_pass"
+      ]
+    },
+    {
+      "id": "I-6",
+      "name": "Commitment Tree Consistency",
+      "description": "For parent-child Commitment structures, the sum of all child Commitment subject.requested values (in their base currency) must equal the parent Commitment subject.requested value at all times. When a child is Modified (substitution, cancellation) the parent recalculates immediately. The parent's state reflects the aggregate state of its children.",
+      "enforcement_kind": "structural",
+      "rule": {
+        "datafiable": true,
+        "expressions": [
+          {
+            "id": "tree_sum",
+            "expression": "money_equals(sum(requested_total(child) for child in parent.children), requested_total(parent), base_currency) AND single_currency(parent + children)",
+            "notes": "requested_total(c) sums the Money values in c.subject.requested. Equality uses the currency minor-unit tolerance (moneyEpsilon). Mixed currencies across parent/children without conversion is itself a violation. For exact splits that never drift, build children with allocate() (money.ts).",
+            "reference_impl": "checkI6TreeConsistency"
+          }
+        ]
+      },
+      "prose_spec": "Structural sum over a parent and its present children. Recompute on any child Modified/Cancelled. If parent and children are denominated in different currencies, they must first be expressed in one base currency via explicit conversion before summing.",
+      "fixtures": [
+        "children_sum_equal_to_parent_passes",
+        "children_sum_not_equal_to_parent_is_flagged",
+        "children_sum_with_float_drift_within_epsilon_passes",
+        "allocate_split_children_sum_exactly_to_parent",
+        "parent_child_mixed_currency_is_flagged"
+      ]
+    }
+  ]
+}

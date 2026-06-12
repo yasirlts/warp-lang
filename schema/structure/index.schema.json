@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warp-lang.dev/schema/1.0.0/structure/index.schema.json",
+  "title": "Warp Commerce Model — Canonical Structure (root)",
+  "description": "Root schema of the Warp Commerce Model structure layer (v1.0.0). $refs every primitive group into one document. A `CommerceObject` is any top-level entity: the five primitives plus the auxiliary records.",
+  "x-warp-schema-version": "1.0.0",
+  "version": "1.0.0",
+  "$defs": {
+    "Party": { "$ref": "party.schema.json#/$defs/Party" },
+    "Value": { "$ref": "value.schema.json#/$defs/Value" },
+    "Money": { "$ref": "money.schema.json#/$defs/Money" },
+    "MoneyBreakdown": { "$ref": "money.schema.json#/$defs/MoneyBreakdown" },
+    "Intent": { "$ref": "intent.schema.json#/$defs/Intent" },
+    "Commitment": { "$ref": "commitment.schema.json#/$defs/Commitment" },
+    "Fulfillment": { "$ref": "fulfillment.schema.json#/$defs/Fulfillment" },
+    "AuctionProcess": { "$ref": "auxiliary.schema.json#/$defs/AuctionProcess" },
+    "AwardProtest": { "$ref": "auxiliary.schema.json#/$defs/AwardProtest" },
+    "ResolutionProcess": { "$ref": "auxiliary.schema.json#/$defs/ResolutionProcess" },
+    "EntitlementConsumption": { "$ref": "auxiliary.schema.json#/$defs/EntitlementConsumption" },
+    "CommerceObject": {
+      "description": "Any top-level Warp commerce entity. The five primitives plus the auxiliary coordination/measurement records.",
+      "oneOf": [
+        { "$ref": "party.schema.json#/$defs/Party" },
+        { "$ref": "value.schema.json#/$defs/Value" },
+        { "$ref": "intent.schema.json#/$defs/Intent" },
+        { "$ref": "commitment.schema.json#/$defs/Commitment" },
+        { "$ref": "fulfillment.schema.json#/$defs/Fulfillment" },
+        { "$ref": "auxiliary.schema.json#/$defs/AuctionProcess" },
+        { "$ref": "auxiliary.schema.json#/$defs/AwardProtest" },
+        { "$ref": "auxiliary.schema.json#/$defs/ResolutionProcess" },
+        { "$ref": "auxiliary.schema.json#/$defs/EntitlementConsumption" }
+      ]
+    }
+  },
+  "$ref": "index.schema.json#/$defs/CommerceObject"
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warp-lang.dev/schema/1.0.0/structure/party.schema.json",
+  "title": "Warp Commerce Model — Party (Primitive 1)",
+  "description": "A Party is any entity that can participate in commerce. Parties hold value, make commitments, fulfill obligations, and act as intermediaries or guarantors. Role is contextual, not intrinsic.",
+  "x-warp-schema-version": "1.0.0",
+  "$defs": {
+    "PartyID": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Branded string identifier (brand: PartyID). Globally unique, immutable, never reused (Invariant 5). JSON Schema cannot enforce the brand; the TypeScript generator re-applies it as `string & { __brand: 'PartyID' }`."
+    },
+    "PartyType": {
+      "type": "string",
+      "description": "Individual = a natural person; Organization = a legal entity (company, NGO, government); System = an AI agent or automated system acting on behalf of a principal party.",
+      "enum": ["Individual", "Organization", "System"]
+    },
+    "PartyRole": {
+      "type": "string",
+      "description": "The role a Party plays in a Commitment. Contextual, not intrinsic — the same Party can be Initiator in one Commitment and Counterparty in another.",
+      "enum": ["Initiator", "Counterparty", "Intermediary", "Fulfiller", "Guarantor"]
+    },
+    "PartyLocale": {
+      "type": "object",
+      "description": "Locale of a Party: language (BCP 47), currency (ISO 4217), jurisdiction (ISO 3166-1 alpha-2).",
+      "properties": {
+        "language": {
+          "type": "string",
+          "description": "BCP 47 language tag, e.g. \"fr-MA\", \"ar-MA\", \"zgh-MA\"."
+        },
+        "currency": { "$ref": "money.schema.json#/$defs/CurrencyCode" },
+        "jurisdiction": {
+          "type": "string",
+          "description": "ISO 3166-1 alpha-2 code, e.g. \"MA\", \"FR\"."
+        }
+      },
+      "required": ["language", "currency", "jurisdiction"],
+      "additionalProperties": false
+    },
+    "PartyCapacity": {
+      "type": "object",
+      "description": "What a Party is verified able to do (Invariant 3: Capacity Verification). The safe default is everything false until verified.",
+      "properties": {
+        "can_buy": { "type": "boolean" },
+        "can_sell": { "type": "boolean" },
+        "can_fulfill": { "type": "boolean" },
+        "can_guarantee": { "type": "boolean" },
+        "verified_at": {
+          "type": "string",
+          "description": "ISO 8601 timestamp at which capacity was verified."
+        }
+      },
+      "required": ["can_buy", "can_sell", "can_fulfill", "can_guarantee", "verified_at"],
+      "additionalProperties": false
+    },
+    "Party": {
+      "type": "object",
+      "description": "Primitive 1 — Party.",
+      "properties": {
+        "id": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "party_type": { "$ref": "party.schema.json#/$defs/PartyType" },
+        "locale": { "$ref": "party.schema.json#/$defs/PartyLocale" },
+        "capacity": { "$ref": "party.schema.json#/$defs/PartyCapacity" }
+      },
+      "required": ["id", "party_type", "locale", "capacity"],
+      "additionalProperties": false
+    }
+  }
+}

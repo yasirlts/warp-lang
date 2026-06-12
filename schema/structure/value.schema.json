@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warp-lang.dev/schema/1.0.0/structure/value.schema.json",
+  "title": "Warp Commerce Model — Value (Primitive 2)",
+  "description": "Value is what moves between parties in every commerce operation. It takes multiple forms (physical good, digital good, service, money, nothing, contingent) but in every case represents something of worth to the receiving party.",
+  "x-warp-schema-version": "1.0.0",
+  "$defs": {
+    "ValueID": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Branded string identifier (brand: ValueID). Globally unique instance identifier, never reused (Invariant 5). The TypeScript generator re-applies the brand as `string & { __brand: 'ValueID' }`."
+    },
+    "Condition": {
+      "type": "string",
+      "description": "Physical condition of a good.",
+      "enum": ["New", "Used", "Refurbished", "Damaged", "RequiresInspection"]
+    },
+    "Quantity": {
+      "type": "object",
+      "description": "A unit-bearing quantity (model Primitive 2: Value.quantity may carry a unit such as \"hours\", \"kg\"). Value.quantity itself stays a bare number for backward compatibility; Quantity is used where the model needs the unit (e.g. wholesale RecurringDelivery).",
+      "properties": {
+        "amount": { "type": "number" },
+        "unit": { "type": "string" }
+      },
+      "required": ["amount"],
+      "additionalProperties": false
+    },
+    "PhysicalGood": {
+      "type": "object",
+      "description": "ValueForm::PhysicalGood. Discriminated on `kind`.",
+      "properties": {
+        "kind": { "const": "PhysicalGood" },
+        "sku": { "type": "string", "description": "What the good is." },
+        "condition": { "$ref": "value.schema.json#/$defs/Condition" },
+        "location": { "type": "string", "description": "Where it physically exists." }
+      },
+      "required": ["kind", "sku", "condition"],
+      "additionalProperties": false
+    },
+    "AccessModel": {
+      "description": "How a DigitalGood is accessed. Discriminated on `kind`. Includes the v0.3 variants EventAccess, DocumentaryCollection, and CarbonCredit.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "License" },
+            "license_type": { "type": "string", "enum": ["Perpetual", "Subscription", "Trial", "OpenSource"] },
+            "seats": { "type": "integer", "minimum": 0 },
+            "transferable": { "type": "boolean" }
+          },
+          "required": ["kind", "license_type", "seats", "transferable"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "Stream" },
+            "simultaneous_streams": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["kind", "simultaneous_streams"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "Download" },
+            "redownloadable": { "type": "boolean" }
+          },
+          "required": ["kind", "redownloadable"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "APIAccess" },
+            "calls_per_period": { "type": "integer", "minimum": 0 },
+            "endpoint": { "type": "string" }
+          },
+          "required": ["kind", "endpoint"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "NFT" },
+            "blockchain": { "type": "string" },
+            "contract_address": { "type": "string" },
+            "token_id": { "type": "string" }
+          },
+          "required": ["kind", "blockchain", "contract_address", "token_id"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — perishable event ticket; value expires when the event ends.",
+          "properties": {
+            "kind": { "const": "EventAccess" },
+            "event": { "type": "string" },
+            "location": { "type": "string" },
+            "date": { "type": "string", "description": "ISO 8601 date." },
+            "entry_window_start": { "type": "string" },
+            "entry_window_end": { "type": "string" },
+            "transferable": { "type": "boolean" }
+          },
+          "required": ["kind", "event", "location", "date", "entry_window_start", "entry_window_end", "transferable"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — trade finance title documents held by a bank, released on payment. Documents are Exclusive DigitalGoods.",
+          "properties": {
+            "kind": { "const": "DocumentaryCollection" },
+            "held_by": { "type": "string", "description": "PartyID of the bank holding the documents." },
+            "release_condition": { "type": "string" }
+          },
+          "required": ["kind", "held_by", "release_condition"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — verified environmental instrument; retirable (ValueState::Retired when consumed).",
+          "properties": {
+            "kind": { "const": "CarbonCredit" },
+            "standard": { "type": "string", "description": "e.g. \"Verra VCS\", \"Gold Standard\"." },
+            "vintage": { "type": "integer", "description": "Year credits were generated." },
+            "project_id": { "type": "string" },
+            "project_type": { "type": "string", "description": "e.g. \"Reforestation\", \"Solar\"." },
+            "location": { "type": "string" },
+            "quantity": { "type": "number" },
+            "retired": { "type": "boolean", "description": "true = permanently consumed (ValueState::Retired)." },
+            "additionality_verified": { "type": "boolean" },
+            "verification_body": { "type": "string" }
+          },
+          "required": ["kind", "standard", "vintage", "project_id", "project_type", "location", "quantity", "retired", "additionality_verified"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "DigitalGood": {
+      "type": "object",
+      "description": "ValueForm::DigitalGood.",
+      "properties": {
+        "kind": { "const": "DigitalGood" },
+        "identifier": { "type": "string", "description": "Product ID, token ID, or license key." },
+        "exclusivity": {
+          "type": "string",
+          "description": "Exclusive = one party holds it at a time (transfer means originator loses it). NonExclusive = multiple parties hold simultaneously; granting does not reduce provider capacity.",
+          "enum": ["Exclusive", "NonExclusive"]
+        },
+        "access_model": { "$ref": "value.schema.json#/$defs/AccessModel" }
+      },
+      "required": ["kind", "identifier", "exclusivity", "access_model"],
+      "additionalProperties": false
+    },
+    "ServiceDelivery": {
+      "type": "object",
+      "properties": {
+        "location": { "type": "string", "enum": ["Physical", "Remote", "Either"] },
+        "performer": { "$ref": "party.schema.json#/$defs/PartyID" }
+      },
+      "required": ["location"],
+      "additionalProperties": false
+    },
+    "ServiceValue": {
+      "type": "object",
+      "description": "ValueForm::Service.",
+      "properties": {
+        "kind": { "const": "Service" },
+        "identifier": { "type": "string" },
+        "delivery_model": { "$ref": "value.schema.json#/$defs/ServiceDelivery" }
+      },
+      "required": ["kind", "identifier", "delivery_model"],
+      "additionalProperties": false
+    },
+    "MoneyValue": {
+      "type": "object",
+      "description": "ValueForm::Money — value that is itself a monetary amount. `breakdown` is OPTIONAL: when present it MUST decompose `money` (same currency; components sum to money) per Invariant 1 / the money_breakdown_sum rule. Omitting it keeps existing plain-Money usage valid. This is the site the spec calls out for 'Money MAY be expressed as plain Money OR as MoneyBreakdown' (e.g. a CommitmentSubject requested value).",
+      "properties": {
+        "kind": { "const": "Money" },
+        "money": { "$ref": "money.schema.json#/$defs/Money" },
+        "breakdown": { "$ref": "money.schema.json#/$defs/MoneyBreakdown" }
+      },
+      "required": ["kind", "money"],
+      "additionalProperties": false
+    },
+    "NothingValue": {
+      "type": "object",
+      "description": "ValueForm::Nothing — explicit zero value (e.g. ContingentValue when the trigger does not fire).",
+      "properties": {
+        "kind": { "const": "Nothing" }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "ContingentValue": {
+      "type": "object",
+      "description": "ValueForm::ContingentValue — value that depends on a trigger firing (insurance, prediction markets, options). The model's if_triggered / if_not_triggered are themselves Values; the package carries lightweight descriptions to avoid a recursive type explosion.",
+      "properties": {
+        "kind": { "const": "ContingentValue" },
+        "trigger_type": { "type": "string" },
+        "monitoring_period_start": { "type": "string" },
+        "monitoring_period_end": { "type": "string" },
+        "monitoring_party": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "if_triggered_description": { "type": "string" },
+        "if_not_triggered_description": { "type": "string", "description": "Often \"Nothing\"." }
+      },
+      "required": ["kind", "trigger_type", "if_triggered_description", "if_not_triggered_description"],
+      "additionalProperties": false
+    },
+    "ValueForm": {
+      "description": "The forms value takes. Discriminated on `kind`.",
+      "oneOf": [
+        { "$ref": "value.schema.json#/$defs/PhysicalGood" },
+        { "$ref": "value.schema.json#/$defs/DigitalGood" },
+        { "$ref": "value.schema.json#/$defs/ServiceValue" },
+        { "$ref": "value.schema.json#/$defs/MoneyValue" },
+        { "$ref": "value.schema.json#/$defs/NothingValue" },
+        { "$ref": "value.schema.json#/$defs/ContingentValue" }
+      ]
+    },
+    "ReservationBasis": {
+      "type": "string",
+      "description": "The basis on which a Value is Reserved. Speculative = no formal verification, risk accepted (dropshipping, made-to-order); systems can compute capacity risk from the basis (Invariant 3).",
+      "enum": ["PhysicalStock", "ProductionCapacity", "TimeSlot", "RecurringTimeSlot", "DriverCapacity", "Speculative"]
+    },
+    "ValueState": {
+      "description": "The lifecycle of a value instance. Discriminated on `type`. Retired is the v0.3 terminal state for permanently consumed exclusive goods (no transition out is valid).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": { "type": { "const": "Available" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Reserved" },
+            "commitment_id": { "$ref": "commitment.schema.json#/$defs/CommitmentID" },
+            "basis": { "$ref": "value.schema.json#/$defs/ReservationBasis" }
+          },
+          "required": ["type", "commitment_id", "basis"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "UnderAuction" },
+            "auction_process_id": { "type": "string" },
+            "closes_at": { "type": "string" }
+          },
+          "required": ["type", "auction_process_id", "closes_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Committed" },
+            "commitment_id": { "$ref": "commitment.schema.json#/$defs/CommitmentID" }
+          },
+          "required": ["type", "commitment_id"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "InTransit" },
+            "fulfillment_id": { "$ref": "fulfillment.schema.json#/$defs/FulfillmentID" }
+          },
+          "required": ["type", "fulfillment_id"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Transferred" },
+            "to": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "at": { "type": "string" }
+          },
+          "required": ["type", "to", "at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Returned" },
+            "from": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "initiated_at": { "type": "string" }
+          },
+          "required": ["type", "from", "initiated_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — terminal. Carbon credits after offset use, redeemed gift certificates, used coupons.",
+          "properties": {
+            "type": { "const": "Retired" },
+            "retired_at": { "type": "string" },
+            "retired_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "reason": { "type": "string" },
+            "certificate": { "type": "string" }
+          },
+          "required": ["type", "retired_at", "retired_by", "reason"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Value": {
+      "type": "object",
+      "description": "Primitive 2 — a value instance.",
+      "properties": {
+        "id": { "$ref": "value.schema.json#/$defs/ValueID" },
+        "form": { "$ref": "value.schema.json#/$defs/ValueForm" },
+        "quantity": { "type": "number" },
+        "state": { "$ref": "value.schema.json#/$defs/ValueState" }
+      },
+      "required": ["id", "form", "quantity", "state"],
+      "additionalProperties": false
+    }
+  }
+}

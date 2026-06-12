@@ -1,0 +1,379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warp-lang.dev/schema/1.0.0/structure/auxiliary.schema.json",
+  "title": "Warp Commerce Model — Auxiliary records & v0.3 term structures",
+  "description": "Auxiliary coordination records built from the five primitives (not themselves primitives): AuctionProcess, AwardProtest, ResolutionProcess, EntitlementConsumption; plus the v0.3 CommitmentTerms structures referenced from commitment.schema.json (CascadeCancellation, VolumePricing, LoyaltyEarnTerm) and ThresholdActivation.",
+  "x-warp-schema-version": "1.0.0",
+  "$defs": {
+    "AuctionMechanism": {
+      "description": "How an auction determines its winner. Discriminated on `kind`. Includes the v0.3 ScoredSelection (government procurement).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "English" },
+            "reserve_price": { "$ref": "money.schema.json#/$defs/Money" },
+            "increment": { "$ref": "money.schema.json#/$defs/Money" }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "Dutch" },
+            "start_price": { "$ref": "money.schema.json#/$defs/Money" },
+            "decrement": { "$ref": "money.schema.json#/$defs/Money" },
+            "interval_seconds": { "type": "number" }
+          },
+          "required": ["kind", "start_price", "decrement", "interval_seconds"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "SealedBid" },
+            "reserve_price": { "$ref": "money.schema.json#/$defs/Money" },
+            "reveal_at": { "type": "string" }
+          },
+          "required": ["kind", "reveal_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "Vickrey" },
+            "reserve_price": { "$ref": "money.schema.json#/$defs/Money" }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — government procurement: winner by weighted multi-criteria score, not just price.",
+          "properties": {
+            "kind": { "const": "ScoredSelection" },
+            "criteria": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "weight": { "type": "number", "description": "Weights must sum to 1.0." },
+                  "max_points": { "type": "number" }
+                },
+                "required": ["name", "weight", "max_points"],
+                "additionalProperties": false
+              }
+            },
+            "minimum_threshold": { "type": "number" },
+            "evaluation_committee": {
+              "type": "array",
+              "items": { "$ref": "party.schema.json#/$defs/PartyID" }
+            },
+            "publication_required": { "type": "boolean" }
+          },
+          "required": ["kind", "criteria", "evaluation_committee", "publication_required"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AuctionCloseReason": {
+      "type": "string",
+      "enum": ["NormalClose", "ReserveNotMet", "BuyItNowExercised", "SellerCancelled", "AwardProtestUpheld"]
+    },
+    "AuctionState": {
+      "description": "Discriminated on `type`.",
+      "oneOf": [
+        { "type": "object", "properties": { "type": { "const": "Scheduled" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "Open" } }, "required": ["type"], "additionalProperties": false },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Closed" },
+            "winning_commitment": { "$ref": "commitment.schema.json#/$defs/CommitmentID" },
+            "winning_price": { "$ref": "money.schema.json#/$defs/Money" },
+            "reason": { "$ref": "auxiliary.schema.json#/$defs/AuctionCloseReason" }
+          },
+          "required": ["type", "reason"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AuctionProcess": {
+      "type": "object",
+      "description": "Auxiliary coordination record for market-making commerce. Manages the collection of Tendered Commitments and determines the winner when the auction closes. Not a sixth primitive.",
+      "properties": {
+        "id": { "type": "string" },
+        "subject": { "$ref": "value.schema.json#/$defs/ValueID" },
+        "seller": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "mechanism": { "$ref": "auxiliary.schema.json#/$defs/AuctionMechanism" },
+        "tendered_commitments": {
+          "type": "array",
+          "items": { "$ref": "commitment.schema.json#/$defs/CommitmentID" }
+        },
+        "opens_at": { "type": "string" },
+        "closes_at": { "type": "string" },
+        "state": { "$ref": "auxiliary.schema.json#/$defs/AuctionState" }
+      },
+      "required": ["id", "subject", "seller", "mechanism", "tendered_commitments", "opens_at", "closes_at", "state"],
+      "additionalProperties": false
+    },
+    "AwardProtestState": {
+      "description": "Discriminated on `type`.",
+      "oneOf": [
+        { "type": "object", "properties": { "type": { "const": "Filed" } }, "required": ["type"], "additionalProperties": false },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "UnderReview" },
+            "reviewer": { "type": "string" }
+          },
+          "required": ["type", "reviewer"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Upheld" },
+            "remedy": { "type": "string", "enum": ["ReEvaluation", "AwardToProtestant", "Cancellation"] }
+          },
+          "required": ["type", "remedy"],
+          "additionalProperties": false
+        },
+        { "type": "object", "properties": { "type": { "const": "Dismissed" } }, "required": ["type"], "additionalProperties": false }
+      ]
+    },
+    "AwardProtest": {
+      "type": "object",
+      "description": "Government procurement challenge. Not a Commitment Dispute: it challenges whether the correct Tendered Commitment was selected. References an AuctionProcess by id.",
+      "properties": {
+        "id": { "type": "string" },
+        "filed_by": { "type": "string" },
+        "against": { "type": "string", "description": "CommitmentID of the awarded Commitment." },
+        "auction_process": { "type": "string", "description": "AuctionProcess.id whose award is challenged." },
+        "grounds": { "type": "array", "items": { "type": "string" } },
+        "filed_at": { "type": "string" },
+        "deadline_for_response": { "type": "string" },
+        "reviewing_body": { "type": "string" },
+        "state": { "$ref": "auxiliary.schema.json#/$defs/AwardProtestState" }
+      },
+      "required": ["id", "filed_by", "against", "auction_process", "grounds", "filed_at", "deadline_for_response", "state"],
+      "additionalProperties": false
+    },
+    "CandidateState": {
+      "type": "string",
+      "enum": ["Pending", "Accepted", "Rejected"]
+    },
+    "ResolutionCandidate": {
+      "type": "object",
+      "description": "A proposed substitute for an unresolved item, with its price delta and delivery-window impact.",
+      "properties": {
+        "id": { "type": "string" },
+        "proposed_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "substitute_description": { "type": "string" },
+        "fulfilling_party": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "price_delta": { "$ref": "money.schema.json#/$defs/Money" },
+        "new_total": { "$ref": "money.schema.json#/$defs/Money" },
+        "original_window": { "type": "string" },
+        "new_window": { "type": "string" },
+        "state": { "$ref": "auxiliary.schema.json#/$defs/CandidateState" }
+      },
+      "required": ["id", "proposed_by", "substitute_description", "price_delta", "new_total", "original_window", "new_window", "state"],
+      "additionalProperties": false
+    },
+    "ResolutionState": {
+      "description": "Discriminated on `type`.",
+      "oneOf": [
+        { "type": "object", "properties": { "type": { "const": "AwaitingCustomerDecision" } }, "required": ["type"], "additionalProperties": false },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Resolved" },
+            "outcome": { "type": "string", "enum": ["SubstituteAccepted", "ItemCancelled"] },
+            "candidate_id": { "type": "string" }
+          },
+          "required": ["type", "outcome"],
+          "additionalProperties": false
+        },
+        { "type": "object", "properties": { "type": { "const": "Expired" } }, "required": ["type"], "additionalProperties": false }
+      ]
+    },
+    "ResolutionProcess": {
+      "type": "object",
+      "description": "The substitution / cancellation workflow that opens for each unresolved item when a Commitment reaches PartiallyFulfilled.",
+      "properties": {
+        "id": { "type": "string" },
+        "parent_commitment": { "$ref": "commitment.schema.json#/$defs/CommitmentID" },
+        "unresolved_item": { "$ref": "value.schema.json#/$defs/ValueID" },
+        "original_value": { "$ref": "money.schema.json#/$defs/Money" },
+        "candidates": {
+          "type": "array",
+          "items": { "$ref": "auxiliary.schema.json#/$defs/ResolutionCandidate" }
+        },
+        "state": { "$ref": "auxiliary.schema.json#/$defs/ResolutionState" },
+        "deadline": { "type": "string" }
+      },
+      "required": ["id", "parent_commitment", "unresolved_item", "original_value", "candidates", "state", "deadline"],
+      "additionalProperties": false
+    },
+    "EntitlementConsumption": {
+      "type": "object",
+      "description": "A lightweight per-access measurement record for metered digital services (Primitive 5). A Fulfillment per API call would be architecturally wrong; this links a measured consumption event to its parent Commitment. When total_consumed exceeds the allowance, an overage child Commitment is created at the metered rate.",
+      "properties": {
+        "id": { "type": "string" },
+        "commitment": { "type": "string", "description": "Parent CommitmentID this consumption belongs to." },
+        "entitlement": { "type": "string", "description": "What is metered, e.g. \"api-calls\", \"executions-per-month\"." },
+        "consumed_this_event": { "type": "number" },
+        "total_consumed_this_period": { "type": "number" },
+        "total_allowed_this_period": { "type": "number" },
+        "period_start": { "type": "string" },
+        "period_end": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "overage": { "type": "boolean" }
+      },
+      "required": ["id", "commitment", "entitlement", "consumed_this_event", "total_consumed_this_period", "total_allowed_this_period", "period_start", "period_end", "timestamp", "overage"],
+      "additionalProperties": false
+    },
+    "RefundPolicy": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "oneOf": [
+            { "const": "FullRefund" },
+            {
+              "type": "object",
+              "properties": {
+                "kind": { "const": "PartialRefund" },
+                "rate": { "type": "number" }
+              },
+              "required": ["kind", "rate"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "deadline_days": { "type": "number" }
+      },
+      "required": ["amount"],
+      "additionalProperties": false
+    },
+    "CascadeTrigger": {
+      "description": "Discriminated on `type`.",
+      "oneOf": [
+        { "type": "object", "properties": { "type": { "const": "ParentCancelled" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "ParentDisputed" } }, "required": ["type"], "additionalProperties": false },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "ExternalEvent" },
+            "event_type": { "type": "string" }
+          },
+          "required": ["type", "event_type"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CascadeScope": {
+      "description": "Discriminated on `type`.",
+      "oneOf": [
+        { "type": "object", "properties": { "type": { "const": "AllChildren" } }, "required": ["type"], "additionalProperties": false },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "ChildrenInState" },
+            "states": {
+              "type": "array",
+              "items": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+            }
+          },
+          "required": ["type", "states"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CascadeCancellation": {
+      "type": "object",
+      "description": "v0.3 — a parent's cancellation propagates to its children (event cancellation, franchise collapse, multi-year contract, force majeure).",
+      "properties": {
+        "trigger": { "$ref": "auxiliary.schema.json#/$defs/CascadeTrigger" },
+        "applies_to": { "$ref": "auxiliary.schema.json#/$defs/CascadeScope" },
+        "child_transition": { "$ref": "commitment.schema.json#/$defs/CommitmentState" },
+        "auto_refund": { "$ref": "auxiliary.schema.json#/$defs/RefundPolicy" }
+      },
+      "required": ["trigger", "applies_to", "child_transition"],
+      "additionalProperties": false
+    },
+    "VolumeTier": {
+      "type": "object",
+      "properties": {
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "price_per_unit": { "$ref": "money.schema.json#/$defs/Money" }
+      },
+      "required": ["min", "price_per_unit"],
+      "additionalProperties": false
+    },
+    "TrueUpPolicy": {
+      "type": "object",
+      "description": "Year-end reconciliation when a buyer crosses into a cheaper tier.",
+      "properties": {
+        "reconcile_at": { "type": "string" },
+        "applies_to_prior_units": { "type": "boolean" }
+      },
+      "required": ["reconcile_at", "applies_to_prior_units"],
+      "additionalProperties": false
+    },
+    "VolumePricing": {
+      "type": "object",
+      "description": "v0.3 — wholesale tiered pricing with optional year-end true-up.",
+      "properties": {
+        "tiers": {
+          "type": "array",
+          "items": { "$ref": "auxiliary.schema.json#/$defs/VolumeTier" }
+        },
+        "true_up": { "$ref": "auxiliary.schema.json#/$defs/TrueUpPolicy" }
+      },
+      "required": ["tiers"],
+      "additionalProperties": false
+    },
+    "LoyaltyEarnTerm": {
+      "type": "object",
+      "description": "v0.3 — point accrual on purchase (loyalty programs). currency is a CurrencyCode::Custom value such as \"PTS\".",
+      "properties": {
+        "program": { "type": "string" },
+        "earn_rate": { "type": "number", "description": "Points per unit of currency spent." },
+        "points_earned": { "type": "number" },
+        "credited_on": { "type": "string", "enum": ["FulfillmentComplete", "PaymentReceived"] },
+        "currency": { "$ref": "money.schema.json#/$defs/CurrencyCode" }
+      },
+      "required": ["program", "earn_rate", "points_earned", "credited_on", "currency"],
+      "additionalProperties": false
+    },
+    "GroupPriceTier": {
+      "type": "object",
+      "properties": {
+        "participants": { "type": "number" },
+        "price": { "$ref": "money.schema.json#/$defs/Money" }
+      },
+      "required": ["participants", "price"],
+      "additionalProperties": false
+    },
+    "ThresholdActivation": {
+      "type": "object",
+      "description": "v0.3 — group buying / crowdfunding minimum-viable commitments. (Note: a parallel inline ThresholdActivation also exists as a CommitmentCondition variant in commitment.schema.json.)",
+      "properties": {
+        "minimum_participants": { "type": "number" },
+        "maximum_participants": { "type": "number" },
+        "activation_deadline": { "type": "string" },
+        "if_threshold_not_met": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" },
+        "if_threshold_met": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" },
+        "price_tiers": {
+          "type": "array",
+          "items": { "$ref": "auxiliary.schema.json#/$defs/GroupPriceTier" }
+        }
+      },
+      "required": ["minimum_participants", "activation_deadline", "if_threshold_not_met", "if_threshold_met"],
+      "additionalProperties": false
+    }
+  }
+}

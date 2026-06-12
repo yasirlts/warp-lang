@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warp-lang.dev/schema/1.0.0/structure/money.schema.json",
+  "title": "Warp Commerce Model — Money",
+  "description": "Typed monetary values (Primitive 2: Value -> ValueForm -> Money). Money ALWAYS carries its currency; there is no amount without a denomination. MoneyBreakdown decomposes a total into typed components that must sum to the total (extends Invariant 1).",
+  "x-warp-schema-version": "1.0.0",
+  "$defs": {
+    "CurrencyCode": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO 4217 currency code (e.g. \"MAD\", \"EUR\", \"USD\"). Open string: also admits CurrencyCode::Custom denominations such as loyalty points and store credits (e.g. \"PTS\"). The TypeScript generator re-applies the literal-suggestion-plus-open-string form.",
+      "examples": ["MAD", "EUR", "USD", "TND", "PTS"]
+    },
+    "Money": {
+      "type": "object",
+      "description": "A monetary value. `currency` is required, always — Decimal alone is not valid Money. This makes accidental currency mixing impossible to express.",
+      "properties": {
+        "amount": {
+          "type": "number",
+          "description": "The numeric amount, in major currency units."
+        },
+        "currency": {
+          "$ref": "money.schema.json#/$defs/CurrencyCode"
+        }
+      },
+      "required": ["amount", "currency"],
+      "additionalProperties": false
+    },
+    "MoneyComponentKind": {
+      "type": "string",
+      "description": "The kind of a single component in a MoneyBreakdown.",
+      "enum": ["Base", "Tax", "Discount", "Shipping", "Surcharge", "Tip", "Adjustment"]
+    },
+    "MoneyComponent": {
+      "type": "object",
+      "description": "One typed component of a monetary total. A Discount component carries a negative amount (it reduces the total). Tax components may carry a tax_rate and jurisdiction.",
+      "properties": {
+        "kind": { "$ref": "money.schema.json#/$defs/MoneyComponentKind" },
+        "amount": { "$ref": "money.schema.json#/$defs/Money" },
+        "label": {
+          "type": "string",
+          "description": "Optional human-readable label, e.g. \"VAT 20%\", \"Loyalty discount\"."
+        },
+        "tax_rate": {
+          "type": "number",
+          "description": "Optional fractional tax rate (0.0 to 1.0) for Tax components.",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "jurisdiction": {
+          "type": "string",
+          "description": "Optional ISO 3166-1 alpha-2 jurisdiction for Tax components, e.g. \"MA\"."
+        }
+      },
+      "required": ["kind", "amount"],
+      "additionalProperties": false
+    },
+    "MoneyBreakdown": {
+      "type": "object",
+      "description": "A structured decomposition of a monetary total into typed components (Base / Tax / Discount / Shipping / Surcharge / Tip / Adjustment). CORE from v1. INVARIANT (see behavior/invariants.json, I-1 / rule money_breakdown_sum): the components MUST sum to `total` in the SAME currency (Discounts subtract). All component currencies and the total currency must be identical. This is the structural sum rule that extends Invariant 1 (Value Conservation). Money used anywhere a total may decompose MAY be expressed as plain Money OR as MoneyBreakdown; breakdown is optional so existing plain-Money usage stays valid.",
+      "properties": {
+        "total": { "$ref": "money.schema.json#/$defs/Money" },
+        "components": {
+          "type": "array",
+          "items": { "$ref": "money.schema.json#/$defs/MoneyComponent" },
+          "minItems": 1
+        }
+      },
+      "required": ["total", "components"],
+      "additionalProperties": false
+    },
+    "MoneyOrBreakdown": {
+      "description": "Either a plain Money value or a structured MoneyBreakdown. Use where a total MAY decompose (e.g. a CommitmentSubject requested value) while keeping plain-Money usage valid.",
+      "oneOf": [
+        { "$ref": "money.schema.json#/$defs/Money" },
+        { "$ref": "money.schema.json#/$defs/MoneyBreakdown" }
+      ]
+    }
+  }
+}

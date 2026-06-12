@@ -1,0 +1,854 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warp-lang.dev/schema/1.0.0/structure/commitment.schema.json",
+  "title": "Warp Commerce Model — Commitment (Primitive 4)",
+  "description": "A Commitment is a formal agreement between two or more parties to exchange value under specified terms. The central primitive of the model — everything else exists to create, describe, or fulfill Commitments.",
+  "x-warp-schema-version": "1.0.0",
+  "$defs": {
+    "CommitmentID": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Branded string identifier (brand: CommitmentID). Globally unique, immutable, never reused (Invariant 5). A platform's native order ID maps to exactly one CommitmentID. The TypeScript generator re-applies the brand as `string & { __brand: 'CommitmentID' }`."
+    },
+    "CommitmentStateType": {
+      "type": "string",
+      "description": "The discriminant names of the 11 CommitmentState variants. Used by CommitmentCondition fields (e.g. if_fail, must_complete_before) that reference a target state by name.",
+      "enum": [
+        "Draft", "Proposed", "Tendered", "Accepted", "Modified",
+        "PartiallyFulfilled", "Active", "Fulfilled", "Cancelled", "Disputed", "Refunded"
+      ]
+    },
+    "CommitmentState": {
+      "description": "The lifecycle of a Commitment — all 11 variants. Discriminated on `type`. Valid transitions between these states are defined in behavior/transitions.json (26 commitment transitions); this schema defines the shapes only.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Being assembled, not yet binding.",
+          "properties": { "type": { "const": "Draft" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Presented to counterparty; binding on initiator, not yet on counterparty.",
+          "properties": { "type": { "const": "Proposed" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Open offer to any qualifying counterparty (auction bid). offer_amount/offer_currency are the offered price; superseded_by is set when outbid.",
+          "properties": {
+            "type": { "const": "Tendered" },
+            "offer_amount": { "type": "number" },
+            "offer_currency": { "type": "string" },
+            "closes_at": { "type": "string" },
+            "superseded_by": { "$ref": "commitment.schema.json#/$defs/CommitmentID" }
+          },
+          "required": ["type", "offer_amount", "offer_currency", "closes_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Binding on all parties; all terms agreed, capacity verified (Invariant 3).",
+          "properties": { "type": { "const": "Accepted" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Terms changed after Accepted; returns to Accepted when all affected parties agree.",
+          "properties": {
+            "type": { "const": "Modified" },
+            "modified_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "reason": { "type": "string" }
+          },
+          "required": ["type", "modified_by", "reason"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Some value transferred, not all.",
+          "properties": {
+            "type": { "const": "PartiallyFulfilled" },
+            "fulfilled_item_ids": { "type": "array", "items": { "type": "string" } },
+            "remaining_item_ids": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["type", "fulfilled_item_ids", "remaining_item_ids"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "For subscriptions and ongoing services; perpetually in progress, never reaches Fulfilled while active.",
+          "properties": { "type": { "const": "Active" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "All obligations met by all parties.",
+          "properties": { "type": { "const": "Fulfilled" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Cancelled" },
+            "by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "reason": { "type": "string" },
+            "at": { "type": "string" }
+          },
+          "required": ["type", "by", "reason", "at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Disputed" },
+            "by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "reason": { "type": "string" },
+            "opened_at": { "type": "string" }
+          },
+          "required": ["type", "by", "reason", "opened_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "Refunded" },
+            "amount": { "$ref": "money.schema.json#/$defs/Money" },
+            "at": { "type": "string" }
+          },
+          "required": ["type", "amount", "at"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CommitmentTransition": {
+      "type": "object",
+      "description": "An append-only, immutable record of one Commitment state transition (Invariant 4).",
+      "properties": {
+        "from": { "$ref": "commitment.schema.json#/$defs/CommitmentState" },
+        "to": { "$ref": "commitment.schema.json#/$defs/CommitmentState" },
+        "at": { "type": "string" },
+        "actor": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "reason": { "type": "string" }
+      },
+      "required": ["from", "to", "at", "actor"],
+      "additionalProperties": false
+    },
+    "CommitmentParties": {
+      "type": "object",
+      "description": "The parties to a Commitment. Role is contextual.",
+      "properties": {
+        "initiator": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "counterparty": { "$ref": "party.schema.json#/$defs/PartyID" },
+        "intermediaries": {
+          "type": "array",
+          "items": { "$ref": "party.schema.json#/$defs/PartyID" }
+        }
+      },
+      "required": ["initiator", "counterparty", "intermediaries"],
+      "additionalProperties": false
+    },
+    "CommitmentSubject": {
+      "type": "object",
+      "description": "What is exchanged: `offered` is what the counterparty provides, `requested` is what the initiator provides in return (usually Money, sometimes goods for trade/barter). A requested Money Value MAY carry an optional MoneyBreakdown on its MoneyValue form (see value.schema.json MoneyValue.breakdown).",
+      "properties": {
+        "offered": {
+          "type": "array",
+          "items": { "$ref": "value.schema.json#/$defs/Value" }
+        },
+        "requested": {
+          "type": "array",
+          "items": { "$ref": "value.schema.json#/$defs/Value" }
+        }
+      },
+      "required": ["offered", "requested"],
+      "additionalProperties": false
+    },
+    "PostFulfillmentTrigger": {
+      "description": "v0.3 — the post-fulfillment event that must resolve before payment (PaymentTiming::PostFulfillment).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "InsuranceAdjudication" },
+            "adjudicator": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "claim_reference": { "type": "string" },
+            "deadline": { "type": "string" }
+          },
+          "required": ["type", "adjudicator"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "InspectionCompletion" },
+            "inspector": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "standard": { "type": "string" }
+          },
+          "required": ["type", "inspector"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "AcceptanceTest" },
+            "tester": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "criteria": { "type": "string" }
+          },
+          "required": ["type", "tester", "criteria"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CommissionFee": {
+      "type": "object",
+      "properties": {
+        "rate": { "type": "number" },
+        "paid_to": { "$ref": "party.schema.json#/$defs/PartyID" }
+      },
+      "required": ["rate", "paid_to"],
+      "additionalProperties": false
+    },
+    "CommissionStructure": {
+      "description": "v0.3 — how a marketplace platform takes commission.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "SingleSided" },
+            "rate": { "type": "number" },
+            "paid_by": { "type": "string" },
+            "paid_to": { "$ref": "party.schema.json#/$defs/PartyID" }
+          },
+          "required": ["type", "rate", "paid_by", "paid_to"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "DoubleSided" },
+            "buyer_fee": { "$ref": "commitment.schema.json#/$defs/CommissionFee" },
+            "seller_fee": { "$ref": "commitment.schema.json#/$defs/CommissionFee" }
+          },
+          "required": ["type", "buyer_fee", "seller_fee"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PaymentTiming": {
+      "description": "When value moves in a Commitment (Primitive 4: terms.payment). Base timings are simple variants; v0.3 additions carry structured data. Discriminated on `type`.",
+      "oneOf": [
+        { "type": "object", "properties": { "type": { "const": "Immediate" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "Upfront" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "OnDelivery" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "OnServiceCompletion" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "AfterGoodsReceived" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "Installments" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "Milestone" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "Recurring" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "Simultaneous" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "Metered" } }, "required": ["type"], "additionalProperties": false },
+        {
+          "type": "object",
+          "description": "v0.3 — payment after fulfillment AND after a post-fulfillment trigger resolves.",
+          "properties": {
+            "type": { "const": "PostFulfillment" },
+            "trigger": { "$ref": "commitment.schema.json#/$defs/PostFulfillmentTrigger" }
+          },
+          "required": ["type", "trigger"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — trade finance: importer pays the bank to receive title documents.",
+          "properties": {
+            "type": { "const": "DocumentsAgainstPayment" },
+            "documents_held_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "release_condition": { "type": "string" }
+          },
+          "required": ["type", "documents_held_by", "release_condition"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — B2B credit terms: Net30 / Net60 / Net90.",
+          "properties": {
+            "type": { "const": "Net" },
+            "days": { "enum": [30, 60, 90] },
+            "from": { "type": "string", "enum": ["InvoiceDate", "DeliveryDate", "EndOfMonth"] },
+            "early_payment_discount": { "type": "number" }
+          },
+          "required": ["type", "days", "from"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — marketplace platforms, single- or double-sided commission.",
+          "properties": {
+            "type": { "const": "CommissionSplit" },
+            "structure": { "$ref": "commitment.schema.json#/$defs/CommissionStructure" }
+          },
+          "required": ["type", "structure"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "DeliveryMethod": {
+      "description": "How value moves under a Commitment (Primitive 4: DeliveryTerms.method). 10 base + 4 v0.3 variants. Discriminated on `kind`.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "PhysicalDelivery" },
+            "carrier": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "tracking": { "type": "string" }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "InPersonHandover" },
+            "location": { "type": "string" },
+            "staff_id": { "$ref": "party.schema.json#/$defs/PartyID" }
+          },
+          "required": ["kind", "location"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "InterStoreTransfer" },
+            "from": { "type": "string" },
+            "to": { "type": "string" },
+            "customer_pickup": { "type": "boolean" }
+          },
+          "required": ["kind", "from", "to", "customer_pickup"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "InternalTransfer" },
+            "from": { "type": "string" },
+            "to": { "type": "string" }
+          },
+          "required": ["kind", "from", "to"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "ServicePerformance" },
+            "performer": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "location": { "type": "string" },
+            "scheduled_at": { "type": "string" },
+            "duration_minutes": { "type": "number" }
+          },
+          "required": ["kind", "performer", "location", "scheduled_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "DigitalDelivery" },
+            "mechanism": { "type": "string" },
+            "delivered_at": { "type": "string" },
+            "access_token": { "type": "string" }
+          },
+          "required": ["kind", "mechanism"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "MoneyTransfer" },
+            "mechanism": { "type": "string" },
+            "reference": { "type": "string" },
+            "cleared_at": { "type": "string" }
+          },
+          "required": ["kind", "mechanism"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "ContingentDelivery" },
+            "trigger": { "type": "string" }
+          },
+          "required": ["kind", "trigger"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "WhiteGlove" },
+            "carrier": { "$ref": "party.schema.json#/$defs/PartyID" }
+          },
+          "required": ["kind", "carrier"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "ReturnDelivery" },
+            "pickup_address": { "type": "string" },
+            "dropoff_address": { "type": "string" }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — real estate, legal ownership transfer.",
+          "properties": {
+            "kind": { "const": "TitleTransfer" },
+            "mechanism": { "type": "string", "enum": ["NotarialDeed", "WarrantyDeed", "LandRegistration"] },
+            "registry": { "type": "string" },
+            "title_number": { "type": "string" },
+            "notary": { "$ref": "party.schema.json#/$defs/PartyID" }
+          },
+          "required": ["kind", "mechanism", "registry"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — wholesale blanket POs, scheduled shipments.",
+          "properties": {
+            "kind": { "const": "RecurringDelivery" },
+            "schedule": { "type": "string" },
+            "quantity_per_delivery": { "$ref": "value.schema.json#/$defs/Quantity" },
+            "first_delivery": { "type": "string" },
+            "last_delivery": { "type": "string" },
+            "flexibility": {
+              "type": "object",
+              "properties": {
+                "min_per_delivery": { "$ref": "value.schema.json#/$defs/Quantity" },
+                "max_per_delivery": { "$ref": "value.schema.json#/$defs/Quantity" }
+              },
+              "required": ["min_per_delivery", "max_per_delivery"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["kind", "schedule", "quantity_per_delivery", "first_delivery"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — cross-border, government-controlled release.",
+          "properties": {
+            "kind": { "const": "CustomsRelease" },
+            "customs_reference": { "type": "string" },
+            "cleared_at": { "type": "string" },
+            "duties_paid": { "$ref": "money.schema.json#/$defs/Money" },
+            "inspection_required": { "type": "boolean" }
+          },
+          "required": ["kind", "customs_reference", "cleared_at", "inspection_required"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — carbon credits, permanent consumption recording.",
+          "properties": {
+            "kind": { "const": "RegistryRetirement" },
+            "registry": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "retirement_reference": { "type": "string" },
+            "retired_on_behalf_of": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "reason": { "type": "string" }
+          },
+          "required": ["kind", "registry", "retirement_reference", "retired_on_behalf_of", "reason"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CommitmentCondition": {
+      "description": "Prerequisites gating specific transitions (Primitive 4: CommitmentTerms.conditions). 10 base + 8 v0.3 variants. Discriminated on `kind`. Fields like must_complete_before / if_fail reference a target CommitmentState by name (CommitmentStateType).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "QualityInspection" },
+            "inspector": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "standard": { "type": "string" },
+            "must_complete_before": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" },
+            "if_fail": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "inspector", "standard", "must_complete_before", "if_fail"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "AuthenticationVerification" },
+            "verifier": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "must_complete_before": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "verifier", "must_complete_before"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "DeliverableAcceptance" },
+            "deliverable_id": { "type": "string" },
+            "accepted_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "acceptance_window_days": { "type": "number" },
+            "if_rejected": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "deliverable_id", "accepted_by", "acceptance_window_days", "if_rejected"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "ConditionVerification" },
+            "required_condition": { "type": "string" },
+            "inspector": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "if_not_met": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "required_condition", "inspector", "if_not_met"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "InsuredEventMonitoring" },
+            "event_type": { "type": "string" },
+            "monitoring_party": { "$ref": "party.schema.json#/$defs/PartyID" }
+          },
+          "required": ["kind", "event_type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "GracePeriod" },
+            "duration_days": { "type": "number" },
+            "if_not_restored": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "duration_days", "if_not_restored"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "RoyaltyDistribution" },
+            "beneficiaries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": { "$ref": "party.schema.json#/$defs/PartyID" },
+                  "rate": { "type": "number" }
+                },
+                "required": ["to", "rate"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["kind", "beneficiaries"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "StaffDiscount" },
+            "rate": { "type": "number" }
+          },
+          "required": ["kind", "rate"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "NoShowPolicy" },
+            "grace_minutes": { "type": "number" },
+            "fee": { "$ref": "money.schema.json#/$defs/Money" }
+          },
+          "required": ["kind", "grace_minutes", "fee"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "SimultaneousAccessLimit" },
+            "max_concurrent": { "type": "number" }
+          },
+          "required": ["kind", "max_concurrent"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — real estate, conditional on lender approval.",
+          "properties": {
+            "kind": { "const": "FinancingContingency" },
+            "lender": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "amount": { "$ref": "money.schema.json#/$defs/Money" },
+            "rate_cap": { "type": "number" },
+            "approval_deadline": { "type": "string" },
+            "if_not_met": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "amount", "approval_deadline", "if_not_met"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — real estate, property condition gate.",
+          "properties": {
+            "kind": { "const": "InspectionContingency" },
+            "inspector": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "deadline": { "type": "string" },
+            "if_failed": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "deadline", "if_failed"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — healthcare, regulatory requirement.",
+          "properties": {
+            "kind": { "const": "PrescriptionRequired" },
+            "prescription": {
+              "type": "object",
+              "properties": {
+                "reference": { "type": "string" },
+                "issuer": { "$ref": "party.schema.json#/$defs/PartyID" },
+                "issued_at": { "type": "string" },
+                "valid_until": { "type": "string" },
+                "medication": { "type": "string" },
+                "quantity": { "type": "string" },
+                "refills": { "type": "number" }
+              },
+              "required": ["reference", "issuer", "issued_at", "valid_until", "medication", "quantity", "refills"],
+              "additionalProperties": false
+            },
+            "verified_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "must_verify_before": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "must_verify_before"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — carbon credits, title deeds.",
+          "properties": {
+            "kind": { "const": "RegistryVerification" },
+            "registry": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "must_verify_before": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" },
+            "verifies": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["kind", "registry", "must_verify_before", "verifies"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — group buying, crowdfunding.",
+          "properties": {
+            "kind": { "const": "ThresholdActivation" },
+            "minimum_participants": { "type": "number" },
+            "maximum_participants": { "type": "number" },
+            "activation_deadline": { "type": "string" },
+            "if_threshold_not_met": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" },
+            "if_threshold_met": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "minimum_participants", "activation_deadline", "if_threshold_not_met", "if_threshold_met"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — government procurement.",
+          "properties": {
+            "kind": { "const": "ComplianceDocumentation" },
+            "required_documents": { "type": "array", "items": { "type": "string" } },
+            "submission_deadline": { "type": "string" },
+            "verified_by": { "$ref": "party.schema.json#/$defs/PartyID" },
+            "if_not_submitted": { "$ref": "commitment.schema.json#/$defs/CommitmentStateType" }
+          },
+          "required": ["kind", "required_documents", "submission_deadline", "verified_by", "if_not_submitted"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — healthcare, irreversible services.",
+          "properties": {
+            "kind": { "const": "NoReturnPolicy" },
+            "basis": { "type": "string" },
+            "jurisdiction": { "type": "string" }
+          },
+          "required": ["kind", "basis", "jurisdiction"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "v0.3 — event commerce, force majeure.",
+          "properties": {
+            "kind": { "const": "EventCancellationPolicy" },
+            "if_cancelled": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "oneOf": [
+                    { "const": "FullRefund" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": { "const": "PartialRefund" },
+                        "rate": { "type": "number" }
+                      },
+                      "required": ["kind", "rate"],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "deadline_days": { "type": "number" }
+              },
+              "required": ["amount", "deadline_days"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["kind", "if_cancelled"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PaymentTerms": {
+      "type": "object",
+      "description": "Wraps the PaymentTiming with method / split / currency conversion.",
+      "properties": {
+        "timing": { "$ref": "commitment.schema.json#/$defs/PaymentTiming" },
+        "method": { "type": "string" },
+        "split": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "method": { "type": "string" },
+              "amount": { "$ref": "money.schema.json#/$defs/Money" },
+              "reference": { "type": "string" }
+            },
+            "required": ["method", "amount"],
+            "additionalProperties": false
+          }
+        },
+        "currency_conversion": {
+          "type": "object",
+          "properties": {
+            "from": { "$ref": "money.schema.json#/$defs/CurrencyCode" },
+            "to": { "$ref": "money.schema.json#/$defs/CurrencyCode" },
+            "rate": { "type": "number" },
+            "customer_pays": { "$ref": "money.schema.json#/$defs/Money" }
+          },
+          "required": ["from", "to", "rate", "customer_pays"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["timing"],
+      "additionalProperties": false
+    },
+    "DeliveryTerms": {
+      "type": "object",
+      "properties": {
+        "method": { "$ref": "commitment.schema.json#/$defs/DeliveryMethod" },
+        "address": { "type": "string" },
+        "window": {
+          "type": "object",
+          "properties": {
+            "earliest": { "type": "string" },
+            "latest": { "type": "string" }
+          },
+          "required": ["earliest", "latest"],
+          "additionalProperties": false
+        },
+        "incoterm": { "type": "string" }
+      },
+      "required": ["method"],
+      "additionalProperties": false
+    },
+    "RequiredDocuments": {
+      "type": "object",
+      "description": "Trade-finance documentary requirements.",
+      "properties": {
+        "bill_of_lading": { "type": "boolean" },
+        "commercial_invoice": { "type": "boolean" },
+        "packing_list": { "type": "boolean" },
+        "certificate_of_origin": { "type": "boolean" },
+        "insurance_certificate": { "type": "boolean" },
+        "customs_declaration": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "CommitmentDuration": {
+      "description": "Discriminated on `kind`.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "Fixed" },
+            "ends_at": { "type": "string" }
+          },
+          "required": ["kind", "ends_at"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "OpenEnded" },
+            "minimum_term_days": { "type": "number" },
+            "cancellation_notice_days": { "type": "number" }
+          },
+          "required": ["kind", "cancellation_notice_days"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CommitmentTerms": {
+      "type": "object",
+      "description": "The terms aggregate the model attaches to a Commitment: delivery, payment, conditions, and the v0.3 term structures. Every field optional so a Commitment may carry as little or as much of its terms as the platform knows. cascade / volume_pricing / loyalty reference auxiliary.schema.json.",
+      "properties": {
+        "delivery": { "$ref": "commitment.schema.json#/$defs/DeliveryTerms" },
+        "payment": { "$ref": "commitment.schema.json#/$defs/PaymentTerms" },
+        "conditions": {
+          "type": "array",
+          "items": { "$ref": "commitment.schema.json#/$defs/CommitmentCondition" }
+        },
+        "cascade": { "$ref": "auxiliary.schema.json#/$defs/CascadeCancellation" },
+        "volume_pricing": { "$ref": "auxiliary.schema.json#/$defs/VolumePricing" },
+        "loyalty": { "$ref": "auxiliary.schema.json#/$defs/LoyaltyEarnTerm" },
+        "required_documents": { "$ref": "commitment.schema.json#/$defs/RequiredDocuments" },
+        "jurisdiction": { "type": "string" },
+        "duration": { "$ref": "commitment.schema.json#/$defs/CommitmentDuration" }
+      },
+      "additionalProperties": false
+    },
+    "Commitment": {
+      "type": "object",
+      "description": "Primitive 4 — Commitment.",
+      "properties": {
+        "id": { "$ref": "commitment.schema.json#/$defs/CommitmentID" },
+        "parties": { "$ref": "commitment.schema.json#/$defs/CommitmentParties" },
+        "subject": { "$ref": "commitment.schema.json#/$defs/CommitmentSubject" },
+        "state": { "$ref": "commitment.schema.json#/$defs/CommitmentState" },
+        "history": {
+          "type": "array",
+          "items": { "$ref": "commitment.schema.json#/$defs/CommitmentTransition" }
+        },
+        "parent": { "$ref": "commitment.schema.json#/$defs/CommitmentID" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "commitment.schema.json#/$defs/CommitmentID" }
+        },
+        "originated_from": { "$ref": "intent.schema.json#/$defs/IntentID" },
+        "created_at": { "type": "string" },
+        "expires_at": { "type": "string" },
+        "terms": { "$ref": "commitment.schema.json#/$defs/CommitmentTerms" }
+      },
+      "required": ["id", "parties", "subject", "state", "history", "children", "created_at"],
+      "additionalProperties": false
+    }
+  }
+}
