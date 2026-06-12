@@ -1,0 +1,381 @@
+{
+  "fixture": "case-healthcare",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "healthcare",
+  "title": "Insured visit: price finalized after adjudication, split copay + insurer",
+  "doc": "PaymentTiming::PostFulfillment(InsuranceAdjudication) — the price is finalized AFTER the service (modelled via a Modified transition), opposite of upfront. Split payment (copay + insurer). PrescriptionRequired + NoReturnPolicy conditions; MedicalRecord evidence. All canonical v1.0.0.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:patient",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:clinic",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:insurer",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:visit-1",
+        "parties": {
+          "initiator": "party:patient",
+          "counterparty": "party:clinic",
+          "intermediaries": [
+            "party:insurer"
+          ]
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:consult",
+              "form": {
+                "kind": "Service",
+                "identifier": "SVC-CONSULT",
+                "delivery_model": {
+                  "location": "Physical",
+                  "performer": "party:clinic"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:visit-fee",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 800,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:patient"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:clinic"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [],
+              "remaining_item_ids": [
+                "fee"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:clinic"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [],
+              "remaining_item_ids": [
+                "fee"
+              ]
+            },
+            "to": {
+              "type": "Modified",
+              "modified_by": "party:insurer",
+              "reason": "price finalized after insurer adjudication"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:insurer"
+          },
+          {
+            "from": {
+              "type": "Modified",
+              "modified_by": "party:insurer",
+              "reason": "price finalized after insurer adjudication"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T13:00:00.000Z",
+            "actor": "party:patient"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "copay"
+              ],
+              "remaining_item_ids": [
+                "insurer"
+              ]
+            },
+            "at": "2026-03-10T14:00:00.000Z",
+            "actor": "party:clinic"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "copay"
+              ],
+              "remaining_item_ids": [
+                "insurer"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T15:00:00.000Z",
+            "actor": "party:clinic"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "payment": {
+            "timing": {
+              "type": "PostFulfillment",
+              "trigger": {
+                "type": "InsuranceAdjudication",
+                "adjudicator": "party:insurer",
+                "claim_reference": "CLM-1",
+                "deadline": "2026-03-10T13:00:00.000Z"
+              }
+            },
+            "split": [
+              {
+                "method": "copay",
+                "amount": {
+                  "amount": 200,
+                  "currency": "MAD"
+                }
+              },
+              {
+                "method": "insurer",
+                "amount": {
+                  "amount": 600,
+                  "currency": "MAD"
+                }
+              }
+            ]
+          },
+          "conditions": [
+            {
+              "kind": "PrescriptionRequired",
+              "must_verify_before": "Fulfilled",
+              "verified_by": "party:clinic"
+            },
+            {
+              "kind": "NoReturnPolicy",
+              "basis": "medical service rendered",
+              "jurisdiction": "MA"
+            }
+          ]
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:visit-svc",
+        "commitment": "commitment:visit-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:clinic"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:clinic"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "MedicalRecord",
+            "reference": "MR-1",
+            "issued_by": "clinic",
+            "patient": "patient",
+            "service_date": "2026-03-10T11:00:00.000Z"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:visit-copay",
+        "commitment": "commitment:visit-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:patient"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:clinic"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "copay",
+            "amount": {
+              "amount": 200,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:visit-insurer",
+        "commitment": "commitment:visit-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:insurer"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:clinic"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "insurer",
+            "amount": {
+              "amount": 600,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      }
+    ]
+  }
+}

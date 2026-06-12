@@ -1,0 +1,397 @@
+{
+  "fixture": "case-events",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "events",
+  "title": "Event cancelled (force majeure): CascadeCancellation propagates to all ticket children",
+  "doc": "EventAccess tickets as children of an event Commitment. CascadeCancellation term + EventCancellationPolicy condition: parent Cancelled → all children Cancelled (each refunded). The children's prices (350+350) sum to the 700 parent (I-6). Cascade is declared in terms (canonical) and realized as child Cancelled transitions.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:event-org",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:fan-1",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:fan-2",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:event-parent",
+        "parties": {
+          "initiator": "party:event-org",
+          "counterparty": "party:event-org",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:event-total",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 700,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Cancelled",
+          "by": "party:event-org",
+          "reason": "force majeure",
+          "at": "2026-03-10T16:00:00.000Z"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:event-org"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:event-org"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "Cancelled",
+              "by": "party:event-org",
+              "reason": "force majeure",
+              "at": "2026-03-10T16:00:00.000Z"
+            },
+            "at": "2026-03-10T16:00:00.000Z",
+            "actor": "party:event-org"
+          }
+        ],
+        "children": [
+          "commitment:tkt-1",
+          "commitment:tkt-2"
+        ],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "cascade": {
+            "trigger": {
+              "type": "ParentCancelled"
+            },
+            "applies_to": {
+              "type": "AllChildren"
+            },
+            "child_transition": {
+              "type": "Cancelled",
+              "by": "party:event-org",
+              "reason": "cascade",
+              "at": "2026-03-10T16:00:00.000Z"
+            },
+            "auto_refund": {
+              "amount": "FullRefund",
+              "deadline_days": 14
+            }
+          },
+          "conditions": [
+            {
+              "kind": "EventCancellationPolicy",
+              "if_cancelled": {
+                "amount": "FullRefund",
+                "deadline_days": 14
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "commitment:tkt-1",
+        "parties": {
+          "initiator": "party:fan-1",
+          "counterparty": "party:event-org",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:tkt-1",
+              "form": {
+                "kind": "DigitalGood",
+                "identifier": "TKT-1",
+                "exclusivity": "Exclusive",
+                "access_model": {
+                  "kind": "EventAccess",
+                  "event": "Jazzablanca 2026",
+                  "location": "Casablanca",
+                  "date": "2026-07-10",
+                  "entry_window_start": "2026-07-10T18:00:00.000Z",
+                  "entry_window_end": "2026-07-10T20:00:00.000Z",
+                  "transferable": false
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:tkt-1-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 350,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Cancelled",
+          "by": "party:event-org",
+          "reason": "event cancelled — force majeure (cascade)",
+          "at": "2026-03-10T16:00:00.000Z"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:fan-1"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:event-org"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "Cancelled",
+              "by": "party:event-org",
+              "reason": "event cancelled — force majeure (cascade)",
+              "at": "2026-03-10T16:00:00.000Z"
+            },
+            "at": "2026-03-10T16:00:00.000Z",
+            "actor": "party:event-org"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "parent": "commitment:event-parent"
+      },
+      {
+        "id": "commitment:tkt-2",
+        "parties": {
+          "initiator": "party:fan-2",
+          "counterparty": "party:event-org",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:tkt-2",
+              "form": {
+                "kind": "DigitalGood",
+                "identifier": "TKT-2",
+                "exclusivity": "Exclusive",
+                "access_model": {
+                  "kind": "EventAccess",
+                  "event": "Jazzablanca 2026",
+                  "location": "Casablanca",
+                  "date": "2026-07-10",
+                  "entry_window_start": "2026-07-10T18:00:00.000Z",
+                  "entry_window_end": "2026-07-10T20:00:00.000Z",
+                  "transferable": false
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:tkt-2-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 350,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Cancelled",
+          "by": "party:event-org",
+          "reason": "event cancelled — force majeure (cascade)",
+          "at": "2026-03-10T16:00:00.000Z"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:fan-2"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:event-org"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "Cancelled",
+              "by": "party:event-org",
+              "reason": "event cancelled — force majeure (cascade)",
+              "at": "2026-03-10T16:00:00.000Z"
+            },
+            "at": "2026-03-10T16:00:00.000Z",
+            "actor": "party:event-org"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "parent": "commitment:event-parent"
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:tkt-1-refund",
+        "commitment": "commitment:tkt-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T16:00:00.000Z",
+            "actor": "party:event-org"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T17:00:00.000Z",
+            "actor": "party:event-org"
+          }
+        ],
+        "planned_at": "2026-03-10T16:00:00.000Z",
+        "started_at": "2026-03-10T16:00:00.000Z",
+        "completed_at": "2026-03-10T17:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "refund-tkt-1",
+            "amount": {
+              "amount": 350,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T17:00:00.000Z",
+            "mechanism": "card_reversal"
+          }
+        ]
+      }
+    ]
+  }
+}

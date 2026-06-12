@@ -1,0 +1,516 @@
+{
+  "fixture": "case-group-buying",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "group-buying",
+  "title": "Group buying: pledges activate simultaneously when the threshold is met",
+  "doc": "ThresholdActivation CommitmentCondition (min 50 participants). Threshold met → all pledges activate at the SAME timestamp (Tendered→Accepted at t16). GroupPriceTier (price drops with group size) is the auxiliary ThresholdActivation record (price_tiers), documented in group-buying.md.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:gb-a",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:gb-b",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:gb-c",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:gb-shop",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:pledge-a",
+        "parties": {
+          "initiator": "party:gb-a",
+          "counterparty": "party:gb-shop",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:commitment:pledge-a-good",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-MACHINE",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:commitment:pledge-a-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 260,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Tendered",
+              "offer_amount": 260,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T16:00:00.000Z"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:gb-a"
+          },
+          {
+            "from": {
+              "type": "Tendered",
+              "offer_amount": 260,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T16:00:00.000Z"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T16:00:00.000Z",
+            "actor": "party:gb-shop"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T17:00:00.000Z",
+            "actor": "party:gb-shop"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T18:00:00.000Z",
+            "actor": "party:gb-shop"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "conditions": [
+            {
+              "kind": "ThresholdActivation",
+              "minimum_participants": 50,
+              "maximum_participants": 500,
+              "activation_deadline": "2026-03-10T16:00:00.000Z",
+              "if_threshold_not_met": "Cancelled",
+              "if_threshold_met": "Accepted"
+            }
+          ]
+        }
+      },
+      {
+        "id": "commitment:pledge-b",
+        "parties": {
+          "initiator": "party:gb-b",
+          "counterparty": "party:gb-shop",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:commitment:pledge-b-good",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-MACHINE",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:commitment:pledge-b-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 260,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Tendered",
+              "offer_amount": 260,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T16:00:00.000Z"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:gb-b"
+          },
+          {
+            "from": {
+              "type": "Tendered",
+              "offer_amount": 260,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T16:00:00.000Z"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T16:00:00.000Z",
+            "actor": "party:gb-shop"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T17:00:00.000Z",
+            "actor": "party:gb-shop"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T18:00:00.000Z",
+            "actor": "party:gb-shop"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "conditions": [
+            {
+              "kind": "ThresholdActivation",
+              "minimum_participants": 50,
+              "maximum_participants": 500,
+              "activation_deadline": "2026-03-10T16:00:00.000Z",
+              "if_threshold_not_met": "Cancelled",
+              "if_threshold_met": "Accepted"
+            }
+          ]
+        }
+      },
+      {
+        "id": "commitment:pledge-c",
+        "parties": {
+          "initiator": "party:gb-c",
+          "counterparty": "party:gb-shop",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:commitment:pledge-c-good",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-MACHINE",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:commitment:pledge-c-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 260,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Tendered",
+              "offer_amount": 260,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T16:00:00.000Z"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:gb-c"
+          },
+          {
+            "from": {
+              "type": "Tendered",
+              "offer_amount": 260,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T16:00:00.000Z"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T16:00:00.000Z",
+            "actor": "party:gb-shop"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T17:00:00.000Z",
+            "actor": "party:gb-shop"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T18:00:00.000Z",
+            "actor": "party:gb-shop"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "conditions": [
+            {
+              "kind": "ThresholdActivation",
+              "minimum_participants": 50,
+              "maximum_participants": 500,
+              "activation_deadline": "2026-03-10T16:00:00.000Z",
+              "if_threshold_not_met": "Cancelled",
+              "if_threshold_met": "Accepted"
+            }
+          ]
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:gb-a-pay",
+        "commitment": "commitment:pledge-a",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T17:00:00.000Z",
+            "actor": "party:gb-a"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T17:00:00.000Z",
+            "actor": "party:gb-shop"
+          }
+        ],
+        "planned_at": "2026-03-10T16:00:00.000Z",
+        "started_at": "2026-03-10T17:00:00.000Z",
+        "completed_at": "2026-03-10T17:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "gb-a",
+            "amount": {
+              "amount": 260,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T17:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:gb-a-del",
+        "commitment": "commitment:pledge-a",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T17:00:00.000Z",
+            "actor": "party:gb-shop"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T18:00:00.000Z",
+            "actor": "party:gb-shop"
+          }
+        ],
+        "planned_at": "2026-03-10T16:00:00.000Z",
+        "started_at": "2026-03-10T17:00:00.000Z",
+        "completed_at": "2026-03-10T18:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "ProofOfDelivery",
+            "timestamp": "2026-03-10T18:00:00.000Z",
+            "recipient": "party:gb-a",
+            "signature": "sig"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,401 @@
+{
+  "fixture": "case-real-estate",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "real-estate",
+  "title": "Property purchase with financing + inspection contingencies; title transfer",
+  "doc": "FinancingContingency + InspectionContingency CommitmentConditions, DeliveryMethod::TitleTransfer (NotarialDeed), RegistryRecording Evidence. Second Commitment shows the contingency-failure exit: Accepted→Cancelled with deposit handling in prose.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:re-buyer",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:re-seller",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:notary",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:lender",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:re-happy",
+        "parties": {
+          "initiator": "party:re-buyer",
+          "counterparty": "party:re-seller",
+          "intermediaries": [
+            "party:notary",
+            "party:lender"
+          ]
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:villa",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "PROP-VILLA-1",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:re-price",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 2000000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:re-buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:re-seller"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:re-seller"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:re-seller"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "delivery": {
+            "method": {
+              "kind": "TitleTransfer",
+              "mechanism": "NotarialDeed",
+              "registry": "Conservation Foncière Casablanca",
+              "title_number": "CF-12345",
+              "notary": "party:notary"
+            }
+          },
+          "payment": {
+            "timing": {
+              "type": "Upfront"
+            }
+          },
+          "conditions": [
+            {
+              "kind": "FinancingContingency",
+              "lender": "party:lender",
+              "amount": {
+                "amount": 1500000,
+                "currency": "MAD"
+              },
+              "approval_deadline": "2026-03-10T15:00:00.000Z",
+              "if_not_met": "Cancelled"
+            },
+            {
+              "kind": "InspectionContingency",
+              "inspector": "party:notary",
+              "deadline": "2026-03-10T14:00:00.000Z",
+              "if_failed": "Cancelled"
+            }
+          ]
+        }
+      },
+      {
+        "id": "commitment:re-failed",
+        "parties": {
+          "initiator": "party:re-buyer",
+          "counterparty": "party:re-seller",
+          "intermediaries": [
+            "party:lender"
+          ]
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:apt",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "PROP-APT-9",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:re-price-2",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 900000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Cancelled",
+          "by": "party:re-buyer",
+          "reason": "financing contingency not met",
+          "at": "2026-03-10T15:00:00.000Z"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:re-buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:re-seller"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "Cancelled",
+              "by": "party:re-buyer",
+              "reason": "financing contingency not met",
+              "at": "2026-03-10T15:00:00.000Z"
+            },
+            "at": "2026-03-10T15:00:00.000Z",
+            "actor": "party:re-buyer"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "conditions": [
+            {
+              "kind": "FinancingContingency",
+              "lender": "party:lender",
+              "amount": {
+                "amount": 1500000,
+                "currency": "MAD"
+              },
+              "approval_deadline": "2026-03-10T15:00:00.000Z",
+              "if_not_met": "Cancelled"
+            }
+          ]
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:re-pay",
+        "commitment": "commitment:re-happy",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:re-buyer"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:re-seller"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "re-1",
+            "amount": {
+              "amount": 2000000,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:re-title",
+        "commitment": "commitment:re-happy",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:notary"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:notary"
+          }
+        ],
+        "planned_at": "2026-03-10T11:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "RegistryRecording",
+            "registry": "Conservation Foncière Casablanca",
+            "reference": "CF-12345",
+            "recorded_at": "2026-03-10T12:00:00.000Z",
+            "notary": "notary office"
+          }
+        ]
+      }
+    ]
+  }
+}

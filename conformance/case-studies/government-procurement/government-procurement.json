@@ -1,0 +1,374 @@
+{
+  "fixture": "case-government-procurement",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "government-procurement",
+  "title": "Public tender: scored selection, compliance docs, award protest upheld",
+  "doc": "Sealed competitive bids as Tendered Commitments + ComplianceDocumentation condition. The award mechanism (AuctionMechanism::ScoredSelection — weighted multi-criteria, evaluation committee) and the AwardProtest (Upheld → ReEvaluation) are auxiliary records validated by conformance/case-studies/validate-aux.mjs, documented in government-procurement.md. Protest upheld: initial award (C) Accepted→Cancelled, re-award (A) runs to Fulfilled.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:ministry",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:supplier-a",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:supplier-c",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:bid-c",
+        "parties": {
+          "initiator": "party:supplier-c",
+          "counterparty": "party:ministry",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:it-deploy-c",
+              "form": {
+                "kind": "Service",
+                "identifier": "SVC-IT",
+                "delivery_model": {
+                  "location": "Either"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:bid-c-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 9200000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Cancelled",
+          "by": "party:ministry",
+          "reason": "award protest upheld — re-evaluation",
+          "at": "2026-03-10T20:00:00.000Z"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Tendered",
+              "offer_amount": 9200000,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T18:00:00.000Z"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:supplier-c"
+          },
+          {
+            "from": {
+              "type": "Tendered",
+              "offer_amount": 9200000,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T18:00:00.000Z"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T18:00:00.000Z",
+            "actor": "party:ministry"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "Cancelled",
+              "by": "party:ministry",
+              "reason": "award protest upheld — re-evaluation",
+              "at": "2026-03-10T20:00:00.000Z"
+            },
+            "at": "2026-03-10T20:00:00.000Z",
+            "actor": "party:ministry"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "conditions": [
+            {
+              "kind": "ComplianceDocumentation",
+              "required_documents": [
+                "tax_clearance",
+                "technical_dossier"
+              ],
+              "submission_deadline": "2026-03-10T12:00:00.000Z",
+              "verified_by": "party:ministry",
+              "if_not_submitted": "Cancelled"
+            }
+          ]
+        }
+      },
+      {
+        "id": "commitment:bid-a",
+        "parties": {
+          "initiator": "party:supplier-a",
+          "counterparty": "party:ministry",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:it-deploy-a",
+              "form": {
+                "kind": "Service",
+                "identifier": "SVC-IT",
+                "delivery_model": {
+                  "location": "Either"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:bid-a-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 9000000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Tendered",
+              "offer_amount": 9000000,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T18:00:00.000Z"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:supplier-a"
+          },
+          {
+            "from": {
+              "type": "Tendered",
+              "offer_amount": 9000000,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T18:00:00.000Z"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T21:00:00.000Z",
+            "actor": "party:ministry"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "mobilise"
+              ],
+              "remaining_item_ids": [
+                "deliver"
+              ]
+            },
+            "at": "2026-03-10T22:00:00.000Z",
+            "actor": "party:supplier-a"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "mobilise"
+              ],
+              "remaining_item_ids": [
+                "deliver"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T23:00:00.000Z",
+            "actor": "party:supplier-a"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "conditions": [
+            {
+              "kind": "ComplianceDocumentation",
+              "required_documents": [
+                "tax_clearance",
+                "technical_dossier"
+              ],
+              "submission_deadline": "2026-03-10T12:00:00.000Z",
+              "verified_by": "party:ministry",
+              "if_not_submitted": "Cancelled"
+            }
+          ]
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:gp-pay",
+        "commitment": "commitment:bid-a",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T22:00:00.000Z",
+            "actor": "party:ministry"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T22:00:00.000Z",
+            "actor": "party:supplier-a"
+          }
+        ],
+        "planned_at": "2026-03-10T21:00:00.000Z",
+        "started_at": "2026-03-10T22:00:00.000Z",
+        "completed_at": "2026-03-10T22:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "gp",
+            "amount": {
+              "amount": 9000000,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T22:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:gp-deliver",
+        "commitment": "commitment:bid-a",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T22:00:00.000Z",
+            "actor": "party:supplier-a"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T23:00:00.000Z",
+            "actor": "party:supplier-a"
+          }
+        ],
+        "planned_at": "2026-03-10T21:00:00.000Z",
+        "started_at": "2026-03-10T22:00:00.000Z",
+        "completed_at": "2026-03-10T23:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "ServiceCompletion",
+            "confirmed_by": "party:ministry",
+            "timestamp": "2026-03-10T23:00:00.000Z"
+          }
+        ]
+      }
+    ]
+  }
+}

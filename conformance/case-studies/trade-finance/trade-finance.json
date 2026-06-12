@@ -1,0 +1,321 @@
+{
+  "fixture": "case-trade-finance",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "trade-finance",
+  "title": "Documentary collection: bank-held title, documents against payment, customs release",
+  "doc": "DocumentaryCollection (exclusive digital good held by the bank), PaymentTiming::DocumentsAgainstPayment, DeliveryMethod::CustomsRelease, RequiredDocuments, and BillOfLading + CustomsClearance Evidence — all present in canonical v1.0.0 (refuting D's 'evidence is a closed set of 5' flag).",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:importer",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:exporter",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "EUR",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:bank",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:customs",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:tf-1",
+        "parties": {
+          "initiator": "party:importer",
+          "counterparty": "party:exporter",
+          "intermediaries": [
+            "party:bank",
+            "party:customs"
+          ]
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:machinery",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-MACHINERY",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            },
+            {
+              "id": "value:title-docs",
+              "form": {
+                "kind": "DigitalGood",
+                "identifier": "BL-DOCS",
+                "exclusivity": "Exclusive",
+                "access_model": {
+                  "kind": "DocumentaryCollection",
+                  "held_by": "party:bank",
+                  "release_condition": "payment confirmed"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Transferred",
+                "to": "party:importer",
+                "at": "2026-03-10T12:00:00.000Z"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:tf-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 50000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:importer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:exporter"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:exporter"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:exporter"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "delivery": {
+            "method": {
+              "kind": "CustomsRelease",
+              "customs_reference": "CUST-REF-1",
+              "cleared_at": "2026-03-10T12:00:00.000Z",
+              "duties_paid": {
+                "amount": 5000,
+                "currency": "MAD"
+              },
+              "inspection_required": true
+            }
+          },
+          "payment": {
+            "timing": {
+              "type": "DocumentsAgainstPayment",
+              "documents_held_by": "party:bank",
+              "release_condition": "documents released against payment"
+            }
+          },
+          "required_documents": {
+            "bill_of_lading": true,
+            "commercial_invoice": true,
+            "certificate_of_origin": true,
+            "customs_declaration": true
+          }
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:tf-pay",
+        "commitment": "commitment:tf-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:importer"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:bank"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "tf",
+            "amount": {
+              "amount": 50000,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:tf-ship",
+        "commitment": "commitment:tf-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:exporter"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:exporter"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "BillOfLading",
+            "reference": "BL-1",
+            "issued_by": "party:bank",
+            "origin_port": "Hamburg",
+            "destination_port": "Casablanca",
+            "issued_at": "2026-03-10T11:00:00.000Z"
+          },
+          {
+            "kind": "CustomsClearance",
+            "reference": "CUST-REF-1",
+            "cleared_at": "2026-03-10T12:00:00.000Z",
+            "jurisdiction": "MA"
+          }
+        ]
+      }
+    ]
+  }
+}

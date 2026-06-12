@@ -1,0 +1,368 @@
+{
+  "fixture": "case-bnpl",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "bnpl",
+  "title": "BNPL: purchase fulfilled, financing child carries the installment schedule",
+  "doc": "Purchase Commitment (buyer↔shop, BNPL provider as intermediary) with a financing child (buyer↔provider) on PaymentTiming::Installments. The financing principal (2400) equals the parent price (2400) — I-6 holds. Interest/schedule detail is prose (the model carries the timing kind, not the amortization table).",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:bnpl-buyer",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:bnpl-shop",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:bnpl-provider",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:bnpl-purchase",
+        "parties": {
+          "initiator": "party:bnpl-buyer",
+          "counterparty": "party:bnpl-shop",
+          "intermediaries": [
+            "party:bnpl-provider"
+          ]
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:laptop",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-LAPTOP",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:bnpl-price",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 2400,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:bnpl-buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:bnpl-shop"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:bnpl-shop"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:bnpl-shop"
+          }
+        ],
+        "children": [
+          "commitment:bnpl-financing"
+        ],
+        "created_at": "2026-03-10T08:00:00.000Z"
+      },
+      {
+        "id": "commitment:bnpl-financing",
+        "parties": {
+          "initiator": "party:bnpl-buyer",
+          "counterparty": "party:bnpl-provider",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:bnpl-repay",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 2400,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Active"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:bnpl-buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:bnpl-provider"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "Active"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:bnpl-provider"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "parent": "commitment:bnpl-purchase",
+        "terms": {
+          "payment": {
+            "timing": {
+              "type": "Installments"
+            }
+          }
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:bnpl-settle",
+        "commitment": "commitment:bnpl-purchase",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:bnpl-provider"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:bnpl-shop"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "bnpl-settle",
+            "amount": {
+              "amount": 2400,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:bnpl-del",
+        "commitment": "commitment:bnpl-purchase",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:bnpl-shop"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:bnpl-shop"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "ProofOfDelivery",
+            "timestamp": "2026-03-10T12:00:00.000Z",
+            "recipient": "party:bnpl-buyer",
+            "signature": "sig"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:bnpl-inst1",
+        "commitment": "commitment:bnpl-financing",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:bnpl-buyer"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T13:00:00.000Z",
+            "actor": "party:bnpl-provider"
+          }
+        ],
+        "planned_at": "2026-03-10T11:00:00.000Z",
+        "started_at": "2026-03-10T12:00:00.000Z",
+        "completed_at": "2026-03-10T13:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "inst-1",
+            "amount": {
+              "amount": 630,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T13:00:00.000Z",
+            "mechanism": "direct_debit"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -208,6 +208,160 @@
       "kind": "transition-sequence",
       "path": "transitions/fulfillment-failed-nonrecoverable.json",
       "expect": "accept"
+    },
+    {
+      "id": "case-physical-ecommerce",
+      "kind": "scene",
+      "path": "case-studies/physical-ecommerce/physical-ecommerce.json",
+      "expect": "accept",
+      "domain": "physical-ecommerce"
+    },
+    {
+      "id": "case-gifting",
+      "kind": "scene",
+      "path": "case-studies/gifting/gifting.json",
+      "expect": "accept",
+      "domain": "gifting"
+    },
+    {
+      "id": "case-pos",
+      "kind": "scene",
+      "path": "case-studies/pos/pos.json",
+      "expect": "accept",
+      "domain": "pos"
+    },
+    {
+      "id": "case-services",
+      "kind": "scene",
+      "path": "case-studies/services/services.json",
+      "expect": "accept",
+      "domain": "services"
+    },
+    {
+      "id": "case-bnpl",
+      "kind": "scene",
+      "path": "case-studies/bnpl/bnpl.json",
+      "expect": "accept",
+      "domain": "bnpl"
+    },
+    {
+      "id": "case-escrow",
+      "kind": "scene",
+      "path": "case-studies/escrow/escrow.json",
+      "expect": "accept",
+      "domain": "escrow"
+    },
+    {
+      "id": "case-fx",
+      "kind": "scene",
+      "path": "case-studies/fx/fx.json",
+      "expect": "accept",
+      "domain": "fx"
+    },
+    {
+      "id": "case-saas",
+      "kind": "scene",
+      "path": "case-studies/saas/saas.json",
+      "expect": "accept",
+      "domain": "saas"
+    },
+    {
+      "id": "case-streaming",
+      "kind": "scene",
+      "path": "case-studies/streaming/streaming.json",
+      "expect": "accept",
+      "domain": "streaming"
+    },
+    {
+      "id": "case-api-metering",
+      "kind": "scene",
+      "path": "case-studies/api-metering/api-metering.json",
+      "expect": "accept",
+      "domain": "api-metering"
+    },
+    {
+      "id": "case-nft",
+      "kind": "scene",
+      "path": "case-studies/nft/nft.json",
+      "expect": "accept",
+      "domain": "nft"
+    },
+    {
+      "id": "case-auction-family",
+      "kind": "scene",
+      "path": "case-studies/auction-family/auction-family.json",
+      "expect": "accept",
+      "domain": "auction-family"
+    },
+    {
+      "id": "case-real-estate",
+      "kind": "scene",
+      "path": "case-studies/real-estate/real-estate.json",
+      "expect": "accept",
+      "domain": "real-estate"
+    },
+    {
+      "id": "case-healthcare",
+      "kind": "scene",
+      "path": "case-studies/healthcare/healthcare.json",
+      "expect": "accept",
+      "domain": "healthcare"
+    },
+    {
+      "id": "case-government-procurement",
+      "kind": "scene",
+      "path": "case-studies/government-procurement/government-procurement.json",
+      "expect": "accept",
+      "domain": "government-procurement"
+    },
+    {
+      "id": "case-wholesale",
+      "kind": "scene",
+      "path": "case-studies/wholesale/wholesale.json",
+      "expect": "accept",
+      "domain": "wholesale"
+    },
+    {
+      "id": "case-marketplace",
+      "kind": "scene",
+      "path": "case-studies/marketplace/marketplace.json",
+      "expect": "accept",
+      "domain": "marketplace"
+    },
+    {
+      "id": "case-trade-finance",
+      "kind": "scene",
+      "path": "case-studies/trade-finance/trade-finance.json",
+      "expect": "accept",
+      "domain": "trade-finance"
+    },
+    {
+      "id": "case-events",
+      "kind": "scene",
+      "path": "case-studies/events/events.json",
+      "expect": "accept",
+      "domain": "events"
+    },
+    {
+      "id": "case-loyalty",
+      "kind": "scene",
+      "path": "case-studies/loyalty/loyalty.json",
+      "expect": "accept",
+      "domain": "loyalty"
+    },
+    {
+      "id": "case-group-buying",
+      "kind": "scene",
+      "path": "case-studies/group-buying/group-buying.json",
+      "expect": "accept",
+      "domain": "group-buying"
+    },
+    {
+      "id": "case-carbon-credits",
+      "kind": "scene",
+      "path": "case-studies/carbon-credits/carbon-credits.json",
+      "expect": "accept",
+      "domain": "carbon-credits"
     }
   ]
 }

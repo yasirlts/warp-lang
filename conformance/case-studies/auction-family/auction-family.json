@@ -1,0 +1,337 @@
+{
+  "fixture": "case-auction-family",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "auction-family",
+  "title": "English auction: competing Tendered bids; winner Accepted, loser Cancelled",
+  "doc": "Two Tendered Commitments. Bidder A is outbid (superseded_by → winner) and goes Tendered→Cancelled; Bidder B wins Tendered→Accepted→…→Fulfilled. The coordinating AuctionProcess (mechanism English/Dutch/SealedBid/Vickrey/ScoredSelection) is an auxiliary record validated by conformance/case-studies/validate-aux.mjs, documented in auction-family.md.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:auc-seller",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:bidder-a",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:bidder-b",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:bid-b",
+        "parties": {
+          "initiator": "party:bidder-b",
+          "counterparty": "party:auc-seller",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:painting",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "ART-PAINTING",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Transferred",
+                "to": "party:bidder-b",
+                "at": "2026-03-10T21:00:00.000Z"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:bid-b-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 12000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Tendered",
+              "offer_amount": 12000,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T20:00:00.000Z"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:bidder-b"
+          },
+          {
+            "from": {
+              "type": "Tendered",
+              "offer_amount": 12000,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T20:00:00.000Z"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T20:00:00.000Z",
+            "actor": "party:auc-seller"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "art"
+              ]
+            },
+            "at": "2026-03-10T21:00:00.000Z",
+            "actor": "party:auc-seller"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "art"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T22:00:00.000Z",
+            "actor": "party:auc-seller"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z"
+      },
+      {
+        "id": "commitment:bid-a",
+        "parties": {
+          "initiator": "party:bidder-a",
+          "counterparty": "party:auc-seller",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:painting",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "ART-PAINTING",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:bid-a-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 10000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Cancelled",
+          "by": "party:auc-seller",
+          "reason": "Outbid",
+          "at": "2026-03-10T20:00:00.000Z"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Tendered",
+              "offer_amount": 10000,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T20:00:00.000Z",
+              "superseded_by": "commitment:bid-b"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:bidder-a"
+          },
+          {
+            "from": {
+              "type": "Tendered",
+              "offer_amount": 10000,
+              "offer_currency": "MAD",
+              "closes_at": "2026-03-10T20:00:00.000Z",
+              "superseded_by": "commitment:bid-b"
+            },
+            "to": {
+              "type": "Cancelled",
+              "by": "party:auc-seller",
+              "reason": "Outbid",
+              "at": "2026-03-10T20:00:00.000Z"
+            },
+            "at": "2026-03-10T20:00:00.000Z",
+            "actor": "party:auc-seller"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z"
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:auc-pay",
+        "commitment": "commitment:bid-b",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T21:00:00.000Z",
+            "actor": "party:bidder-b"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T21:00:00.000Z",
+            "actor": "party:auc-seller"
+          }
+        ],
+        "planned_at": "2026-03-10T20:00:00.000Z",
+        "started_at": "2026-03-10T21:00:00.000Z",
+        "completed_at": "2026-03-10T21:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "auc",
+            "amount": {
+              "amount": 12000,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T21:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:auc-del",
+        "commitment": "commitment:bid-b",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T21:00:00.000Z",
+            "actor": "party:auc-seller"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T22:00:00.000Z",
+            "actor": "party:auc-seller"
+          }
+        ],
+        "planned_at": "2026-03-10T20:00:00.000Z",
+        "started_at": "2026-03-10T21:00:00.000Z",
+        "completed_at": "2026-03-10T22:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "ProofOfDelivery",
+            "timestamp": "2026-03-10T22:00:00.000Z",
+            "recipient": "party:bidder-b",
+            "signature": "sig"
+          }
+        ]
+      }
+    ]
+  }
+}
