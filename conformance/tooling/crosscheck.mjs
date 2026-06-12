@@ -10,8 +10,9 @@
  *
  * A fixture "runnable in both" MUST get the same verdict from TS and Python AND
  * match the manifest's expectation. Any disagreement exits non-zero. Fixtures a
- * binding cannot run (e.g. TS has no MoneyBreakdown checker; state-catalog is
- * structural) are marked n/a and are not disagreements — they are reported.
+ * binding cannot run (e.g. state-catalog fixtures are structural — covered by the
+ * runner + JSON Schema) are marked n/a and are not disagreements — they are
+ * reported. (Money-breakdown fixtures now run in BOTH bindings — B-1 closed.)
  *
  *   node conformance/tooling/crosscheck.mjs
  */

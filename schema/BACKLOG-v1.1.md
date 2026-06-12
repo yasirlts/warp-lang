@@ -7,7 +7,28 @@ items to weigh for a future v1.1.0.
 
 ---
 
-## B-1 — TS binding lacks a MoneyBreakdown checker (binding parity, NOT a schema gap)
+## B-1 — TS binding lacks a MoneyBreakdown checker (binding parity, NOT a schema gap) — ✅ RESOLVED
+
+**Resolved.** `@warp-lang/commerce-types` now ships `validateMoneyBreakdown(breakdown)`
+(`money.ts`, throwing — the twin of Python's `validate_money_breakdown`) plus the
+violations-returning `checkI1MoneyBreakdownSum` (`invariants.ts`, aliased
+`verifyMoneyBreakdown`), both enforcing the identical canonical `money_breakdown_sum`
+rule (single-currency clause + components-sum-to-total within minor-unit tolerance,
+Discounts negative). The conformance cross-check (`crosscheck-ts.mjs`) now runs the
+four `money-breakdown` fixtures in TS instead of marking them n/a:
+
+| fixture | TS | Python |
+|---|---|---|
+| money-breakdown-sums-correctly | accept | accept |
+| money-breakdown-float-tolerance | accept | accept |
+| money-breakdown-currency-mixed | reject:money_breakdown_sum | reject:money_breakdown_sum |
+| money-breakdown-sum-mismatch | reject:money_breakdown_sum | reject:money_breakdown_sum |
+
+Cross-check agreement went from 41/41 to **45/45 runnable-in-both, 0 disagreements**
+(remaining 6 n/a are the structural state-catalog fixtures, covered by the runner +
+JSON Schema). The original analysis is retained below for the record.
+
+---
 
 **What.** The canonical schema fully specifies the `money_breakdown_sum` rule as an
 expression of **Invariant I-1** (`schema/behavior/invariants.json` → `I-1` →

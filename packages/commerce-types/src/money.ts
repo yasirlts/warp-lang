@@ -10,7 +10,7 @@
  * hand-written money arithmetic that the schema deliberately does not carry.
  */
 
-import type { CurrencyCode, Money } from "./generated/types.generated.js";
+import type { CurrencyCode, Money, MoneyBreakdown } from "./generated/types.generated.js";
 
 export type {
   CurrencyCode,
@@ -159,5 +159,45 @@ export function format(amount: Money, locale?: string): string {
   } catch {
     // Unknown / custom currency code — fall back to "<amount> <CODE>".
     return `${amount.amount.toFixed(2)} ${amount.currency}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// MoneyBreakdown sum validation — the canonical `money_breakdown_sum` rule
+// (schema/behavior/invariants.json, invariant I-1). This is the explicit
+// extension of I-1 (Value Conservation) to a MoneyBreakdown.
+// ---------------------------------------------------------------------------
+
+/**
+ * Enforce the canonical `money_breakdown_sum` rule
+ * (schema/behavior/invariants.json → invariant I-1, expression `money_breakdown_sum`):
+ *
+ *     all(c.amount.currency === total.currency for c in components)
+ *     AND moneyEquals(sum(c.amount.amount for c in components), total.amount, total.currency)
+ *
+ * i.e. every component shares the total's currency and the component amounts sum
+ * to the total within the currency's minor-unit tolerance (a Discount component
+ * carries a negative amount and therefore subtracts). Equality is checked with
+ * `moneyEquals`, NOT exact float equality, so a 0.1 + 0.2 breakdown reconciles
+ * against a 0.3 total. Throws on violation — the TypeScript twin of Python's
+ * `validate_money_breakdown` (packages/commerce-types-py money.py).
+ */
+export function validateMoneyBreakdown(breakdown: MoneyBreakdown): void {
+  const currency = breakdown.total.currency;
+
+  // single-currency clause
+  for (const c of breakdown.components) {
+    if (c.amount.currency !== currency) {
+      throw new CurrencyMismatchError(c.amount.currency, currency);
+    }
+  }
+
+  // sum clause (minor-unit tolerance, NOT exact float equality)
+  const componentSum = breakdown.components.reduce((s, c) => s + c.amount.amount, 0);
+  if (!moneyEquals(componentSum, breakdown.total.amount, currency)) {
+    throw new Error(
+      `MoneyBreakdown components sum to ${componentSum} ${currency} but total is ` +
+        `${breakdown.total.amount} ${currency} (money_breakdown_sum)`,
+    );
   }
 }

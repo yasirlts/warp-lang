@@ -46,4 +46,5 @@ export {
   checkI4TemporalIntegrity as verifyInvariant4,
   checkI5IdentityPermanence as verifyInvariant5,
   checkI6TreeConsistency as verifyInvariant6,
+  checkI1MoneyBreakdownSum as verifyMoneyBreakdown,
 } from "./invariants.js";
