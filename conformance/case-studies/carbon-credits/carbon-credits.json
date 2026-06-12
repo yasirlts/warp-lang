@@ -1,0 +1,290 @@
+{
+  "fixture": "case-carbon-credits",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "carbon-credits",
+  "title": "Carbon credit purchase + retirement (ValueState::Retired terminal)",
+  "doc": "AccessModel::CarbonCredit (exclusive digital good), RegistryVerification condition (additionality), DeliveryMethod::RegistryRetirement, RetirementCertificate Evidence, and the terminal ValueState::Retired (value extinguished — Invariant 1's retirement clause). All canonical v1.0.0.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:cc-corp",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "USD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:cc-dev",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "USD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:cc-registry",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:cc-1",
+        "parties": {
+          "initiator": "party:cc-corp",
+          "counterparty": "party:cc-dev",
+          "intermediaries": [
+            "party:cc-registry"
+          ]
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:credit",
+              "form": {
+                "kind": "DigitalGood",
+                "identifier": "VCS-CREDIT",
+                "exclusivity": "Exclusive",
+                "access_model": {
+                  "kind": "CarbonCredit",
+                  "standard": "Verra VCS",
+                  "vintage": 2024,
+                  "project_id": "VCS-001",
+                  "project_type": "Reforestation",
+                  "location": "Brazil",
+                  "quantity": 500,
+                  "retired": true,
+                  "additionality_verified": true,
+                  "verification_body": "Verra"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Retired",
+                "retired_at": "2026-03-10T13:00:00.000Z",
+                "retired_by": "party:cc-corp",
+                "reason": "offset 2026 emissions",
+                "certificate": "VCS-RET-12345"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:cc-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 7500,
+                  "currency": "USD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:cc-corp"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:cc-dev"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:cc-dev"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:cc-dev"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "delivery": {
+            "method": {
+              "kind": "RegistryRetirement",
+              "registry": "party:cc-registry",
+              "retirement_reference": "VCS-RET-12345",
+              "retired_on_behalf_of": "party:cc-corp",
+              "reason": "offset 2026 emissions"
+            }
+          },
+          "conditions": [
+            {
+              "kind": "RegistryVerification",
+              "registry": "party:cc-registry",
+              "must_verify_before": "Accepted",
+              "verifies": [
+                "additionality",
+                "vintage"
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:cc-pay",
+        "commitment": "commitment:cc-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:cc-corp"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:cc-dev"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "cc",
+            "amount": {
+              "amount": 7500,
+              "currency": "USD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:cc-retire",
+        "commitment": "commitment:cc-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:cc-registry"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T13:00:00.000Z",
+            "actor": "party:cc-registry"
+          }
+        ],
+        "planned_at": "2026-03-10T11:00:00.000Z",
+        "started_at": "2026-03-10T12:00:00.000Z",
+        "completed_at": "2026-03-10T13:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "RetirementCertificate",
+            "reference": "VCS-RET-12345",
+            "issued_by": "Verra",
+            "quantity": 500,
+            "retired_at": "2026-03-10T13:00:00.000Z",
+            "project_id": "VCS-001"
+          }
+        ]
+      }
+    ]
+  }
+}

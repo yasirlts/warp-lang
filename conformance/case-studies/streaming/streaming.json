@@ -1,0 +1,188 @@
+{
+  "fixture": "case-streaming",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "streaming",
+  "title": "Streaming subscription (Active) with a payment grace period",
+  "doc": "AccessModel::Stream, subscription Active, GracePeriod condition. NOTE: a failed-payment access SUSPENSION is modelled at the Commitment level (GracePeriod) — canonical ValueState has no AccessSuspended/Revoked/Expired variants (a genuine v1.1 gap, see BACKLOG B-2).",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:stream-sub",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:stream-svc",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:stream-1",
+        "parties": {
+          "initiator": "party:stream-sub",
+          "counterparty": "party:stream-svc",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:stream",
+              "form": {
+                "kind": "DigitalGood",
+                "identifier": "STREAM-PLAN",
+                "exclusivity": "NonExclusive",
+                "access_model": {
+                  "kind": "Stream",
+                  "simultaneous_streams": 2
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:stream-fee",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 79,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Active"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:stream-sub"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:stream-svc"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "Active"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:stream-svc"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "payment": {
+            "timing": {
+              "type": "Recurring"
+            }
+          },
+          "conditions": [
+            {
+              "kind": "GracePeriod",
+              "duration_days": 5,
+              "if_not_restored": "Cancelled"
+            }
+          ]
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:stream-m1",
+        "commitment": "commitment:stream-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:stream-sub"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:stream-svc"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "stream-m1",
+            "amount": {
+              "amount": 79,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      }
+    ]
+  }
+}

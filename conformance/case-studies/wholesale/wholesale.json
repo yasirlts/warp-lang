@@ -1,0 +1,464 @@
+{
+  "fixture": "case-wholesale",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "wholesale",
+  "title": "Blanket PO (Active parent) with monthly call-off children; volume pricing + Net 30",
+  "doc": "Blanket purchase order is an Active parent Commitment; each monthly call-off is a child (43200 + 54000 = 97200 parent — I-6 holds). DeliveryMethod::RecurringDelivery, PaymentTiming::Net (Net30), and VolumePricing with year-end true-up. All canonical v1.0.0.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:retailer",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:distributor",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:blanket-po",
+        "parties": {
+          "initiator": "party:retailer",
+          "counterparty": "party:distributor",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:blanket-total",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 97200,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Active"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:retailer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:distributor"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "Active"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:distributor"
+          }
+        ],
+        "children": [
+          "commitment:co-1",
+          "commitment:co-2"
+        ],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "delivery": {
+            "method": {
+              "kind": "RecurringDelivery",
+              "schedule": "monthly",
+              "quantity_per_delivery": {
+                "amount": 120,
+                "unit": "cartons"
+              },
+              "first_delivery": "2026-03-10T11:00:00.000Z",
+              "last_delivery": "2026-03-10T23:00:00.000Z"
+            }
+          },
+          "payment": {
+            "timing": {
+              "type": "Net",
+              "days": 30,
+              "from": "InvoiceDate"
+            }
+          },
+          "volume_pricing": {
+            "tiers": [
+              {
+                "min": 0,
+                "max": 1000,
+                "price_per_unit": {
+                  "amount": 360,
+                  "currency": "MAD"
+                }
+              },
+              {
+                "min": 1001,
+                "price_per_unit": {
+                  "amount": 340,
+                  "currency": "MAD"
+                }
+              }
+            ],
+            "true_up": {
+              "reconcile_at": "2026-03-10T23:00:00.000Z",
+              "applies_to_prior_units": true
+            }
+          }
+        }
+      },
+      {
+        "id": "commitment:co-1",
+        "parties": {
+          "initiator": "party:retailer",
+          "counterparty": "party:distributor",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:olive-1",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-OLIVEOIL",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:co-1-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 43200,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:retailer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:distributor"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:distributor"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:distributor"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "parent": "commitment:blanket-po",
+        "terms": {
+          "payment": {
+            "timing": {
+              "type": "Net",
+              "days": 30,
+              "from": "InvoiceDate",
+              "early_payment_discount": 0.02
+            }
+          }
+        }
+      },
+      {
+        "id": "commitment:co-2",
+        "parties": {
+          "initiator": "party:retailer",
+          "counterparty": "party:distributor",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:olive-2",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-OLIVEOIL",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:co-2-amt",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 54000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:retailer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:distributor"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:distributor"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:distributor"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "parent": "commitment:blanket-po",
+        "terms": {
+          "payment": {
+            "timing": {
+              "type": "Net",
+              "days": 30,
+              "from": "InvoiceDate",
+              "early_payment_discount": 0.02
+            }
+          }
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:co-1-pay",
+        "commitment": "commitment:co-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:retailer"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:distributor"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "co1",
+            "amount": {
+              "amount": 43200,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:co-1-del",
+        "commitment": "commitment:co-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:distributor"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:distributor"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "ProofOfDelivery",
+            "timestamp": "2026-03-10T12:00:00.000Z",
+            "recipient": "party:retailer",
+            "signature": "sig"
+          }
+        ]
+      }
+    ]
+  }
+}

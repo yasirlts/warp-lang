@@ -1,0 +1,310 @@
+{
+  "fixture": "case-services",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "services",
+  "title": "Appointment (no-show policy) + ongoing subscription (Active) with grace period",
+  "doc": "ServicePerformance delivery, NoShowPolicy + GracePeriod CommitmentConditions, and a subscription that goes Accepted→Active and stays Active (never Fulfilled). Failed-payment retry recoverability is exercised by the canonical transition fixtures.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:client",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:spa",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:appt-1",
+        "parties": {
+          "initiator": "party:client",
+          "counterparty": "party:spa",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:massage",
+              "form": {
+                "kind": "Service",
+                "identifier": "SVC-MASSAGE-60",
+                "delivery_model": {
+                  "location": "Physical",
+                  "performer": "party:spa"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:appt-fee",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 400,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:client"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:spa"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:spa"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:spa"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "delivery": {
+            "method": {
+              "kind": "ServicePerformance",
+              "performer": "party:spa",
+              "location": "Spa Maarif",
+              "scheduled_at": "2026-03-10T11:00:00.000Z",
+              "duration_minutes": 60
+            }
+          },
+          "payment": {
+            "timing": {
+              "type": "OnServiceCompletion"
+            }
+          },
+          "conditions": [
+            {
+              "kind": "NoShowPolicy",
+              "grace_minutes": 15,
+              "fee": {
+                "amount": 100,
+                "currency": "MAD"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "commitment:sub-1",
+        "parties": {
+          "initiator": "party:client",
+          "counterparty": "party:spa",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:gym",
+              "form": {
+                "kind": "Service",
+                "identifier": "SVC-GYM-MONTHLY",
+                "delivery_model": {
+                  "location": "Physical"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:sub-fee",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 300,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Active"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:client"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:spa"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "Active"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:spa"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "payment": {
+            "timing": {
+              "type": "Recurring"
+            }
+          },
+          "conditions": [
+            {
+              "kind": "GracePeriod",
+              "duration_days": 7,
+              "if_not_restored": "Cancelled"
+            }
+          ]
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:massage",
+        "commitment": "commitment:appt-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:spa"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:spa"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "ServiceCompletion",
+            "confirmed_by": "party:client",
+            "timestamp": "2026-03-10T12:00:00.000Z",
+            "notes": "60-min massage delivered"
+          }
+        ]
+      }
+    ]
+  }
+}

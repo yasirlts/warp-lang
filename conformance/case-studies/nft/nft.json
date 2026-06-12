@@ -1,0 +1,466 @@
+{
+  "fixture": "case-nft",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "nft",
+  "title": "NFT primary sale + resale with artist royalty (exclusive digital good)",
+  "doc": "DigitalGood exclusivity Exclusive (transfer means the originator loses it — conservation like a physical good). Resale carries a RoyaltyDistribution condition; the 80 USD royalty (10% of 800) is a sibling Commitment paid to the artist.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:artist",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:collector-a",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:collector-b",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:nft-primary",
+        "parties": {
+          "initiator": "party:collector-a",
+          "counterparty": "party:artist",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:nft",
+              "form": {
+                "kind": "DigitalGood",
+                "identifier": "TOKEN-4419",
+                "exclusivity": "Exclusive",
+                "access_model": {
+                  "kind": "NFT",
+                  "blockchain": "Ethereum",
+                  "contract_address": "0xABC",
+                  "token_id": "4419"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Transferred",
+                "to": "party:collector-a",
+                "at": "2026-03-10T12:00:00.000Z"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:nft-p",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 500,
+                  "currency": "USD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:collector-a"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:artist"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:artist"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:artist"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z"
+      },
+      {
+        "id": "commitment:nft-resale",
+        "parties": {
+          "initiator": "party:collector-b",
+          "counterparty": "party:collector-a",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:nft",
+              "form": {
+                "kind": "DigitalGood",
+                "identifier": "TOKEN-4419",
+                "exclusivity": "Exclusive",
+                "access_model": {
+                  "kind": "NFT",
+                  "blockchain": "Ethereum",
+                  "contract_address": "0xABC",
+                  "token_id": "4419"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Transferred",
+                "to": "party:collector-b",
+                "at": "2026-03-10T16:00:00.000Z"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:nft-r",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 800,
+                  "currency": "USD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T14:00:00.000Z",
+            "actor": "party:collector-b"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T15:00:00.000Z",
+            "actor": "party:collector-a"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "nft"
+              ]
+            },
+            "at": "2026-03-10T16:00:00.000Z",
+            "actor": "party:collector-a"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "nft"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T17:00:00.000Z",
+            "actor": "party:collector-a"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T13:00:00.000Z",
+        "terms": {
+          "conditions": [
+            {
+              "kind": "RoyaltyDistribution",
+              "beneficiaries": [
+                {
+                  "to": "party:artist",
+                  "rate": 0.1
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "commitment:nft-royalty",
+        "parties": {
+          "initiator": "party:collector-a",
+          "counterparty": "party:artist",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:nft-roy",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 80,
+                  "currency": "USD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:collector-a"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:artist"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:artist"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:artist"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z"
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:nft-p-pay",
+        "commitment": "commitment:nft-primary",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:collector-a"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:artist"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "nft-p",
+            "amount": {
+              "amount": 500,
+              "currency": "USD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:nft-roy-pay",
+        "commitment": "commitment:nft-royalty",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:collector-a"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:artist"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "nft-roy",
+            "amount": {
+              "amount": 80,
+              "currency": "USD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      }
+    ]
+  }
+}

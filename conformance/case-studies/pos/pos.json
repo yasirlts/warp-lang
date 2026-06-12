@@ -1,0 +1,276 @@
+{
+  "fixture": "case-pos",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "pos",
+  "title": "Counter sale: in-person handover, staff discount, split tender",
+  "doc": "POS sale with DeliveryMethod::InPersonHandover, a StaffDiscount CommitmentCondition, and a three-way split payment (loyalty points + card + cash) on PaymentTerms.split. All canonical v1.0.0 constructs.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:pos-cust",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:pos-store",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:sale-1",
+        "parties": {
+          "initiator": "party:pos-cust",
+          "counterparty": "party:pos-store",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:sku-shoe",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-SHOE-42",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:sale-total",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 480,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Fulfilled"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:pos-cust"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:pos-store"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:pos-store"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "pay"
+              ],
+              "remaining_item_ids": [
+                "good"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:pos-store"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "delivery": {
+            "method": {
+              "kind": "InPersonHandover",
+              "location": "Casablanca — Anfa store",
+              "staff_id": "party:pos-store"
+            }
+          },
+          "payment": {
+            "timing": {
+              "type": "Immediate"
+            },
+            "split": [
+              {
+                "method": "loyalty_points",
+                "amount": {
+                  "amount": 80,
+                  "currency": "PTS"
+                },
+                "reference": "pts-redeem"
+              },
+              {
+                "method": "card",
+                "amount": {
+                  "amount": 300,
+                  "currency": "MAD"
+                }
+              },
+              {
+                "method": "cash",
+                "amount": {
+                  "amount": 100,
+                  "currency": "MAD"
+                }
+              }
+            ]
+          },
+          "conditions": [
+            {
+              "kind": "StaffDiscount",
+              "rate": 0.1
+            }
+          ]
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:sale-pay",
+        "commitment": "commitment:sale-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:pos-cust"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:pos-store"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "pos-1",
+            "amount": {
+              "amount": 400,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      },
+      {
+        "id": "fulfillment:sale-hand",
+        "commitment": "commitment:sale-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:pos-store"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:pos-store"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "ProofOfDelivery",
+            "timestamp": "2026-03-10T12:00:00.000Z",
+            "recipient": "party:pos-cust",
+            "signature": "sig"
+          }
+        ]
+      }
+    ]
+  }
+}

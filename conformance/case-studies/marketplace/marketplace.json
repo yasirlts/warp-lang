@@ -1,0 +1,264 @@
+{
+  "fixture": "case-marketplace",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "marketplace",
+  "title": "Marketplace double-sided commission: buyer total = seller payout + platform fee",
+  "doc": "PaymentTiming::CommissionSplit (DoubleSided). Buyer pays 430 = seller payout 360 + platform fee 70 — value conservation across the platform intermediary, and the two children sum exactly to the 430 parent (I-6).",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:mp-buyer",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:mp-seller",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:mp-platform",
+        "party_type": "System",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "USD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:mp-1",
+        "parties": {
+          "initiator": "party:mp-buyer",
+          "counterparty": "party:mp-seller",
+          "intermediaries": [
+            "party:mp-platform"
+          ]
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:mp-good",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-TAGINE",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:mp-total",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 430,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Accepted"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:mp-buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:mp-seller"
+          }
+        ],
+        "children": [
+          "commitment:mp-payout",
+          "commitment:mp-commission"
+        ],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "payment": {
+            "timing": {
+              "type": "CommissionSplit",
+              "structure": {
+                "type": "DoubleSided",
+                "buyer_fee": {
+                  "rate": 0.075,
+                  "paid_to": "party:mp-platform"
+                },
+                "seller_fee": {
+                  "rate": 0.1,
+                  "paid_to": "party:mp-platform"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "commitment:mp-payout",
+        "parties": {
+          "initiator": "party:mp-buyer",
+          "counterparty": "party:mp-seller",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:mp-payout",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 360,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Accepted"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:mp-buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:mp-seller"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "parent": "commitment:mp-1"
+      },
+      {
+        "id": "commitment:mp-commission",
+        "parties": {
+          "initiator": "party:mp-buyer",
+          "counterparty": "party:mp-platform",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:mp-comm",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 70,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Accepted"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:mp-buyer"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:mp-platform"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "parent": "commitment:mp-1"
+      }
+    ],
+    "fulfillments": []
+  }
+}
