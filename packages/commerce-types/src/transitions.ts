@@ -19,12 +19,18 @@ import type {
 import { now } from "./primitives.js";
 import type {
   CommitmentState,
-  CommitmentStateType,
   FulfillmentState,
-  FulfillmentStateType,
   IntentState,
-  IntentStateType,
 } from "./states.js";
+// The valid-transition tables are GENERATED from schema/behavior/transitions.json
+// (the 26 commitment edges, intent, and fulfillment maps) — they are no longer
+// hand-maintained here. The Failed -> Planned recoverable special case below is
+// applied in code, exactly as the schema's transitions.json note documents.
+import {
+  COMMITMENT_TRANSITIONS,
+  FULFILLMENT_TRANSITIONS,
+  INTENT_TRANSITIONS,
+} from "./generated/transitions.generated.js";
 
 /** A fallible result. `error` is set (and `ok` is false) on failure. */
 export interface Result<T> {
@@ -50,38 +56,8 @@ export class CapacityError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// Valid-transition tables (exhaustive)
+// Valid-transition checks (tables generated from schema/behavior/transitions.json)
 // ---------------------------------------------------------------------------
-
-/** The model's 26 valid commitment transitions. Every other pair is rejected. */
-const COMMITMENT_TRANSITIONS: Record<CommitmentStateType, readonly CommitmentStateType[]> = {
-  Draft: ["Proposed", "Tendered", "Cancelled"],
-  Proposed: ["Accepted", "Cancelled", "Modified"],
-  Tendered: ["Accepted", "Cancelled"],
-  Accepted: ["Modified", "PartiallyFulfilled", "Active", "Cancelled", "Disputed"],
-  Modified: ["Accepted", "Cancelled"],
-  PartiallyFulfilled: ["Fulfilled", "Modified", "Cancelled"],
-  Active: ["Modified", "Cancelled", "Disputed"],
-  Fulfilled: ["Disputed", "Refunded"],
-  Cancelled: [],
-  Disputed: ["Fulfilled", "Refunded", "Cancelled"],
-  Refunded: [],
-};
-
-const INTENT_TRANSITIONS: Record<IntentStateType, readonly IntentStateType[]> = {
-  Active: ["Abandoned", "Converted", "Expired"],
-  Abandoned: [],
-  Converted: [],
-  Expired: [],
-};
-
-const FULFILLMENT_TRANSITIONS: Record<FulfillmentStateType, readonly FulfillmentStateType[]> = {
-  Planned: ["InProgress", "Failed"],
-  InProgress: ["Completed", "Failed", "Reversed"],
-  Completed: ["Reversed"],
-  Failed: [], // Failed → Planned is handled specially (recoverable only)
-  Reversed: [],
-};
 
 export function isValidCommitmentTransition(from: CommitmentState, to: CommitmentState): boolean {
   return COMMITMENT_TRANSITIONS[from.type].includes(to.type);

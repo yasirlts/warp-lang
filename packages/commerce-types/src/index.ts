@@ -13,6 +13,11 @@
 
 export * from "./money.js";
 export * from "./states.js";
+// The CommerceObject union (any top-level entity) and the frozen schema version
+// these types were generated from — both come straight from the canonical
+// schema spine (schema/structure/index.schema.json + schema/VERSION).
+export type { CommerceObject } from "./generated/types.generated.js";
+export { SCHEMA_VERSION } from "./generated/types.generated.js";
 export * from "./primitives.js";
 export * from "./transitions.js";
 export * from "./invariants.js";
