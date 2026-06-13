@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type CommitmentState,
+  type Result,
   isValidCommitmentTransition,
   isValidFulfillmentTransition,
   isValidIntentTransition,
@@ -12,6 +13,18 @@ import {
   transitionFulfillment,
   transitionIntent,
 } from "../src/index.js";
+
+/** Assert a Result is ok and return its value — narrows the union, so no `!`. */
+function unwrap<T>(r: Result<T>): T {
+  if (!r.ok) throw new Error(`expected ok, got error: ${r.error}`);
+  return r.value;
+}
+
+/** Assert a Result is a failure and return its error — narrows the union. */
+function unwrapErr<T>(r: Result<T>): string {
+  if (r.ok) throw new Error("expected error, got ok");
+  return r.error;
+}
 
 const p1 = partyId("p1");
 const buyer = partyId("buyer");
@@ -111,17 +124,18 @@ describe("transitionCommitment", () => {
     const c0 = newCommitment(buyer, seller);
     const r1 = transitionCommitment(c0, { type: "Proposed" }, buyer);
     expect(r1.ok).toBe(true);
-    const r2 = transitionCommitment(r1.value!, { type: "Accepted" }, seller);
+    const r2 = transitionCommitment(unwrap(r1), { type: "Accepted" }, seller);
     expect(r2.ok).toBe(true);
-    expect(r2.value!.state.type).toBe("Accepted");
-    expect(r2.value!.history.length).toBe(2);
+    const c2 = unwrap(r2);
+    expect(c2.state.type).toBe("Accepted");
+    expect(c2.history.length).toBe(2);
   });
 
   it("rejects an invalid transition with a clear error", () => {
     const c0 = newCommitment(buyer, seller);
     const r = transitionCommitment(c0, { type: "Fulfilled" }, buyer);
     expect(r.ok).toBe(false);
-    expect(r.error).toContain("Invariant 2");
+    expect(unwrapErr(r)).toContain("Invariant 2");
   });
 
   it("is immutable and append-only — the input is never mutated", () => {
@@ -129,7 +143,7 @@ describe("transitionCommitment", () => {
     const r = transitionCommitment(c0, { type: "Proposed" }, buyer);
     expect(r.ok).toBe(true);
     expect(c0.history.length).toBe(0); // original untouched
-    expect(r.value!.history.length).toBe(1);
+    expect(unwrap(r).history.length).toBe(1);
   });
 
   it("rejects a transition timestamped before the previous one (Invariant 4)", () => {
@@ -137,7 +151,7 @@ describe("transitionCommitment", () => {
     c0.history.push({ from: { type: "Draft" }, to: { type: "Draft" }, at: "2999-01-01T00:00:00.000Z", actor: buyer });
     const r = transitionCommitment(c0, { type: "Proposed" }, buyer);
     expect(r.ok).toBe(false);
-    expect(r.error).toContain("Invariant 4");
+    expect(unwrapErr(r)).toContain("Invariant 4");
   });
 });
 
@@ -151,8 +165,9 @@ describe("intent transitions", () => {
     const i = newIntent(buyer);
     const r = transitionIntent(i, { type: "Abandoned" }, buyer, "timeout");
     expect(r.ok).toBe(true);
-    expect(r.value!.state.type).toBe("Abandoned");
-    expect(r.value!.history[0]!.reason).toBe("timeout");
+    const moved = unwrap(r);
+    expect(moved.state.type).toBe("Abandoned");
+    expect(moved.history[0]!.reason).toBe("timeout");
   });
 });
 
@@ -175,8 +190,9 @@ describe("fulfillment transitions", () => {
     const f = newFulfillment(newCommitment(buyer, seller).id);
     const r1 = transitionFulfillment(f, { type: "InProgress" }, buyer);
     expect(r1.ok).toBe(true);
-    expect(r1.value!.started_at).toBeDefined();
-    const r2 = transitionFulfillment(r1.value!, { type: "Completed" }, buyer);
-    expect(r2.value!.completed_at).toBeDefined();
+    const f1 = unwrap(r1);
+    expect(f1.started_at).toBeDefined();
+    const r2 = transitionFulfillment(f1, { type: "Completed" }, buyer);
+    expect(unwrap(r2).completed_at).toBeDefined();
   });
 });

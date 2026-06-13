@@ -35,6 +35,18 @@ export class CurrencyMismatchError extends Error {
   }
 }
 
+/** Thrown when a currency-conversion rate is not a positive, finite number. */
+export class InvalidRateError extends Error {
+  constructor(public readonly rate: number) {
+    super(
+      `Conversion rate must be a positive, finite number; got ${rate}. ` +
+        `A rate of zero, a negative rate, NaN, or Infinity cannot define a ` +
+        `meaningful conversion (Invariant 1: Value Conservation).`,
+    );
+    this.name = "InvalidRateError";
+  }
+}
+
 /** Type guard: is `value` a well-formed Money object? */
 export function isMoney(value: unknown): value is Money {
   return (
@@ -69,6 +81,7 @@ export function subtract(a: Money, b: Money): Money {
  * FX in the model.
  */
 export function convert(amount: Money, to: CurrencyCode, rate: number): Money {
+  if (!Number.isFinite(rate) || rate <= 0) throw new InvalidRateError(rate);
   return { amount: amount.amount * rate, currency: to };
 }
 

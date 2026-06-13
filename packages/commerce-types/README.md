@@ -1,6 +1,6 @@
 # @warp-lang/commerce-types
 
-**Formal commerce types derived from the [Warp Commerce Model](https://github.com/yasirlts/warp-lang) v0.2.**
+**Formal commerce types derived from the [Warp Commerce Model](https://github.com/yasirlts/warp-lang), canonical schema v1.0.0.**
 
 Typed money you can't mix by accident. State transitions validated against the
 model's 26-transition table. Runtime checkers for the six commerce invariants.
@@ -30,16 +30,22 @@ import {
 const price: Money = { amount: 150, currency: "MAD" };
 
 // State transitions are validated; invalid ones return an error, not a throw.
-let order = newCommitment(partyId("cust_1"), partyId("store"));
-const proposed = transitionCommitment(order, { type: "Proposed" }, partyId("cust_1"));
-const accepted = transitionCommitment(proposed.value!, { type: "Accepted" }, partyId("store"));
+// transitionCommitment returns Result<Commitment> = { ok: true, value } | { ok: false, error }.
+// Checking `r.ok` narrows the type, so `r.value` needs no non-null assertion.
+const order = newCommitment(partyId("cust_1"), partyId("store"));
 
-const bad = transitionCommitment(accepted.value!, { type: "Draft" }, partyId("store"));
-bad.ok;    // false — Accepted → Draft is not a valid transition (Invariant 2)
-bad.error; // human-readable explanation
+const proposed = transitionCommitment(order, { type: "Proposed" }, partyId("cust_1"));
+if (proposed.ok === false) throw new Error(proposed.error);
+
+const accepted = transitionCommitment(proposed.value, { type: "Accepted" }, partyId("store"));
+if (accepted.ok === false) throw new Error(accepted.error);
+
+// Accepted → Draft is rejected: an invalid transition returns an error, not a throw.
+const bad = transitionCommitment(accepted.value, { type: "Draft" }, partyId("store"));
+if (bad.ok === false) bad.error; // human-readable explanation (Invariant 2: State Monotonicity)
 
 // Audit a set of commerce objects against all six invariants.
-const violations = auditCommerce([accepted.value!], [], []);
+const violations = auditCommerce([accepted.value], [], []);
 ```
 
 ### Currency-safe money
@@ -98,7 +104,7 @@ npm run generate   # regenerate src/generated/ from ../../schema
 npm run codegen    # CI: fail if the generated output drifts from the schema
 ```
 
-## Scope (v0.1)
+## Scope (v1.0.0)
 
 This release covers the five primitives, the three state machines with their
 transition validators, the six invariant checkers, currency-safe money, and the

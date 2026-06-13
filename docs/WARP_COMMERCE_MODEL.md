@@ -16,7 +16,7 @@ decisions. It answers one question: what is commerce, stated formally.
 
 **Stability:** The five primitives are stable. The six invariants
 are stable (with one refined clause in Invariant 1). Extensions
-validated through adversarial testing across 40+ commerce domains.
+validated through adversarial testing across 22 commerce domains.
 
 **v0.3 changes from v0.2:** Ten additional commerce domains tested —
 real estate, healthcare, government procurement, wholesale/distribution,
@@ -108,7 +108,7 @@ next transitions without human input.
 
 Everything in commerce derives from five primitives. No commerce operation
 anywhere in the world requires a concept outside these five. This claim
-has been tested adversarially across 40+ commerce domains: physical goods
+has been tested adversarially across 22 commerce domains: physical goods
 commerce (Amazon, Alibaba, Temu, Shein, Net-a-Porter), multi-recipient
 gifting with returns, physical retail POS including multi-store chains and
 franchise models, services commerce including appointments, subscriptions,
@@ -1958,7 +1958,7 @@ Environmental markets:
 
 **Result: No test has required a sixth primitive.**
 
-Across 40+ domains spanning every major category of human commercial
+Across 22 domains spanning every major category of human commercial
 activity, the five primitives — Party, Value, Intent, Commitment,
 Fulfillment — have been sufficient to represent every commerce operation
 tested. All additions have been extensions to existing primitive
@@ -1977,7 +1977,7 @@ been found necessary across any tested domain."
 ### v0.3 (2026-06-11) — Full commerce vocabulary
 
 Ten additional domains tested. All held. No sixth primitive found.
-40+ domains total across all major categories of human commerce.
+22 domains total across all major categories of human commerce.
 
 New DeliveryMethod variants:
   TitleTransfer (real estate, legal ownership via notarial deed)

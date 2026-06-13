@@ -1,10 +1,13 @@
 # Warp Commerce Model — Canonical Schema Spine
 
 **Version 1.0.0 — frozen.** This directory is the **canonical, language-neutral
-source of truth** for the Warp Commerce Model. TypeScript, Python, and Rust
-types are **generated from** or **validated against** these files. When the spec
-([`spec/COMMERCE_MODEL.md`](../spec/COMMERCE_MODEL.md)) and a downstream language
-package disagree, **this directory is the arbiter.**
+source of truth** for the Warp Commerce Model. The **TypeScript and Python**
+packages are **generated from** these files and proven equivalent to each other
+by the conformance cross-check (the TS↔Python guarantee, CI-enforced). **Rust**
+generation/validation against the canonical schema is **on the roadmap and is
+not yet in the conformance loop** — do not read this as three-language parity.
+When the spec ([`spec/COMMERCE_MODEL.md`](../spec/COMMERCE_MODEL.md)) and a
+downstream language package disagree, **this directory is the arbiter.**
 
 It is derived faithfully from `spec/COMMERCE_MODEL.md` v0.3 and is kept exactly
 compatible with the live TypeScript package
@@ -68,21 +71,27 @@ The schema is upstream of every language binding:
 
 ```
 schema/structure/*.schema.json ─┐
-                                 ├─► TypeScript  (packages/commerce-types) — generated / validated
-schema/behavior/*.json ──────────┼─► Python      — generated / validated
-                                 └─► Rust         — generated / validated
+                                 ├─► TypeScript  (packages/commerce-types)    — generated + cross-checked
+schema/behavior/*.json ──────────┼─► Python      (packages/commerce-types-py) — generated + cross-checked
+                                 └─► Rust                                       — roadmap (not yet in the conformance loop)
 ```
 
 - **TypeScript**: regenerate interfaces from `structure/`, re-apply id brands,
   and emit the transition tables + invariant checkers from `behavior/`. The
   package's existing test suite is the canary — generated output must keep it
   green.
-- **Python / Rust**: generate dataclasses / structs from `structure/`; implement
+- **Python**: generate dataclasses from `structure/`; implement
   `behavior/transitions.json` and `invariants.json` directly; pass the shared
-  `fixtures` from `invariants.json`.
+  `fixtures` from `invariants.json`. TS and Python are proven equivalent by the
+  conformance cross-check.
+- **Rust**: schema-generated Rust types and their inclusion in the conformance
+  cross-check are **roadmap**, not done. Today's Rust crates (`warp-core`,
+  `warp-generated`) are the compiler/runtime, not a schema-derived type binding.
 
 The **conformance fixtures** named in `invariants.json` — not hand-written
-per-language code — are the cross-language correctness guarantee.
+per-language code — are the cross-language correctness guarantee. Today that
+guarantee covers **TypeScript and Python** (the cross-check runs both and
+requires agreement); Rust joins when its binding lands.
 
 ## Validate
 
