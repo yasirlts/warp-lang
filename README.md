@@ -1,68 +1,158 @@
 # Warp
 
-**A typed, compiled commerce workflow language.**
+**A formally specified, language-neutral model of commerce — with currency-safe,
+state-validated types proven equivalent across two language bindings.**
 
-[![npm](https://img.shields.io/npm/v/@warp-lang/commerce-types)](https://www.npmjs.com/package/@warp-lang/commerce-types)
+[![npm](https://img.shields.io/npm/v/@warp-lang/commerce-types?label=npm)](https://www.npmjs.com/package/@warp-lang/commerce-types)
+[![PyPI](https://img.shields.io/pypi/v/warp-commerce-types?label=PyPI)](https://pypi.org/project/warp-commerce-types/)
+[![CI](https://github.com/yasirlts/warp-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/yasirlts/warp-lang/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Warp is a small language for commerce automation. You write a workflow in
-`.warp` — triggers, delays, communication, intelligence steps — and the Warp
-compiler type-checks it against a formal commerce model before it can run.
-Money carries its currency; orders move through a real state machine; the
-compiler catches whole classes of commerce mistakes at compile time.
+Warp is a model of what commerce *is* — five primitives, six invariants, and one
+frozen schema — written down precisely enough that two independent
+implementations produce the same answers. From that one schema it generates a
+TypeScript package and a Python package, and a conformance suite checks that they
+agree on every fixture.
 
-The compiler is an **original Rust implementation** — a hand-written lexer,
-recursive-descent parser, type checker, and code generator. Durable execution
-(workflows that survive restarts, durable timers, human-in-the-loop pauses) is
-provided by [Restate](https://restate.dev)'s MIT-licensed SDK. There is no
-forked upstream; the language and its tooling are written from scratch.
+It is for anyone who writes commerce logic and wants the structure to be checked
+rather than assumed: commerce engineers modelling orders, payments, and
+fulfillment; teams sharing a vocabulary across services in different languages;
+and developers building AI agents that generate commerce code and need a typed
+contract to generate against.
 
 ---
 
-## A `.warp` workflow
+## The problem
 
-```warp
-project "cart_recovery" {
-    version = "1.0.0"
-    tenant  = "tenant_demo"
+Commerce code is full of mistakes that look correct. A total is added across two
+currencies. An order is moved from `Fulfilled` back to `Accepted`. A refund
+exceeds the amount that was captured. A parent order's children no longer sum to
+the parent. None of these throw on a happy path — they pass review, ship, and
+surface later as reconciliation bugs.
 
-    CartAbandoned trigger {
-        min_value: Currency(200, MAD)     // money carries its currency
-        after:     Duration(30, minutes)
-    }
+The failure mode gets sharper when code is *generated*: an AI agent producing
+commerce logic has no innate sense that MAD and EUR cannot be added, or that a
+state machine forbids a transition. It needs a model to generate against, and a
+way to be told when it gets it wrong.
 
-    ACPGetCustomerProfile profile {
-        customer_id: trigger.customer_id
-    }
+---
 
-    WhatsAppSend first_touch {
-        to:       profile.phone           // a PhoneNumber, not a String
-        template: "cart_reminder"
-        lang:     profile.language
-    }
+## What Warp is
 
-    DelayFor wait { duration: Duration(24, hours) }   // durable — survives restarts
+Warp is a **formal commerce model**, not a framework. Its surface is small and
+deliberately language-neutral:
 
-    ACPEvaluateStrategy offer { customer_id: trigger.customer_id }
+- **5 primitives** — `Party`, `Value`, `Intent`, `Commitment`, `Fulfillment`.
+  Every commerce operation is expressed in terms of these. The model has been
+  exercised adversarially across **22 commerce domains** — physical goods,
+  services, BNPL and lending, digital licensing, auctions, real estate,
+  healthcare, government procurement, trade finance, loyalty, group buying,
+  carbon markets, and more.
+- **6 invariants** — value conservation, state monotonicity, capacity
+  verification, temporal integrity, identity permanence, and commitment-tree
+  consistency. These are the rules an implementation can be checked against.
+- **One frozen schema** — the structural types and the behavioral rules
+  (transition tables, invariant definitions) live in [`schema/`](schema/) at a
+  single versioned source of truth (currently **v1.0.0**, see
+  [`schema/VERSION`](schema/VERSION)).
+- **Two bindings, generated from that schema** — a TypeScript package and a
+  Python package, both produced from the same `schema/`, not hand-maintained in
+  parallel.
 
-    WhatsAppSend followup {
-        to:       profile.phone
-        template: "cart_offer"
-        lang:     profile.language
-    }
+**The headline property: the two bindings are proven to agree.** A cross-language
+conformance check runs every shared fixture through both the TypeScript and the
+Python implementation and compares the verdicts. Today that is **45 of 45**
+fixtures runnable in both languages — **45 agreements, 0 disagreements**. When TS
+and Python disagree on whether a commerce object is valid, CI fails. (Six further
+fixtures are catalog enumerations that one binding exposes and the other does not,
+and are reported separately as not-applicable.)
+
+The model is specified in full in
+[the Commerce Model spec](spec/COMMERCE_MODEL.md).
+
+---
+
+## Install
+
+```bash
+npm install @warp-lang/commerce-types     # TypeScript / JavaScript
+```
+
+```bash
+pip install warp-commerce-types           # Python
+```
+
+Both packages are published at **1.0.0** and built from the same schema.
+
+### Quickstart — TypeScript
+
+```ts
+import {
+  partyId, newCommitment, transitionCommitment, add,
+} from "@warp-lang/commerce-types";
+
+// Money always carries its currency — no bare numbers for money.
+const price    = { amount: 200, currency: "MAD" };
+const shipping = { amount: 30,  currency: "MAD" };
+const total    = add(price, shipping);           // { amount: 230, currency: "MAD" }
+console.log("total:", total.amount, total.currency);
+
+// A commitment moves through a validated state machine.
+const order = newCommitment(partyId("buyer"), partyId("seller"));
+
+// Valid: Draft -> Proposed. The result is a discriminated union.
+const proposed = transitionCommitment(order, { type: "Proposed" }, partyId("buyer"));
+if (proposed.ok) {
+  console.log("state:", proposed.value.state.type);   // "Proposed"
+}
+
+// Invalid: Draft -> Fulfilled is not in the table. Caught, not thrown.
+const bad = transitionCommitment(order, { type: "Fulfilled" }, partyId("buyer"));
+if (bad.ok === false) {
+  console.log("rejected:", bad.error);                // explains the violation
 }
 ```
 
-The compiler checks the node graph, the field types, and the commerce
-invariants (below) before the workflow can be installed.
+### Quickstart — Python
+
+```python
+from warp_commerce_types import (
+    Money, party_id, new_commitment, transition_commitment, add,
+)
+
+# Money always carries its currency — Decimal alone is not valid Money.
+price    = Money(amount=200, currency="MAD")
+shipping = Money(amount=30,  currency="MAD")
+total    = add(price, shipping)               # Money(amount=230, currency="MAD")
+print("total:", total.amount, total.currency)
+
+# A commitment moves through a validated state machine.
+order = new_commitment(party_id("buyer"), party_id("seller"))
+
+# Valid: Draft -> Proposed. The result carries ok / value / error.
+proposed = transition_commitment(order, {"type": "Proposed"}, party_id("buyer"))
+if proposed.ok:
+    print("state:", proposed.value.state.type)    # "Proposed"
+
+# Invalid: Draft -> Fulfilled is not in the table. Caught, not raised.
+bad = transition_commitment(order, {"type": "Fulfilled"}, party_id("buyer"))
+if not bad.ok:
+    print("rejected:", bad.error)                 # explains the violation
+```
+
+Both snippets print the running total, the new state, and an explained rejection
+for the invalid transition. `add()` raises on a currency mismatch rather than
+silently producing a wrong number.
 
 ---
 
-## What the compiler actually enforces
+## What the model checks — and what it does not
 
-Warp is honest about what it checks today. The compiler does **not** enforce
-all six commerce invariants, and it does not make every mistake impossible —
-here is exactly what it does:
+The runtime validators check commerce objects against the six invariants. They do
+**not** enforce all six the same way, and passing them is **not** a guarantee that
+a workflow is correct or safe — it is a set of specific, named checks. Here is the
+honest picture of how the bundled DSL **compiler** treats each invariant at
+compile time:
 
 | Invariant | Compile-time behavior |
 |-----------|------------------------|
@@ -70,76 +160,147 @@ here is exactly what it does:
 | **I-4 Temporal Integrity** | **Blocking** — a violation fails compilation |
 | **I-5 Identity Permanence** | **Blocking** — a violation fails compilation |
 | **I-6 Commitment Tree Consistency** | **Partial / best-effort** — checks literal child-vs-parent values |
-| **I-1 Value Conservation** | **Warning** — currency mixing compiles *with a warning*, it does not block |
-| **I-2 State Monotonicity** | **Not yet enforced at compile time** — on the roadmap |
+| **I-1 Value Conservation** | **Warning** — currency mixing compiles *with a warning*; it does not block |
+| **I-2 State Monotonicity** | **Not yet enforced at compile time** (see Roadmap) |
 
-> The honest one-liner: *the Warp compiler enforces Capacity (I-3), Temporal
-> Integrity (I-4), and Identity Permanence (I-5) at compile time, blocking on
-> violation; it partially checks Tree Consistency (I-6), warns on currency
-> mixing (I-1), and does not yet enforce State Monotonicity (I-2).*
+> In one line: the compiler blocks on Capacity (I-3), Temporal Integrity (I-4),
+> and Identity Permanence (I-5); partially checks Tree Consistency (I-6); warns on
+> currency mixing (I-1); and does not yet enforce State Monotonicity (I-2). It
+> does not enforce all six, and it is not a proof of correctness.
 
-The five primitives (Party, Value, Intent, Commitment, Fulfillment) and the six
-invariants are defined in [the Commerce Model spec](spec/COMMERCE_MODEL.md).
+The library validators (`auditCommerce` / `audit_commerce` and the `checkI*`
+functions) cover all six invariants as *runtime* checks; the table above is
+specifically about the DSL compiler's static behavior.
 
 ---
 
-## Try it
+## The conformance suite
 
-**Hosted (easiest):** the managed Warp compiler runs at
-[warp.aimer.ma](https://warp.aimer.ma).
+The conformance suite is what makes "two implementations agree" a checkable claim
+rather than a hope. It is a set of language-neutral fixtures — valid objects that
+must be accepted, invalid objects that must be rejected — run through every
+binding.
+
+- **51 / 51 fixtures pass** against the canonical schema.
+- **45 / 45** fixtures runnable in both TypeScript and Python **agree**, with
+  **0 disagreements** (6 catalog-enumeration fixtures are reported as
+  not-applicable to one binding).
+- The **three original audit bugs are locked as permanent regression fixtures**,
+  so they cannot return:
+  1. **Three-decimal currencies** (TND/BHD/KWD/OMR/JOD) were treated as
+     two-decimal, making amounts 10× wrong.
+  2. **Adapter empty histories** — synthesized objects with empty histories that
+     falsely passed (or failed) the auditor.
+  3. **Invariant 6 float equality** — tree consistency used exact float equality,
+     so `0.1 + 0.2` children falsely failed a `0.3` parent.
+
+Because the fixtures are schema-bound and language-neutral, **any other stack can
+generate its own types from [`schema/`](schema/) and run the same fixtures to
+prove it agrees** with the reference bindings.
+
+Run it locally:
 
 ```bash
-curl -X POST https://warp.aimer.ma/api/v1/workflows/compile \
-  -H "X-Warp-API-Key: your-key" -H "Content-Type: application/json" \
-  -d '{"tenant_id":"your-tenant","warp_source":"project \"hello\" {\n  version = \"1.0.0\"\n  tenant  = \"your-tenant\"\n  CartAbandoned trigger {\n    min_value: Currency(200, MAD)\n    after:     Duration(30, minutes)\n  }\n}"}'
+node conformance/runner/run.mjs          # 51/51 fixtures vs the canonical schema
+node conformance/tooling/crosscheck.mjs  # TS vs Python agreement
 ```
 
-**Local (the source is here):** build and run the compiler from this repo.
+See [`conformance/README.md`](conformance/README.md) for the full layout.
+
+---
+
+## The DSL and Rust compiler
+
+The model is the foundation; the `.warp` workflow language is **one application
+built on it**. A `.warp` workflow describes a commerce automation — triggers,
+delays, communication, intelligence steps — and the Warp compiler type-checks it
+against the commerce model before it can run.
+
+```warp
+project "cart_recovery" {
+  version = "1.0.0"
+  tenant  = "your-tenant-id"
+
+  CartAbandoned trigger {
+    min_value: Currency(200, MAD)        // money carries its currency
+    after:     Duration(30, minutes)
+  }
+
+  ACPGetCustomerProfile profile {
+    customer_id: trigger.customer_id
+  }
+
+  WhatsAppSend message {
+    to:       profile.phone              // a PhoneNumber, not a String
+    template: "cart_reminder"
+    lang:     profile.language
+    params:   { cart_value: trigger.cart_value }
+  }
+}
+```
+
+The compiler is an **original Rust implementation** — a hand-written lexer,
+recursive-descent parser, type checker, and code generator. There is **no forked
+upstream**. Durable execution — workflows that survive restarts, durable timers,
+and human-in-the-loop pauses — is provided by [Restate](https://restate.dev)'s
+MIT-licensed SDK; see
+[ADR-0006](docs/adr/0006-restate-as-execution-foundation.md).
+
+Build and run the compiler from this repo:
 
 ```bash
-cargo build --workspace          # builds warp-core (compiler), warp-mcp, warp-generated
+cargo build --workspace      # warp-core (compiler), warp-mcp, warp-generated
 cargo test  --workspace
 ```
 
+A **managed compiler** is hosted at [warp.aimer.ma](https://warp.aimer.ma) as the
+easiest way to try compilation without a local build (the API is key-gated). The
+commercial server — billing, payments, tenancy, signup — is not part of this open
+release.
+
 ---
 
-## Repository layout
+## Roadmap
 
-```
-crates/
-  warp-core/        the compiler — lexer, parser, type checker, codegen (dsl/),
-                    the commerce type system (types/), AI builder, management API
-  warp-mcp/         Model Context Protocol server — 8 tools that let an MCP
-                    agent generate/validate workflows and commerce code
-  warp-generated/   the codegen target crate (generated workflow output)
-editors/vscode/     the .warp VS Code language extension
-packages/
-  commerce-types/   @warp-lang/commerce-types — the TypeScript vocabulary +
-                    runtime validators (auditCommerce / checkI*), published to npm
-docs/               type specs, type derivation, ADRs, adapter guides
-spec/               the formal Commerce Model, type spec, compatible-platform guide
-```
+These are **planned, not present**. They are listed here so the line between what
+ships today and what is intended is unambiguous.
 
-### What is *not* in this repo
-
-This is the open **language**. The hosted compiler at warp.aimer.ma is the
-managed offering, built on this `warp-core`; the commercial server (billing,
-payments, tenancy, signup) and its storage layer are **not** part of the open
-release.
+- **I-1 blocking and I-2 enforcement** — promote currency mixing from warning to a
+  blocking error, and enforce state monotonicity statically in the compiler.
+- **Rust binding in the cross-check** — add a third binding to the conformance
+  cross-check so TS, Python, and Rust are all proven equivalent.
+- **More platform adapters** — beyond the current Shopify / WooCommerce / Stripe
+  type mappings.
+- **A profile system** — schema profiles for subsets of the model.
+- **A playground** — a hosted, no-install way to explore the model and the DSL.
+- **Agentic-commerce integration** — positioning the model as an integrity layer
+  for agent-driven commerce protocols (e.g. ACP / AP2), so generated commerce
+  actions can be validated against the invariants before they execute.
 
 ---
 
 ## Documentation
 
 - [Commerce Model](spec/COMMERCE_MODEL.md) — the five primitives and six invariants
-- [Type Specification](spec/TYPE_SPEC.md) and the versioned specs in [docs/](docs/)
-- [Architecture Decision Records](docs/adr/) — including
-  [ADR-0006: Restate as the execution foundation](docs/adr/0006-restate-as-execution-foundation.md)
-- [`@warp-lang/commerce-types`](https://www.npmjs.com/package/@warp-lang/commerce-types) — the npm package
+- [Type Specification](spec/TYPE_SPEC.md) and the versioned specs in [`docs/`](docs/)
+- [Compatible-platform guide](spec/COMPATIBLE_GUIDE.md)
+- [Conformance suite](conformance/README.md) and the [case studies](docs/case-studies/)
+- [Architecture Decision Records](docs/adr/)
+- [`@warp-lang/commerce-types`](https://www.npmjs.com/package/@warp-lang/commerce-types) (npm) ·
+  [`warp-commerce-types`](https://pypi.org/project/warp-commerce-types/) (PyPI)
+- [`.warp` VS Code extension](editors/vscode/) — language support for `.warp` files
 - [CLAUDE.md](CLAUDE.md) — drop-in rules for AI agents writing `.warp` / commerce code
 
 ---
 
+## Contributing
+
+Issues and pull requests are welcome. The bar for any change is the conformance
+suite: `node conformance/runner/run.mjs` and `node conformance/tooling/crosscheck.mjs`
+must stay green, and `cargo test --workspace` plus the package test suites must
+pass. New commerce behavior should come with a fixture that locks it in.
+
 ## License
 
-MIT — see [LICENSE](LICENSE). Use freely, build on it, ship Warp-compatible products.
+MIT — see [LICENSE](LICENSE). Use it freely, build on it, ship Warp-compatible
+products.
