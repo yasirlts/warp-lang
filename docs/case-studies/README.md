@@ -3,9 +3,9 @@
 **These are the adversarial test corpus referenced in the Commerce Model spec's
 Formal Sufficiency Test — now executable against the _canonical_ schema.**
 
-The spec claims the five primitives were "tested adversarially across 40+
+The spec claims the five primitives were "tested adversarially across 22
 commerce domains." This directory turns that claim into evidence: one worked
-case study per domain, each backed by an **executable canonical `scene`
+case study per domain — 22 domains, 22 executable fixtures — each backed by an **executable canonical `scene`
 fixture** that validates + audits clean against the canonical Warp Commerce
 Model schema v1.0.0 (`schema/structure/*.schema.json`) via the canonical runner.
 

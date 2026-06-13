@@ -15,6 +15,17 @@ package are generated from / read the **same canonical schema**
 pip install warp-commerce-types
 ```
 
+> **Available on PyPI as of v1.0.0.** If you're building from a pre-release
+> checkout (before v1.0.0 is live on PyPI), the line above won't resolve yet —
+> install from source instead:
+>
+> ```bash
+> # from a checkout of the warp-lang repo:
+> pip install ./packages/commerce-types-py
+> # …or editable, with dev deps, for working on the package:
+> pip install -e "./packages/commerce-types-py[dev]"
+> ```
+
 ## What you get
 
 ```python

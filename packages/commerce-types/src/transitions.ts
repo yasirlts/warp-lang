@@ -32,12 +32,15 @@ import {
   INTENT_TRANSITIONS,
 } from "./generated/transitions.generated.js";
 
-/** A fallible result. `error` is set (and `ok` is false) on failure. */
-export interface Result<T> {
-  ok: boolean;
-  value?: T;
-  error?: string;
-}
+/**
+ * A fallible result: either a success carrying `value`, or a failure carrying
+ * `error`. Discriminated on `ok` — `if (r.ok)` narrows to the success branch, so
+ * `r.value` is available with no non-null assertion (and `r.error` only exists on
+ * the failure branch).
+ */
+export type Result<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string };
 
 /** Thrown by callers who choose to `throw` on a failed transition. */
 export class InvalidTransitionError extends Error {
@@ -249,7 +252,7 @@ export function applyCommitmentPath(
   let current = commitment;
   for (const step of commitmentPath(target)) {
     const result = transitionCommitment(current, step, actor, reason);
-    if (!result.ok || !result.value) return { ...commitment, state: target };
+    if (!result.ok) return { ...commitment, state: target };
     current = result.value;
   }
   return current;
@@ -283,7 +286,7 @@ export function applyFulfillmentPath(
   let current = fulfillment;
   for (const step of fulfillmentPath(target)) {
     const result = transitionFulfillment(current, step, actor);
-    if (!result.ok || !result.value) return { ...fulfillment, state: target };
+    if (!result.ok) return { ...fulfillment, state: target };
     current = result.value;
   }
   return current;
