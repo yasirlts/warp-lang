@@ -5,9 +5,19 @@ name: Release
 # conformance suite IS the release gate — no green, no publish.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   NPM_TOKEN   — npm automation token (publishes @warp-lang/commerce-types)
-#   PYPI_TOKEN  — PyPI API token        (publishes warp-commerce-types)
+#   NPM_TOKEN   — npm GRANULAR access token (Read+Write, scoped to the warp-lang
+#                 org). A granular token is REQUIRED: the account enforces
+#                 2FA-on-write, and classic/automation-classic tokens hit
+#                 `EOTP` ("requires a one-time password") in headless CI — which
+#                 is exactly how the v1.0.0 npm publish failed. A granular token
+#                 bypasses the interactive OTP. See RELEASING.md.
+#   PYPI_TOKEN  — PyPI API token (publishes warp-commerce-types; no 2FA issue).
 # This file contains secret REFERENCES only — never a literal token.
+#
+# Publish ordering: publish-npm runs first; publish-pypi `needs:` it, so the
+# historically-fragile npm step gates the reliable PyPI step. If npm fails (e.g.
+# EOTP), PyPI does NOT publish — preventing a split state where PyPI is ahead of
+# npm (the v1.0.0 outcome). Recovery for a half-publish is in RELEASING.md.
 
 on:
   push:
@@ -169,14 +179,38 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Precheck — NPM_TOKEN authenticates non-interactively
+        # `npm whoami` is a read; it confirms the token is present and valid and
+        # fails fast with a readable message instead of dying mid-publish. It
+        # does NOT itself prove the token bypasses 2FA-on-write — but if it
+        # passes here and `npm publish` below still EOTPs, the token is a
+        # classic/automation token, not granular (see RELEASING.md).
+        run: |
+          if ! WHO="$(npm whoami 2>&1)"; then
+            echo "::error::NPM_TOKEN failed to authenticate to npm ($WHO). Set NPM_TOKEN to a GRANULAR access token (Read+Write, scoped to the warp-lang org); classic tokens hit EOTP under 2FA-on-write. See RELEASING.md."
+            exit 1
+          fi
+          echo "Authenticated to npm as: $WHO"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish to npm
-        run: npm publish --access public
+        # --access public for a scoped package. No --otp: an OTP cannot live in a
+        # workflow; headless publish relies on a granular token. If this step
+        # fails with EOTP, the token is not granular — fix it (RELEASING.md) and
+        # re-run, or publish manually with `npm publish --otp=<code>`.
+        run: |
+          if ! npm publish --access public; then
+            echo "::error::npm publish failed. If the error above is EOTP / 'requires a one-time password', NPM_TOKEN is not a granular token that bypasses 2FA-on-write. Fix the token (RELEASING.md) and re-run this release, or publish manually: npm publish --otp=<code>."
+            exit 1
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-pypi:
     name: publish pypi
-    needs: [rust, ts, python, schema, conformance, crosscheck]
+    # Also needs publish-npm: the fragile npm publish gates the reliable PyPI one,
+    # so a npm EOTP failure stops PyPI from racing ahead (no split state).
+    needs: [rust, ts, python, schema, conformance, crosscheck, publish-npm]
     runs-on: ubuntu-latest
     defaults:
       run:
