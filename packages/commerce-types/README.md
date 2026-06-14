@@ -15,7 +15,61 @@ code that satisfies them — and your TypeScript compiler enforces the rest.
 npm install @warp-lang/commerce-types
 ```
 
-## Use
+## Quickstart — `order()`
+
+The fastest path from install to a real validation result. `order()` is a fluent
+builder that composes a **history-complete, auditable** order in a few lines, then
+hands it to the headline `auditCommerce` check.
+
+```typescript
+import { order } from "@warp-lang/commerce-types";
+
+// Build a valid order: buyer, seller, a priced item, paid + fulfilled.
+const built = order()
+  .from("buyer_1")
+  .to("seller_1")
+  .item({ sku: "TSHIRT-RED-M", price: { amount: 200, currency: "MAD" } })
+  .paid()
+  .fulfilled()
+  .build();   // Result<AuditedOrder> = { ok: true, value } | { ok: false, error }
+
+if (built.ok) {
+  // The headline check: audit the history-complete order. An empty list is clean.
+  const violations = built.value.audit();   // []
+}
+
+// A buggy order — two currencies in one order — is surfaced as a Result,
+// not coerced into a broken object.
+const mixed = order()
+  .from("buyer_1").to("seller_1")
+  .value({ amount: 200, currency: "MAD" })
+  .value({ amount: 30, currency: "EUR" })
+  .build();
+
+if (mixed.ok === false) {
+  mixed.error; // "Order mixes currencies (MAD, EUR)… (Invariant 1: Value Conservation)"
+}
+```
+
+Runnable version: [`examples/order-quickstart.mjs`](examples/order-quickstart.mjs).
+
+`order()` makes a *correct* order easy to construct; it does not make an incorrect
+one impossible. Invalid compositions — a missing party, the same party on both
+sides, mixed currencies, a non-finite amount — return `{ ok: false, error }` with
+an actionable message, never a thrown exception and never a silently coerced
+object. Internally it uses the same public constructors and the
+`applyCommitmentPath` / `applyFulfillmentPath` replay helpers, so every state it
+reaches has a real, valid, append-only history — exactly what a hand-built object
+would have.
+
+> `order()` is a **TypeScript convenience**. The Python package
+> (`warp-commerce-types`) exposes the same primitives, transitions, and invariant
+> checkers, but does not (yet) ship this builder.
+
+### From scratch (the primitives)
+
+The builder is sugar — the primitives stay public and unchanged. When you need
+full control, construct and transition objects directly:
 
 ```typescript
 import {
@@ -26,15 +80,15 @@ import {
   auditCommerce,
 } from "@warp-lang/commerce-types";
 
-// Money always carries currency — enforced by the type.
+// Money always carries currency — there is no amount without a denomination.
 const price: Money = { amount: 150, currency: "MAD" };
 
 // State transitions are validated; invalid ones return an error, not a throw.
 // transitionCommitment returns Result<Commitment> = { ok: true, value } | { ok: false, error }.
 // Checking `r.ok` narrows the type, so `r.value` needs no non-null assertion.
-const order = newCommitment(partyId("cust_1"), partyId("store"));
+const commitment = newCommitment(partyId("cust_1"), partyId("store"));
 
-const proposed = transitionCommitment(order, { type: "Proposed" }, partyId("cust_1"));
+const proposed = transitionCommitment(commitment, { type: "Proposed" }, partyId("cust_1"));
 if (proposed.ok === false) throw new Error(proposed.error);
 
 const accepted = transitionCommitment(proposed.value, { type: "Accepted" }, partyId("store"));
@@ -71,6 +125,7 @@ const commitment = fromShopifyOrder(shopifyOrder); // Order → Commitment, stat
 
 | Module | Exports |
 |--------|---------|
+| builder | `order()` — fluent, history-complete order construction returning `Result<AuditedOrder>` (TS-only) |
 | primitives | `Party`, `Value`, `Intent`, `Commitment`, `Fulfillment` + branded IDs + constructors |
 | states | `IntentState`, `CommitmentState` (11 variants), `FulfillmentState` |
 | transitions | `transitionCommitment`/`Intent`/`Fulfillment`, `isValid*Transition` |

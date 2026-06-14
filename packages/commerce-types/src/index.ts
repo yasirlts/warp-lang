@@ -35,6 +35,9 @@ export * from "./terms.js";
 export * from "./auction.js";
 export * from "./metering.js";
 export * from "./resolution.js";
+// `order()` — the high-level fluent builder. A convenience over the primitives
+// and transition replay above; the primitives stay public and unchanged.
+export * from "./builder.js";
 
 // Aliases — the `verifyInvariantN` / `auditCommerceCode` names used by the
 // CLAUDE.md template's quick-reference resolve to the canonical checkers.
