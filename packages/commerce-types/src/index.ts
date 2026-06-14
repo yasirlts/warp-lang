@@ -9,18 +9,62 @@
  *
  * Platform mappings (Shopify, WooCommerce, Stripe) are available via subpath
  * imports, e.g. `import { fromShopifyOrder } from "@warp-lang/commerce-types/platforms/shopify"`.
+ *
+ * ──────────────────────────────────────────────────────────────────────────
+ * THE SURFACE IS TIERED. Everything below is exported; the tiers tell you what
+ * to reach for first. See the package README "Core API" / "Advanced API".
+ *
+ *   CORE (start here — ~10):
+ *     order, AuditedOrder            the fluent builder front door + its result
+ *     Money, MoneyBreakdown          the money types
+ *     add, convert                   currency-safe money math
+ *     newCommitment / newIntent /
+ *       newFulfillment, partyId      the primitive constructors
+ *     transitionCommitment           the main state-machine entry
+ *     auditCommerce                  the headline six-invariant check
+ *
+ *   ADVANCED (kept, fully supported, lower-level):
+ *     per-invariant checkI* + checkLoyaltyLiability; isValid*Transition,
+ *     applyCommitmentPath / applyFulfillmentPath, transitionIntent /
+ *     transitionFulfillment; subtract / compare / allocate / format / zero /
+ *     isMoney / currencyDecimals / moneyEpsilon / moneyEquals /
+ *     validateMoneyBreakdown; the id + party constructors; the error classes;
+ *     now, SCHEMA_VERSION; and the full v0.3 type vocabulary.
+ *
+ *   DEPRECATED ALIASES (still work; see the bottom of this file):
+ *     auditCommerceCode, verifyInvariant1…6, verifyMoneyBreakdown.
+ * ──────────────────────────────────────────────────────────────────────────
  */
 
+// ── CORE-bearing modules ────────────────────────────────────────────────────
+// These barrels carry the core surface (and their advanced siblings):
+//   money.js       → CORE: Money, MoneyBreakdown, add, convert
+//                    ADVANCED: subtract, compare, allocate, format, zero, isMoney,
+//                    currencyDecimals, moneyEpsilon, moneyEquals, validateMoneyBreakdown
+//   primitives.js  → CORE: newCommitment, newIntent, newFulfillment, partyId
+//                    ADVANCED: commitmentId/intentId/fulfillmentId/valueId,
+//                    individual/organization/system, unverifiedCapacity, now, the types
+//   transitions.js → CORE: transitionCommitment
+//                    ADVANCED: transitionIntent/Fulfillment, isValid*Transition,
+//                    applyCommitmentPath/applyFulfillmentPath, Result, error classes
+//   invariants.js  → CORE: auditCommerce
+//                    ADVANCED: checkI1…I6, checkI1MoneyBreakdownSum, checkLoyaltyLiability
+//   builder.js     → CORE: order, AuditedOrder (+ the OrderBuilder type)
 export * from "./money.js";
+export * from "./primitives.js";
+export * from "./transitions.js";
+export * from "./invariants.js";
+export * from "./builder.js";
+
+// ── ADVANCED type vocabulary ────────────────────────────────────────────────
+// State machines, the v0.3 commerce vocabulary, and the market-making /
+// metering / resolution records. All advanced; surfaced for completeness.
 export * from "./states.js";
 // The CommerceObject union (any top-level entity) and the frozen schema version
 // these types were generated from — both come straight from the canonical
 // schema spine (schema/structure/index.schema.json + schema/VERSION).
 export type { CommerceObject } from "./generated/types.generated.js";
 export { SCHEMA_VERSION } from "./generated/types.generated.js";
-export * from "./primitives.js";
-export * from "./transitions.js";
-export * from "./invariants.js";
 // v0.3 — full commerce vocabulary (cascade cancellation, volume pricing,
 // loyalty earn terms, threshold activation, AwardProtest, v0.3 Evidence).
 // PaymentTiming + its PostFulfillmentTrigger / CommissionStructure /
@@ -35,19 +79,36 @@ export * from "./terms.js";
 export * from "./auction.js";
 export * from "./metering.js";
 export * from "./resolution.js";
-// `order()` — the high-level fluent builder. A convenience over the primitives
-// and transition replay above; the primitives stay public and unchanged.
-export * from "./builder.js";
 
-// Aliases — the `verifyInvariantN` / `auditCommerceCode` names used by the
-// CLAUDE.md template's quick-reference resolve to the canonical checkers.
-export {
-  auditCommerce as auditCommerceCode,
-  checkI1ValueConservation as verifyInvariant1,
-  checkI2StateMonotonicity as verifyInvariant2,
-  checkI3CapacityVerification as verifyInvariant3,
-  checkI4TemporalIntegrity as verifyInvariant4,
-  checkI5IdentityPermanence as verifyInvariant5,
-  checkI6TreeConsistency as verifyInvariant6,
-  checkI1MoneyBreakdownSum as verifyMoneyBreakdown,
+// ── DEPRECATED ALIASES ──────────────────────────────────────────────────────
+// One canonical name per function; these older duplicate names still work so no
+// existing import breaks. They are re-bindings of the canonical functions (same
+// runtime behavior) and are slated for removal in a future major version.
+// Migrate to the canonical name shown in each @deprecated tag.
+import {
+  auditCommerce,
+  checkI1MoneyBreakdownSum,
+  checkI1ValueConservation,
+  checkI2StateMonotonicity,
+  checkI3CapacityVerification,
+  checkI4TemporalIntegrity,
+  checkI5IdentityPermanence,
+  checkI6TreeConsistency,
 } from "./invariants.js";
+
+/** @deprecated Use {@link auditCommerce} instead. Removed in a future major. */
+export const auditCommerceCode = auditCommerce;
+/** @deprecated Use {@link checkI1ValueConservation} instead. Removed in a future major. */
+export const verifyInvariant1 = checkI1ValueConservation;
+/** @deprecated Use {@link checkI2StateMonotonicity} instead. Removed in a future major. */
+export const verifyInvariant2 = checkI2StateMonotonicity;
+/** @deprecated Use {@link checkI3CapacityVerification} instead. Removed in a future major. */
+export const verifyInvariant3 = checkI3CapacityVerification;
+/** @deprecated Use {@link checkI4TemporalIntegrity} instead. Removed in a future major. */
+export const verifyInvariant4 = checkI4TemporalIntegrity;
+/** @deprecated Use {@link checkI5IdentityPermanence} instead. Removed in a future major. */
+export const verifyInvariant5 = checkI5IdentityPermanence;
+/** @deprecated Use {@link checkI6TreeConsistency} instead. Removed in a future major. */
+export const verifyInvariant6 = checkI6TreeConsistency;
+/** @deprecated Use {@link checkI1MoneyBreakdownSum} instead. Removed in a future major. */
+export const verifyMoneyBreakdown = checkI1MoneyBreakdownSum;

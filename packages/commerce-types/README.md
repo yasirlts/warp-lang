@@ -121,17 +121,53 @@ import { fromStripePaymentIntent } from "@warp-lang/commerce-types/platforms/str
 const commitment = fromShopifyOrder(shopifyOrder); // Order → Commitment, status mapped
 ```
 
-## What's inside
+## Core API
 
-| Module | Exports |
-|--------|---------|
-| builder | `order()` — fluent, history-complete order construction returning `Result<AuditedOrder>` (TS-only) |
-| primitives | `Party`, `Value`, `Intent`, `Commitment`, `Fulfillment` + branded IDs + constructors |
-| states | `IntentState`, `CommitmentState` (11 variants), `FulfillmentState` |
-| transitions | `transitionCommitment`/`Intent`/`Fulfillment`, `isValid*Transition` |
-| invariants | `checkI1…I6`, `auditCommerce` (aliased as `verifyInvariant1…6`, `auditCommerceCode`) |
-| money | `Money`, `add`, `subtract`, `convert`, `compare`, `format`, `zero` |
-| platforms/* | `fromShopify*`, `fromWoo*`, `fromStripe*` mappings |
+The surface is large, but you only need a handful of exports to start. These are
+the "start here" set — the 5-minute path uses them:
+
+| Export | What it is |
+|--------|-----------|
+| `order()` → `AuditedOrder` | The fluent builder front door; `.build()` returns `Result<AuditedOrder>`, and `AuditedOrder.audit()` runs the headline check. |
+| `Money`, `MoneyBreakdown` | The money types — an amount always carries its currency. |
+| `add`, `convert` | Currency-safe money math (`add` rejects a currency mismatch; `convert` needs an explicit rate). |
+| `newCommitment`, `newIntent`, `newFulfillment` | Constructors for the primitives. |
+| `partyId` | Make a typed party identifier for the constructors. |
+| `transitionCommitment` | The main state-machine entry; returns `Result<Commitment>`. |
+| `auditCommerce` | The headline check — runs every applicable invariant over a set of objects. |
+
+## Advanced API
+
+Everything else is exported and fully supported, just lower-level — reach for it
+when the core surface is not enough:
+
+| Group | Exports |
+|-------|---------|
+| Per-invariant checks | `checkI1ValueConservation` … `checkI6TreeConsistency`, `checkI1MoneyBreakdownSum`, `checkLoyaltyLiability` |
+| Low-level transitions | `transitionIntent`, `transitionFulfillment`, `isValidCommitmentTransition`/`Intent`/`Fulfillment`, `applyCommitmentPath`, `applyFulfillmentPath` |
+| Money extras | `subtract`, `compare`, `allocate`, `format`, `zero`, `isMoney`, `currencyDecimals`, `moneyEpsilon`, `moneyEquals`, `validateMoneyBreakdown` |
+| Id + party constructors | `commitmentId`, `intentId`, `fulfillmentId`, `valueId`, `individual`, `organization`, `system`, `unverifiedCapacity`, `now` |
+| Errors | `CapacityError`, `CurrencyMismatchError`, `InvalidRateError`, `InvalidTransitionError` |
+| Type vocabulary | `Party`, `Value`, `Intent`, `Commitment`, `Fulfillment`, the three `*State` unions, `Result`, `OrderBuilder`, `SCHEMA_VERSION`, and the v0.3 records (`AuctionProcess`, `ResolutionProcess`, terms, metering) |
+| Platform mappings | `fromShopify*`, `fromWoo*`, `fromStripe*` via `@warp-lang/commerce-types/platforms/{shopify,woocommerce,stripe}` |
+
+## Deprecations
+
+These older names are duplicate aliases of a canonical function. They **still
+work** — nothing breaks — but they are marked `@deprecated` (your editor will
+strike them through) and will be removed in a future major version. Migrate to
+the canonical name:
+
+| Deprecated alias | Use instead |
+|------------------|-------------|
+| `auditCommerceCode` | `auditCommerce` |
+| `verifyInvariant1` | `checkI1ValueConservation` |
+| `verifyInvariant2` | `checkI2StateMonotonicity` |
+| `verifyInvariant3` | `checkI3CapacityVerification` |
+| `verifyInvariant4` | `checkI4TemporalIntegrity` |
+| `verifyInvariant5` | `checkI5IdentityPermanence` |
+| `verifyInvariant6` | `checkI6TreeConsistency` |
+| `verifyMoneyBreakdown` | `checkI1MoneyBreakdownSum` |
 
 ## The six invariants
 
@@ -159,13 +195,14 @@ npm run generate   # regenerate src/generated/ from ../../schema
 npm run codegen    # CI: fail if the generated output drifts from the schema
 ```
 
-## Scope (v1.0.0)
+## Scope
 
-This release covers the five primitives, the three state machines with their
-transition validators, the six invariant checkers, currency-safe money, and the
-Shopify / WooCommerce / Stripe mappings. The fuller value trees (digital
-licensing / streaming / service-scheduling detail) and the market-making
-records (`AuctionProcess`, `ResolutionProcess`) are modeled in the
+The package covers the five primitives, the three state machines with their
+transition validators, the six invariant checkers, currency-safe money, the
+`order()` builder (TypeScript), and the Shopify / WooCommerce / Stripe mappings.
+The fuller value trees (digital licensing / streaming / service-scheduling
+detail) and the market-making records (`AuctionProcess`, `ResolutionProcess`) are
+modeled in the
 [specification](https://github.com/yasirlts/warp-lang/blob/main/spec/COMMERCE_MODEL.md)
 and land in a later release.
 
