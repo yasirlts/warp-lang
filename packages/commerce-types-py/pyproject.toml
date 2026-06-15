@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "warp-commerce-types"
-version = "1.0.0"
+version = "1.1.0"
 description = "Formal commerce types generated from the Warp Commerce Model — typed money, validated state transitions, and the six commerce invariants. The Python twin of @warp-lang/commerce-types."
 readme = "README.md"
 requires-python = ">=3.9"

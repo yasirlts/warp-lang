@@ -1,7 +1,7 @@
 {
   "name": "@warp-lang/commerce-types",
-  "version": "1.0.0",
-  "description": "Formal commerce types derived from the Warp Commerce Model \u2014 typed money, validated state transitions, and the six commerce invariants.",
+  "version": "1.1.0",
+  "description": "Formal commerce types derived from the Warp Commerce Model — typed money, validated state transitions, and the six commerce invariants.",
   "type": "module",
   "sideEffects": false,
   "main": "dist/index.cjs",
