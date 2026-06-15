@@ -107,17 +107,32 @@ n/a (not failures) — they just mark checks you haven't implemented yet.
 
 ### Worked example (a real binding passing)
 
-The TypeScript binding is the worked reference. Its adapter
-([`crosscheck-ts.mjs`](../conformance/tooling/crosscheck-ts.mjs)) emits exactly the
-format above; piping it through the scorer is the end-to-end demonstration:
+The TypeScript binding is the worked reference. Run it through the harness from a
+fresh clone with one command — it builds the local TS binding if needed, runs its
+adapter, scores the output, and asserts a clean pass:
 
 ```bash
+node conformance/tooling/test-score-adapter.mjs
+# → test-score-adapter: PASS — worked example (TS binding) scores 45/45 via the harness, 0 disagreements.
+```
+
+That command is self-contained (no prior build step) and is what CI runs, so the
+worked example can't silently rot. Under the hood it is just an "emit verdicts →
+score" pipeline — the TS adapter
+([`crosscheck-ts.mjs`](../conformance/tooling/crosscheck-ts.mjs)) emits the verdict
+format above, and the scorer grades it:
+
+```bash
+# the underlying flow (requires the TS binding built first:
+#   cd packages/commerce-types && npm ci && npm run build
+# — test-score-adapter.mjs does that for you):
 node conformance/tooling/crosscheck-ts.mjs | node conformance/tooling/score-adapter.mjs -
 # → ✓ Your binding agrees with the Warp Commerce Model on 45/45 runnable fixtures (schema v1.0.0). 6 not yet implemented.
 ```
 
-[`test-score-adapter.mjs`](../conformance/tooling/test-score-adapter.mjs) runs this
-in CI so the worked example can't silently rot.
+Your own binding needs no build of ours: emit your verdicts and score them
+directly with `score-adapter.mjs` (Path B above) — that step depends only on the
+fixtures, not on our compiled package.
 
 ## Step 4 — Interpret X/Y honestly
 
