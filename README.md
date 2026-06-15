@@ -6,6 +6,7 @@ state-validated types proven equivalent across two language bindings.**
 [![npm](https://img.shields.io/npm/v/@warp-lang/commerce-types?label=npm)](https://www.npmjs.com/package/@warp-lang/commerce-types)
 [![PyPI](https://img.shields.io/pypi/v/warp-commerce-types?label=PyPI)](https://pypi.org/project/warp-commerce-types/)
 [![CI](https://github.com/yasirlts/warp-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/yasirlts/warp-lang/actions/workflows/ci.yml)
+[![Conformance](https://img.shields.io/badge/conformance-51%2F51%20(schema%20v1.0.0)-success)](conformance/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Warp is a model of what commerce *is* — five primitives, six invariants, and one
@@ -82,7 +83,7 @@ npm install @warp-lang/commerce-types     # TypeScript / JavaScript
 pip install warp-commerce-types           # Python
 ```
 
-Both packages are published at **1.0.0** and built from the same schema.
+Both packages are published at **1.1.0** and built from the same schema.
 
 ### Quickstart — TypeScript
 
@@ -118,9 +119,9 @@ if (mixed.ok === false) {
 }
 ```
 
-> `order()` is a TypeScript convenience that lives in the package source; the
-> core types, transitions, and invariant checkers shown below are in the
-> published 1.0.0.
+> `order()` is a TypeScript convenience (in the published npm package); the
+> Python package exposes the same primitives, transitions, and invariant
+> checkers, but not this builder.
 
 Or work with the primitives directly:
 
@@ -234,7 +235,10 @@ binding.
 
 Because the fixtures are schema-bound and language-neutral, **any other stack can
 generate its own types from [`schema/`](schema/) and run the same fixtures to
-prove it agrees** with the reference bindings.
+prove it agrees** with the reference bindings — emit per-fixture verdicts and
+score them with `conformance/tooling/score-adapter.mjs`. The step-by-step guide,
+including the compatibility badge and what a pass does and does **not** prove, is
+[**docs/CONFORMANCE.md — Build a Warp-compatible binding**](docs/CONFORMANCE.md).
 
 Run it locally:
 
@@ -322,6 +326,7 @@ ships today and what is intended is unambiguous.
 - [Commerce Model](spec/COMMERCE_MODEL.md) — the five primitives and six invariants
 - [Type Specification](spec/TYPE_SPEC.md) and the versioned specs in [`docs/`](docs/)
 - [Compatible-platform guide](spec/COMPATIBLE_GUIDE.md)
+- [Build a Warp-compatible binding](docs/CONFORMANCE.md) — generate types, run the fixtures, prove agreement
 - [Conformance suite](conformance/README.md) and the [case studies](docs/case-studies/)
 - [Architecture Decision Records](docs/adr/)
 - [`@warp-lang/commerce-types`](https://www.npmjs.com/package/@warp-lang/commerce-types) (npm) ·

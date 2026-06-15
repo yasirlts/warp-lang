@@ -173,3 +173,9 @@ jobs:
       # non-zero on any disagreement.
       - name: Cross-check
         run: node conformance/tooling/crosscheck.mjs
+
+      # Keeps the external-binding harness honest: run the TS binding's verdicts
+      # through the generic score-adapter (the same path an external binding
+      # uses) and assert a clean pass. Needs the TS dist built above.
+      - name: External-harness worked example
+        run: node conformance/tooling/test-score-adapter.mjs
