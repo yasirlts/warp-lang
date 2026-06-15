@@ -341,6 +341,11 @@ Warp also ships **one example integration surface** — a Model Context Protocol
 speak MCP. It is one option among many, not a requirement; see its
 [README](crates/warp-mcp/README.md).
 
+To prove a binding in any language agrees with the model — generate types from the
+schema, run the same fixtures, score the result — see
+[`docs/CONFORMANCE.md`](docs/CONFORMANCE.md) and the
+[conformance suite](conformance/README.md).
+
 ---
 
 *Based on the Warp Commerce Model — https://github.com/yasirlts/warp-lang*

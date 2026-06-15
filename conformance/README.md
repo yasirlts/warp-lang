@@ -129,12 +129,13 @@ by [`valid/money-breakdown-sums-correctly`](valid/money-breakdown-sums-correctly
 [`invalid/money-breakdown-sum-mismatch`](invalid/money-breakdown-sum-mismatch.json)
 (both rejected as `money_breakdown_sum`).
 
-> **Binding parity note.** The Python binding implements `money_breakdown_sum`
-> (`validate_money_breakdown`); the TS binding does **not** yet expose a
-> MoneyBreakdown checker. So the four money-breakdown fixtures are runnable in
-> Python and in the runner, but n/a in TS — a binding gap logged in
-> [`../schema/BACKLOG-v1.1.md`](../schema/BACKLOG-v1.1.md) (B-1). The schema fully
-> specifies the rule; only TS is behind.
+> **Binding parity note.** Both bindings implement `money_breakdown_sum` — Python
+> as `validate_money_breakdown` and TS as `validateMoneyBreakdown` — so the four
+> money-breakdown fixtures now run in **both** (B-1, once a TS gap surfaced by
+> this very suite, is resolved — see
+> [`../schema/BACKLOG-v1.1.md`](../schema/BACKLOG-v1.1.md)). The only fixtures n/a
+> to a binding are the six structural state-catalogs, which the schema runner
+> validates directly.
 
 ---
 
@@ -187,12 +188,13 @@ It runs `crosscheck-ts.mjs` (canonical `@warp-lang/commerce-types`:
 `crosscheck-python.py` (canonical `warp-commerce-types`: `audit_commerce` /
 `is_valid_*_transition` / `validate_money_breakdown` / `currency_decimals`), then
 prints `fixture | expected | TS | Python | agree?`. Every fixture **runnable in
-both** must get the same verdict (and match the manifest). Fixtures one binding
-cannot run (TS's missing MoneyBreakdown checker; structural-only state-catalogs)
-are marked `n/a` and reported, not counted as disagreements.
+both** must get the same verdict (and match the manifest). Fixtures a binding
+cannot run (the structural-only state-catalogs) are marked `n/a` and reported,
+not counted as disagreements.
 
-Latest result: **19/19 fixtures runnable in both TS and Python agree; 0
-disagreements** (10 n/a — 6 state-catalog structural + 4 money-breakdown TS-gap).
+Latest result: **45/45 fixtures runnable in both TS and Python agree; 0
+disagreements** (6 n/a — the structural state-catalogs, covered by the runner +
+JSON Schema).
 
 ### Writing a runner in another language
 
@@ -203,6 +205,21 @@ disagreements** (10 n/a — 6 state-catalog structural + 4 money-breakdown TS-ga
    rejection names the same `rule`).
 4. Report pass/fail. Port `runner/run.mjs` directly — it is intentionally small
    and dependency-free for exactly this purpose.
+
+Or, without porting the whole runner: have your binding **emit per-fixture
+verdicts** in the documented adapter format and score them with
+[`tooling/score-adapter.mjs`](tooling/score-adapter.mjs) — it applies the same
+agreement check as the TS↔Python cross-check and reports `X/Y`. The worked
+example (the TS binding scored through it) is
+[`tooling/test-score-adapter.mjs`](tooling/test-score-adapter.mjs):
+
+```bash
+node conformance/tooling/crosscheck-ts.mjs | node conformance/tooling/score-adapter.mjs -
+```
+
+See **[`../docs/CONFORMANCE.md`](../docs/CONFORMANCE.md)** for the full
+step-by-step guide — generate types → implement the checks → run the fixtures →
+claim the badge — including what a pass does and does **not** prove.
 
 If your implementation and this suite agree on all fixtures, you are
 Warp-compatible at v1.0.0. Add a badge, ship it.
@@ -226,12 +243,13 @@ So each fixture is validated multiple ways:
 - **Python binding** — the canonical Python package agrees (`tooling/crosscheck-python.py`);
 - **manifest** — all of them match the declared `expect`/`rule`.
 
-Where a binding lacks an API for a check, the suite is what surfaces it: TS does
-not yet ship a `MoneyBreakdown` checker, so the money-breakdown fixtures run in
-Python and in the runner but are n/a in TS (logged as
-[`../schema/BACKLOG-v1.1.md`](../schema/BACKLOG-v1.1.md) B-1). That is the point of
-a conformance suite — it is the gate every binding must pass, and the place
-divergences become visible.
+Where a binding lacks an API for a check, the suite is what surfaces it — that is
+the point of a conformance suite. The one historical case, TS's missing
+`MoneyBreakdown` checker, was caught exactly this way and has since been resolved
+(B-1 in [`../schema/BACKLOG-v1.1.md`](../schema/BACKLOG-v1.1.md); TS now ships
+`validateMoneyBreakdown`), so the money-breakdown fixtures run in both bindings.
+The suite is the gate every binding must pass, and the place divergences become
+visible.
 
 To regenerate / re-verify (requires the TS package built in
 `packages/commerce-types/dist` and the Python package importable):
