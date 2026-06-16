@@ -1,10 +1,10 @@
 # Warp Commerce Model — Canonical Schema Spine
 
 **Version 1.0.0 — frozen.** This directory is the **canonical, language-neutral
-source of truth** for the Warp Commerce Model. The **TypeScript, Python, and
-Rust** bindings are all **generated from** these files and proven equivalent by
-the conformance cross-check (CI-enforced): all three produce the identical
-verdict on every fixture runnable in all three — **45 of the 51 fixtures**; the
+source of truth** for the Warp Commerce Model. The **TypeScript, Python, Rust,
+and Go** bindings are all **generated from** these files and proven equivalent by
+the conformance cross-check (CI-enforced): all four produce the identical
+verdict on every fixture runnable in all four — **45 of the 51 fixtures**; the
 remaining **6 are state-catalog fixtures**, which are purely structural and so
 are n/a for every behavioral binding (they are covered by the runner + JSON
 Schema). When the spec ([`spec/COMMERCE_MODEL.md`](../spec/COMMERCE_MODEL.md))
@@ -72,9 +72,10 @@ The schema is upstream of every language binding:
 
 ```
 schema/structure/*.schema.json ─┐
-                                 ├─► TypeScript  (packages/commerce-types)    — generated + cross-checked
-schema/behavior/*.json ──────────┼─► Python      (packages/commerce-types-py) — generated + cross-checked
-                                 └─► Rust         (crates/warp-commerce-types)     — generated + cross-checked
+                                 ├─► TypeScript  (packages/commerce-types)        — generated + cross-checked
+                                 ├─► Python      (packages/commerce-types-py)     — generated + cross-checked
+schema/behavior/*.json ──────────┼─► Rust         (crates/warp-commerce-types)    — generated + cross-checked
+                                 └─► Go           (bindings/go)                    — generated + cross-checked
 ```
 
 - **TypeScript**: regenerate interfaces from `structure/`, re-apply id brands,
@@ -92,11 +93,19 @@ schema/behavior/*.json ──────────┼─► Python      (pack
   gates) fails if the committed generated Rust diverges from the schema. (This
   is the schema-derived type binding; the older `warp-core` / `warp-generated`
   crates remain the compiler/runtime, not a type binding.)
+- **Go**: `bindings/go/generate-go.mjs` regenerates Go types from `structure/`
+  (re-applying the same BRANDS / open-CurrencyCode seams, and mapping each
+  tagged-union `oneOf` to a single flattened struct carrying the discriminant
+  plus the union of member fields — the documented Go-specific seam) and the
+  transition tables from `behavior/`; the hand-written runtime
+  (`bindings/go/runtime.go`) ports the runner's transition / audit / money
+  rules. A `--check` drift mode (CI-gated, like the TS/Python/Rust codegen
+  gates) fails if the committed generated Go diverges from the schema.
 
 The **conformance fixtures** named in `invariants.json` — not hand-written
 per-language code — are the cross-language correctness guarantee. Today that
-guarantee covers **TypeScript, Python, and Rust**: the cross-check runs all
-three and requires agreement on every fixture runnable in all three (45 of 51;
+guarantee covers **TypeScript, Python, Rust, and Go**: the cross-check runs all
+four and requires agreement on every fixture runnable in all four (45 of 51;
 the 6 state-catalog fixtures are structural and n/a for behavioral bindings).
 
 ## Validate

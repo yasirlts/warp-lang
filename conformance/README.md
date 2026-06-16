@@ -3,15 +3,16 @@
 Language-neutral fixtures that **prove** any implementation of the Warp Commerce
 Model agrees with every other. Every fixture is validated against the **canonical
 schema** ([`schema/`](../schema) — `structure/*.schema.json` + `behavior/`), and
-cross-checked through three bindings:
+cross-checked through four bindings:
 [`@warp-lang/commerce-types`](../packages/commerce-types) (TS),
-[`warp-commerce-types`](../packages/commerce-types-py) (Python), and
-[`warp-commerce-types`](../crates/warp-commerce-types) (Rust). All three are
-generated from the one schema; this suite is what proves they actually agree.
+[`warp-commerce-types`](../packages/commerce-types-py) (Python),
+[`warp-commerce-types`](../crates/warp-commerce-types) (Rust), and
+[`bindings/go`](../bindings/go) (Go). All four are generated from the one schema;
+this suite is what proves they actually agree.
 
 This suite is the cross-check that the TS package, the Python package, the Rust
-crate, and anything that calls itself "Warp-compatible" all conform to the same
-schema.
+crate, the Go module, and anything that calls itself "Warp-compatible" all
+conform to the same schema.
 
 ---
 
@@ -57,8 +58,10 @@ conformance/
     ├── crosscheck-ts.mjs      # emits the TS binding's verdict per fixture (JSON)
     ├── crosscheck-python.py   # emits the Python binding's verdict per fixture (JSON)
     │                          # (the Rust binding's verdict comes from the
-    │                          #  crosscheck-rust binary in crates/warp-commerce-types)
-    └── crosscheck.mjs         # THE CROSS-CHECK: prints the TS/Python/Rust agreement table
+    │                          #  crosscheck-rust binary in crates/warp-commerce-types;
+    │                          #  the Go binding's verdict from the crosscheck-go
+    │                          #  command in bindings/go/cmd/crosscheck-go)
+    └── crosscheck.mjs         # THE CROSS-CHECK: prints the TS/Python/Rust/Go agreement table
 ```
 
 The canonical schema consumed by the runner: [`../schema/structure/`](../schema/structure)
@@ -133,11 +136,11 @@ by [`valid/money-breakdown-sums-correctly`](valid/money-breakdown-sums-correctly
 [`invalid/money-breakdown-sum-mismatch`](invalid/money-breakdown-sum-mismatch.json)
 (both rejected as `money_breakdown_sum`).
 
-> **Binding parity note.** All three bindings implement `money_breakdown_sum` —
-> Python as `validate_money_breakdown`, TS as `validateMoneyBreakdown`, and Rust
-> as `runtime::breakdown_is_valid` — so the four money-breakdown fixtures now run
-> in **all three** (B-1, once a TS gap surfaced by this very suite, is resolved
-> — see
+> **Binding parity note.** All four bindings implement `money_breakdown_sum` —
+> Python as `validate_money_breakdown`, TS as `validateMoneyBreakdown`, Rust as
+> `runtime::breakdown_is_valid`, and Go as `BreakdownIsValid` — so the four
+> money-breakdown fixtures now run in **all four** (B-1, once a TS gap surfaced by
+> this very suite, is resolved — see
 > [`../schema/BACKLOG-v1.1.md`](../schema/BACKLOG-v1.1.md)). The only fixtures n/a
 > to a binding are the six structural state-catalogs, which the schema runner
 > validates directly.
@@ -179,9 +182,9 @@ JSON Schema 2020-12 validator, since `ajv` is not vendored), transition checks r
 are implemented per the reference impls named in `../schema/behavior/invariants.json`.
 Shape alone is not conformance — the runner enforces behavior too.
 
-### The cross-check — prove TS, Python, and Rust agree
+### The cross-check — prove TS, Python, Rust, and Go agree
 
-The point of the whole suite: run every fixture through **all three** bindings
+The point of the whole suite: run every fixture through **all four** bindings
 and confirm identical verdicts.
 
 ```bash
@@ -191,23 +194,28 @@ node conformance/tooling/crosscheck.mjs   # prints the agreement table; exits 1 
 It runs `crosscheck-ts.mjs` (canonical `@warp-lang/commerce-types`:
 `auditCommerce` / `isValid*Transition` / `currencyDecimals`),
 `crosscheck-python.py` (canonical `warp-commerce-types`: `audit_commerce` /
-`is_valid_*_transition` / `validate_money_breakdown` / `currency_decimals`), and
+`is_valid_*_transition` / `validate_money_breakdown` / `currency_decimals`),
 the Rust `crosscheck-rust` binary (canonical `crates/warp-commerce-types`:
 schema-generated types + the `runtime` port of `run.mjs` — `audit_scene` /
 `is_valid_transition` / `breakdown_is_valid` / `currency_decimals`), invoked via
-`cargo run -p warp-commerce-types --bin crosscheck-rust`. It then prints
-`fixture | expected | TS | Python | Rust | agree?`. Every fixture **runnable in
-all three** must get the same verdict (and match the manifest). Fixtures no
+`cargo run -p warp-commerce-types --bin crosscheck-rust`, and the Go
+`crosscheck-go` command (canonical `bindings/go`: schema-generated types + the
+`runtime.go` port of `run.mjs` — `AuditScene` / `IsValidTransition` /
+`BreakdownIsValid` / `CurrencyDecimals`), invoked via `go run ./cmd/crosscheck-go`
+with `WARP_CONFORMANCE_DIR` pointed at this directory. It then prints
+`fixture | expected | TS | Python | Rust | Go | agree?`. Every fixture **runnable
+in all four** must get the same verdict (and match the manifest). Fixtures no
 behavioral binding can run (the structural-only state-catalogs) are marked `n/a`
 and reported, not counted as disagreements.
 
-Latest result: **45/45 fixtures runnable in all three (TS, Python, Rust) agree;
+Latest result: **45/45 fixtures runnable in all four (TS, Python, Rust, Go) agree;
 0 disagreements** (6 n/a — the structural state-catalogs `catalog-commitment-states`,
 `catalog-fulfillment-states`, `catalog-intent-states`, `catalog-value-states`,
 `catalog-value-forms`, `catalog-party-types`, covered by the runner + JSON
 Schema). The Rust types are regenerated from the schema by
-`crates/warp-commerce-types/scripts/generate-rust.mjs` (with a `--check` drift
-gate in CI), exactly as the TS/Python generators work.
+`crates/warp-commerce-types/scripts/generate-rust.mjs` and the Go types by
+`bindings/go/generate-go.mjs` (each with a `--check` drift gate in CI), exactly as
+the TS/Python generators work.
 
 ### Writing a runner in another language
 
@@ -222,7 +230,7 @@ gate in CI), exactly as the TS/Python generators work.
 Or, without porting the whole runner: have your binding **emit per-fixture
 verdicts** in the documented adapter format and score them with
 [`tooling/score-adapter.mjs`](tooling/score-adapter.mjs) — it applies the same
-agreement check as the TS↔Python cross-check and reports `X/Y`. The worked
+agreement check as the four-way TS↔Python↔Rust↔Go cross-check and reports `X/Y`. The worked
 example (the TS binding scored through it) is
 [`tooling/test-score-adapter.mjs`](tooling/test-score-adapter.mjs):
 
@@ -256,24 +264,27 @@ So each fixture is validated multiple ways:
 - **Python binding** — the canonical Python package agrees (`tooling/crosscheck-python.py`);
 - **Rust binding** — the canonical Rust crate agrees (the `crosscheck-rust`
   binary in `crates/warp-commerce-types`, invoked by `tooling/crosscheck.mjs`);
+- **Go binding** — the canonical Go module agrees (the `crosscheck-go` command in
+  `bindings/go/cmd/crosscheck-go`, invoked by `tooling/crosscheck.mjs`);
 - **manifest** — all of them match the declared `expect`/`rule`.
 
 Where a binding lacks an API for a check, the suite is what surfaces it — that is
 the point of a conformance suite. The one historical case, TS's missing
 `MoneyBreakdown` checker, was caught exactly this way and has since been resolved
 (B-1 in [`../schema/BACKLOG-v1.1.md`](../schema/BACKLOG-v1.1.md); TS now ships
-`validateMoneyBreakdown`), so the money-breakdown fixtures run in both bindings.
+`validateMoneyBreakdown`), so the money-breakdown fixtures run in all four bindings.
 The suite is the gate every binding must pass, and the place divergences become
 visible.
 
 To regenerate / re-verify (requires the TS package built in
-`packages/commerce-types/dist`, the Python package importable, and a Rust
-toolchain so `cargo run -p warp-commerce-types` can build the Rust binding):
+`packages/commerce-types/dist`, the Python package importable, a Rust toolchain so
+`cargo run -p warp-commerce-types` can build the Rust binding, and a Go toolchain
+so `go run ./cmd/crosscheck-go` can build the Go binding):
 
 ```bash
 node conformance/tooling/build.mjs       # rewrites fixtures + manifest, cross-checks the TS canonical package
 node conformance/runner/run.mjs          # validates every fixture against ../schema (normative, zero-dep)
-node conformance/tooling/crosscheck.mjs  # prints the TS/Python/Rust agreement table
+node conformance/tooling/crosscheck.mjs  # prints the TS/Python/Rust/Go agreement table
 ```
 
 ---
