@@ -4,6 +4,7 @@ members = [
     "crates/warp-core",
     "crates/warp-mcp",
     "crates/warp-generated",
+    "crates/warp-commerce-types",
 ]
 
 [workspace.package]
