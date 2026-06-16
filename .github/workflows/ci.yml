@@ -22,6 +22,12 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # Node is needed for the warp-commerce-types Rust codegen-drift gate
+      # below (the generator is a node script, mirroring the TS/Python ones).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
@@ -37,6 +43,14 @@ jobs:
       # Restate is not available in CI.
       - name: Test
         run: cargo test --all
+
+      # Rust codegen-drift gate — regenerates the warp-commerce-types types and
+      # transition tables from schema/ in --check mode and fails if the committed
+      # generated Rust differs. Keeps the schema the single source of truth for
+      # the Rust binding too (nobody can hand-edit generated output), exactly as
+      # the TS/Python jobs gate their generators.
+      - name: Rust codegen drift gate
+        run: node crates/warp-commerce-types/scripts/generate-rust.mjs --check
 
   # --- TypeScript binding (@warp-lang/commerce-types) ----------------------
   ts:
@@ -135,11 +149,13 @@ jobs:
       - name: Auxiliary-record coverage (5 records)
         run: node conformance/case-studies/validate-aux.mjs
 
-  # --- Cross-binding parity: TS and Python must agree on every fixture -----
-  # Needs BOTH bindings: the TS package built (crosscheck-ts imports dist/) and
-  # the Python package importable (crosscheck-python imports warp_commerce_types).
+  # --- Cross-binding parity: TS, Python, and Rust must agree on every fixture
+  # Needs ALL THREE bindings: the TS package built (crosscheck-ts imports dist/),
+  # the Python package importable (crosscheck-python imports warp_commerce_types),
+  # and the Rust binding compiled (crosscheck.mjs invokes the crosscheck-rust
+  # binary via cargo).
   crosscheck:
-    name: ts/python cross-check
+    name: ts/python/rust cross-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -156,6 +172,12 @@ jobs:
           cache: pip
           cache-dependency-path: packages/commerce-types-py/pyproject.toml
 
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
       - name: Build TS binding
         working-directory: packages/commerce-types
         run: |
@@ -168,9 +190,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      # Proves TS and Python produce the identical verdict on every fixture
-      # runnable in both (money-breakdown fixtures included since B-1). Exits
-      # non-zero on any disagreement.
+      # Build the Rust binding up front so the cross-check's `cargo run` does not
+      # pay first-compile cost inside the verdict capture.
+      - name: Build Rust binding
+        run: cargo build -p warp-commerce-types --bin crosscheck-rust
+
+      # Proves TS, Python, and Rust produce the identical verdict on every
+      # fixture runnable in all three (money-breakdown fixtures included since
+      # B-1). Exits non-zero on any disagreement.
       - name: Cross-check
         run: node conformance/tooling/crosscheck.mjs
 

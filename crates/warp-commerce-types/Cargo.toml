@@ -1,0 +1,19 @@
+[package]
+name = "warp-commerce-types"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Rust binding for the Warp Commerce Model — types generated from the canonical schema spine (schema/structure/*.schema.json), plus the hand-written behavioral runtime (transitions, the six-invariant scene audit, money) ported from the normative conformance runner. The crosscheck-rust binary emits per-fixture verdicts for the three-way conformance cross-check."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "crosscheck-rust"
+path = "src/bin/crosscheck-rust.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

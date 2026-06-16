@@ -1,13 +1,14 @@
 # Warp Commerce Model — Canonical Schema Spine
 
 **Version 1.0.0 — frozen.** This directory is the **canonical, language-neutral
-source of truth** for the Warp Commerce Model. The **TypeScript and Python**
-packages are **generated from** these files and proven equivalent to each other
-by the conformance cross-check (the TS↔Python guarantee, CI-enforced). **Rust**
-generation/validation against the canonical schema is **on the roadmap and is
-not yet in the conformance loop** — do not read this as three-language parity.
-When the spec ([`spec/COMMERCE_MODEL.md`](../spec/COMMERCE_MODEL.md)) and a
-downstream language package disagree, **this directory is the arbiter.**
+source of truth** for the Warp Commerce Model. The **TypeScript, Python, and
+Rust** bindings are all **generated from** these files and proven equivalent by
+the conformance cross-check (CI-enforced): all three produce the identical
+verdict on every fixture runnable in all three — **45 of the 51 fixtures**; the
+remaining **6 are state-catalog fixtures**, which are purely structural and so
+are n/a for every behavioral binding (they are covered by the runner + JSON
+Schema). When the spec ([`spec/COMMERCE_MODEL.md`](../spec/COMMERCE_MODEL.md))
+and a downstream language package disagree, **this directory is the arbiter.**
 
 It is derived faithfully from `spec/COMMERCE_MODEL.md` v0.3 and is kept exactly
 compatible with the live TypeScript package
@@ -73,7 +74,7 @@ The schema is upstream of every language binding:
 schema/structure/*.schema.json ─┐
                                  ├─► TypeScript  (packages/commerce-types)    — generated + cross-checked
 schema/behavior/*.json ──────────┼─► Python      (packages/commerce-types-py) — generated + cross-checked
-                                 └─► Rust                                       — roadmap (not yet in the conformance loop)
+                                 └─► Rust         (crates/warp-commerce-types)     — generated + cross-checked
 ```
 
 - **TypeScript**: regenerate interfaces from `structure/`, re-apply id brands,
@@ -82,16 +83,21 @@ schema/behavior/*.json ──────────┼─► Python      (pack
   green.
 - **Python**: generate dataclasses from `structure/`; implement
   `behavior/transitions.json` and `invariants.json` directly; pass the shared
-  `fixtures` from `invariants.json`. TS and Python are proven equivalent by the
-  conformance cross-check.
-- **Rust**: schema-generated Rust types and their inclusion in the conformance
-  cross-check are **roadmap**, not done. Today's Rust crates (`warp-core`,
-  `warp-generated`) are the compiler/runtime, not a schema-derived type binding.
+  `fixtures` from `invariants.json`.
+- **Rust**: `crates/warp-commerce-types/scripts/generate-rust.mjs` regenerates
+  serde-derived Rust types from `structure/` (re-applying the same BRANDS /
+  open-CurrencyCode seams) and the transition tables from `behavior/`; the
+  hand-written runtime (`src/runtime.rs`) ports the runner's transition / audit
+  / money rules. A `--check` drift mode (CI-gated, like the TS/Python codegen
+  gates) fails if the committed generated Rust diverges from the schema. (This
+  is the schema-derived type binding; the older `warp-core` / `warp-generated`
+  crates remain the compiler/runtime, not a type binding.)
 
 The **conformance fixtures** named in `invariants.json` — not hand-written
 per-language code — are the cross-language correctness guarantee. Today that
-guarantee covers **TypeScript and Python** (the cross-check runs both and
-requires agreement); Rust joins when its binding lands.
+guarantee covers **TypeScript, Python, and Rust**: the cross-check runs all
+three and requires agreement on every fixture runnable in all three (45 of 51;
+the 6 state-catalog fixtures are structural and n/a for behavioral bindings).
 
 ## Validate
 
