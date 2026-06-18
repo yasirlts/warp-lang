@@ -15,8 +15,13 @@ nothing here is specific to TypeScript or Python.
 - **Fixtures + contract:** [`../conformance/`](../conformance/) — see
   [`conformance/README.md`](../conformance/README.md) for the full envelope spec.
 - **The suite today:** **51 fixtures**, all passing against the canonical schema;
-  the TypeScript and Python bindings agree on **45/45** fixtures runnable in both
-  (the other 6 are structural state-catalogs, validated by the schema runner).
+  the TypeScript, Python, Rust, and Go bindings agree on **45/45** fixtures
+  runnable in all four (the other 6 are structural state-catalogs, validated by
+  the schema runner and so n/a for every behavioral binding). Go is the newest
+  reference binding ([`../bindings/go/`](../bindings/go/)); it joins TS
+  ([`../packages/commerce-types/`](../packages/commerce-types/)), Python
+  ([`../packages/commerce-types-py/`](../packages/commerce-types-py/)), and Rust
+  ([`../crates/warp-commerce-types/`](../crates/warp-commerce-types/)).
 
 ---
 
@@ -86,13 +91,25 @@ language-neutral scorer:
     "id": "i1-currency-mixed",      // fixture id, exactly as in manifest.json
     "kind": "scene",                 // scene | transition-sequence | money-roundtrip | money-breakdown | state-catalog
     "runnable": true,                // false = your binding has no API for this check yet
-    "verdict": "reject",             // "accept" | "reject"
-    "rules": ["I-1"],                // for a reject: the rule id(s) you fired
-    "steps": []                      // for transition-sequence: per-step validity [true,false,...]
+    "verdict": "reject",             // "accept" | "reject" | null (null when runnable:false)
+    "rules": ["I-1"],                // for a reject: the rule id(s) you fired — always [] when none, never null
+    "steps": [],                     // for transition-sequence: per-step validity [true,false,...] — always [], never null
+    "note": ""                       // optional, free text. Every reference emitter includes it; the
+                                     // scorer ignores it. By convention: the structural-only reason for a
+                                     // state-catalog fixture, or "<lang> raised: <msg>" when a fixture failed
+                                     // to deserialize/process (which also sets runnable:false).
   }
   // ... one object per fixture
 ]
 ```
+
+`rules` and `steps` are **always arrays** — emit `[]`, never `null` (in Go,
+initialise the slices to `[]string{}` / `[]bool{}`). `verdict` is `null` only for
+`runnable:false` fixtures; otherwise `"accept"`/`"reject"`. The four reference
+emitters ([`crosscheck-ts.mjs`](../conformance/tooling/crosscheck-ts.mjs),
+[`crosscheck-python.py`](../conformance/tooling/crosscheck-python.py),
+`crosscheck-rust`, and [`crosscheck-go`](../bindings/go/cmd/crosscheck-go/)) all
+emit exactly this shape including `note`.
 
 ```bash
 your-binding --emit-verdicts > verdicts.json
@@ -100,8 +117,8 @@ node conformance/tooling/score-adapter.mjs verdicts.json
 #   or: your-binding --emit-verdicts | node conformance/tooling/score-adapter.mjs
 ```
 
-The scorer applies the **same agreement check** the internal TS↔Python
-cross-check uses, and prints `X/Y` with a per-fixture table. It exits `0` only if
+The scorer applies the **same agreement check** the internal four-way
+TS↔Python↔Rust↔Go cross-check uses, and prints `X/Y` with a per-fixture table. It exits `0` only if
 every runnable fixture agrees. Fixtures you mark `runnable: false` are reported as
 n/a (not failures) — they just mark checks you haven't implemented yet.
 

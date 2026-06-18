@@ -149,13 +149,56 @@ jobs:
       - name: Auxiliary-record coverage (5 records)
         run: node conformance/case-studies/validate-aux.mjs
 
-  # --- Cross-binding parity: TS, Python, and Rust must agree on every fixture
-  # Needs ALL THREE bindings: the TS package built (crosscheck-ts imports dist/),
+  # --- Go binding (bindings/go) --------------------------------------------
+  # Builds + vets + gofmt-checks + tests the Go binding, and runs the Go
+  # codegen-drift gate. Node is needed because the generator is a node script,
+  # mirroring the TS/Python/Rust generators.
+  go:
+    name: go binding
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Build
+        working-directory: bindings/go
+        run: go build ./...
+
+      - name: Vet
+        working-directory: bindings/go
+        run: go vet ./...
+
+      # gofmt -l prints any file that is not gofmt-clean; fail if it prints anything.
+      - name: gofmt check
+        working-directory: bindings/go
+        run: test -z "$(gofmt -l .)"
+
+      - name: Test
+        working-directory: bindings/go
+        run: go test ./...
+
+      # Go codegen-drift gate — regenerates the Go types and transition tables
+      # from schema/ in --check mode and fails if the committed generated Go
+      # differs. Keeps the schema the single source of truth for the Go binding
+      # too, exactly as the TS/Python/Rust jobs gate their generators.
+      - name: Go codegen drift gate
+        run: node bindings/go/generate-go.mjs --check
+
+  # --- Cross-binding parity: TS, Python, Rust, and Go must agree on every fixture
+  # Needs ALL FOUR bindings: the TS package built (crosscheck-ts imports dist/),
   # the Python package importable (crosscheck-python imports warp_commerce_types),
-  # and the Rust binding compiled (crosscheck.mjs invokes the crosscheck-rust
-  # binary via cargo).
+  # the Rust binding compiled (crosscheck.mjs invokes the crosscheck-rust binary
+  # via cargo), and the Go toolchain (crosscheck.mjs invokes `go run` for the
+  # crosscheck-go command).
   crosscheck:
-    name: ts/python/rust cross-check
+    name: ts/python/rust/go cross-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -174,6 +217,10 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -195,9 +242,17 @@ jobs:
       - name: Build Rust binding
         run: cargo build -p warp-commerce-types --bin crosscheck-rust
 
-      # Proves TS, Python, and Rust produce the identical verdict on every
-      # fixture runnable in all three (money-breakdown fixtures included since
-      # B-1). Exits non-zero on any disagreement.
+      # Build the Go binding up front so the cross-check's `go run` does not pay
+      # first-compile cost inside the verdict capture.
+      - name: Build Go binding
+        working-directory: bindings/go
+        run: go build ./...
+
+      # Proves TS, Python, Rust, and Go produce the identical verdict on every
+      # fixture runnable in all four (money-breakdown fixtures included since
+      # B-1). Exits non-zero on any disagreement. The Go emitter is invoked with
+      # /opt/homebrew/bin prepended to PATH for local macOS parity; on the Linux
+      # runner `go` is already on PATH from setup-go.
       - name: Cross-check
         run: node conformance/tooling/crosscheck.mjs
 
