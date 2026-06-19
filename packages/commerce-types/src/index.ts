@@ -55,6 +55,10 @@ export * from "./primitives.js";
 export * from "./transitions.js";
 export * from "./invariants.js";
 export * from "./builder.js";
+// `guardAction` / `guardObject` — validate a proposed commerce action before it
+// executes. A composition over transitionCommitment + auditCommerce (the proven
+// logic); it does not re-derive invariants. TypeScript first; other bindings roadmap.
+export * from "./guard.js";
 
 // ── ADVANCED type vocabulary ────────────────────────────────────────────────
 // State machines, the v0.3 commerce vocabulary, and the market-making /
