@@ -108,11 +108,15 @@ same workflow runs on all five. A cart abandonment on a Shopify store
 fires the same `CartRecoveryFull` chain as a cart abandonment on
 Agora. The adapter underneath is invisible.
 
-The compiler catches type errors before they reach customers. A
-wrong phone number fails at compile time. A currency mismatch fails
-at compile time. A reference to a nonexistent node fails at compile
-time with a Levenshtein-suggested correction. Commerce mistakes are
-**impossible to express** — not just discouraged.
+The compiler catches whole classes of mistakes before they reach
+customers. A reference to a nonexistent node fails at compile time with a
+Levenshtein-suggested correction; un-converted currency mixing blocks
+compilation (declaring an explicit conversion is the sanctioned escape); and
+capacity, temporal-order, identity, state-monotonicity (lifecycle-stage), and
+commitment-tree violations are rejected. And the model's audit layer checks every
+invariant at runtime — proven equivalent across four language bindings by
+the conformance cross-check — so a defined class of commerce mistakes is
+caught against a formal contract instead of surfacing in production.
 
 Live ACP integration on 2026-05-28: the typed `CustomerProfile` round-
 tripped through the ACP intelligence layer for customer 487 against

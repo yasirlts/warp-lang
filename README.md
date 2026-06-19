@@ -1,7 +1,7 @@
 # Warp
 
 **A formally specified, language-neutral model of commerce — with currency-safe,
-state-validated types proven equivalent across two language bindings.**
+state-validated types proven equivalent across four language bindings.**
 
 [![npm](https://img.shields.io/npm/v/@warp-lang/commerce-types?label=npm)](https://www.npmjs.com/package/@warp-lang/commerce-types)
 [![PyPI](https://img.shields.io/pypi/v/warp-commerce-types?label=PyPI)](https://pypi.org/project/warp-commerce-types/)
@@ -10,10 +10,10 @@ state-validated types proven equivalent across two language bindings.**
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Warp is a model of what commerce *is* — five primitives, six invariants, and one
-frozen schema — written down precisely enough that two independent
-implementations produce the same answers. From that one schema it generates a
-TypeScript package and a Python package, and a conformance suite checks that they
-agree on every fixture.
+frozen schema — written down precisely enough that independent implementations
+produce the same answers. From that one schema it generates four bindings —
+TypeScript, Python, Rust, and Go — and a conformance suite checks that they agree
+on every fixture.
 
 It is for anyone who writes commerce logic and wants the structure to be checked
 rather than assumed: commerce engineers modelling orders, payments, and
@@ -40,8 +40,10 @@ way to be told when it gets it wrong.
 
 ## What Warp is
 
-Warp is a **formal commerce model**, not a framework. Its surface is small and
-deliberately language-neutral:
+Warp is a **formal commerce model**, not a framework. The *conceptual* surface is
+deliberately small and language-neutral — five primitives, six invariants, one
+frozen schema — and the packages expose a small **core API** (~10 start-here
+exports) with the rest tiered as advanced:
 
 - **5 primitives** — `Party`, `Value`, `Intent`, `Commitment`, `Fulfillment`.
   Every commerce operation is expressed in terms of these. The model has been
@@ -56,17 +58,17 @@ deliberately language-neutral:
   (transition tables, invariant definitions) live in [`schema/`](schema/) at a
   single versioned source of truth (currently **v1.0.0**, see
   [`schema/VERSION`](schema/VERSION)).
-- **Two bindings, generated from that schema** — a TypeScript package and a
-  Python package, both produced from the same `schema/`, not hand-maintained in
-  parallel.
+- **Four bindings, generated from that schema** — the TypeScript and Python
+  packages plus Rust and Go bindings, all produced from the same `schema/`, not
+  hand-maintained in parallel.
 
-**The headline property: the two bindings are proven to agree.** A cross-language
-conformance check runs every shared fixture through both the TypeScript and the
-Python implementation and compares the verdicts. Today that is **45 of 45**
-fixtures runnable in both languages — **45 agreements, 0 disagreements**. When TS
-and Python disagree on whether a commerce object is valid, CI fails. (Six further
-fixtures are catalog enumerations that one binding exposes and the other does not,
-and are reported separately as not-applicable.)
+**The headline property: the four bindings are proven to agree.** A cross-language
+conformance check runs every shared fixture through the TypeScript, Python, Rust,
+and Go implementations and compares the verdicts. Today that is **45 of 45**
+fixtures runnable in all four — **45 agreements, 0 disagreements**. When any two
+bindings disagree on whether a commerce object is valid, CI fails. (Six further
+fixtures are catalog enumerations that the behavioral bindings do not run, and are
+reported separately as not-applicable.)
 
 The model is specified in full in
 [the Commerce Model spec](spec/COMMERCE_MODEL.md).
@@ -218,15 +220,15 @@ specifically about the DSL compiler's static behavior.
 
 ## The conformance suite
 
-The conformance suite is what makes "two implementations agree" a checkable claim
-rather than a hope. It is a set of language-neutral fixtures — valid objects that
-must be accepted, invalid objects that must be rejected — run through every
-binding.
+The conformance suite is what makes "independent implementations agree" a
+checkable claim rather than a hope. It is a set of language-neutral fixtures —
+valid objects that must be accepted, invalid objects that must be rejected — run
+through every binding.
 
 - **51 / 51 fixtures pass** against the canonical schema.
-- **45 / 45** fixtures runnable in both TypeScript and Python **agree**, with
-  **0 disagreements** (6 catalog-enumeration fixtures are reported as
-  not-applicable to one binding).
+- **45 / 45** fixtures runnable in all four bindings (TypeScript, Python, Rust,
+  Go) **agree**, with **0 disagreements** (6 catalog-enumeration fixtures are
+  reported as not-applicable to the behavioral bindings).
 - The **three original audit bugs are locked as permanent regression fixtures**,
   so they cannot return:
   1. **Three-decimal currencies** (TND/BHD/KWD/OMR/JOD) were treated as
@@ -247,7 +249,7 @@ Run it locally:
 
 ```bash
 node conformance/runner/run.mjs          # 51/51 fixtures vs the canonical schema
-node conformance/tooling/crosscheck.mjs  # TS vs Python agreement
+node conformance/tooling/crosscheck.mjs  # TS / Python / Rust / Go agreement
 ```
 
 See [`conformance/README.md`](conformance/README.md) for the full layout.
@@ -308,12 +310,13 @@ release.
 ## Roadmap
 
 **Recently shipped:** the conformance cross-check now proves **four** bindings
-equivalent (TypeScript, Python, Rust, Go). The DSL compiler now **blocks** I-1
-(un-converted currency mixing) and **blocks** I-2 state monotonicity at the
+equivalent — TypeScript, Python, Rust, and Go — all generated from the schema. The
+DSL compiler now **blocks** I-1 (un-converted currency mixing; declaring a
+conversion is the sanctioned escape) and **blocks** I-2 state monotonicity at the
 lifecycle-stage granularity the DSL exposes (see the invariant table above).
 
-These are **planned, not present**. They are listed here so the line between what
-ships today and what is intended is unambiguous.
+The items below are **planned, not present**. They are listed here so the line
+between what ships today and what is intended is unambiguous.
 
 - **Per-commitment-state I-2 in the compiler** — extend the static I-2 check from
   lifecycle-stage granularity to per-commitment-state transitions (Draft → … →
@@ -324,9 +327,10 @@ ships today and what is intended is unambiguous.
   type mappings.
 - **A profile system** — schema profiles for subsets of the model.
 - **A playground** — a hosted, no-install way to explore the model and the DSL.
-- **Agentic-commerce integration** — positioning the model as an integrity layer
-  for agent-driven commerce protocols (e.g. ACP / AP2), so generated commerce
-  actions can be validated against the invariants before they execute.
+- **Agentic-commerce integration** — positioning the model as a language-neutral
+  integrity layer *beneath* agent-driven commerce protocols (e.g. ACP / AP2), so
+  generated commerce actions can be validated against the invariants before they
+  execute.
 
 ---
 

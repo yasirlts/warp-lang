@@ -10,8 +10,9 @@ Releases are **tag-triggered**. Pushing a tag like `vX.Y.Z` runs
 [`.github/workflows/release.yml`](.github/workflows/release.yml):
 
 1. The **full conformance gate** runs first — the same jobs as CI: Rust
-   (`fmt`/`clippy`/`test`), the TypeScript binding, the Python binding, the
-   schema validator, the conformance runner, and the TS↔Python cross-check.
+   (`fmt`/`clippy`/`test`), the TypeScript binding, the Python binding, the Go
+   binding, the schema validator, the conformance runner, and the
+   TS/Python/Rust/Go cross-check.
 2. The publish jobs `needs:` every gate job, so **a red gate publishes nothing.**
 3. **`publish-npm` runs first; `publish-pypi` `needs:` it.** The historically
    fragile npm publish gates the reliable PyPI one, so a npm failure stops PyPI

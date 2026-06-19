@@ -53,8 +53,10 @@ mechanically mapped to the model and back.
 When two systems share this model, commerce data can move between them
 without custom integration. When an AI agent reasons against this model,
 its commerce reasoning is formally grounded rather than probabilistic.
-When a compiler enforces this model, commerce mistakes are impossible
-to express rather than merely likely to be caught.
+When an implementation enforces this model, a defined class of commerce
+mistakes — mixed currencies, invalid state transitions, capacity and
+temporal violations — is rejected against a formal contract rather than
+discovered later in production.
 
 This is what SQL did for data. SQL did not describe how MySQL stores
 data or how PostgreSQL stores data. It described what data is —
@@ -487,10 +489,11 @@ Retired {
 **Critical constraint on Money:**
 
 Money always carries its currency. There is no amount without a currency
-in this model. Decimal alone is not a valid Money value. This eliminates
-the entire class of currency confusion errors — accidental MAD-EUR mixing,
-incorrect price comparisons across currencies — by making them impossible
-to express.
+in this model. Decimal alone is not a valid Money value. This closes off
+the entire class of currency-confusion errors — accidental MAD-EUR mixing,
+incorrect price comparisons across currencies: a bare amount has no valid
+Money form to take, and an implementation that combines two currencies
+without an explicit conversion is rejected by the model's audit layer.
 
 ---
 
@@ -1789,9 +1792,10 @@ Before taking any commerce action, an AI agent MUST:
 
 If any step fails the action is not taken. The failure reason is
 returned to the human principal. This protocol makes AI commerce
-actions auditable, debuggable, and formally correct by construction.
+actions auditable, debuggable, and checkable against the model's
+invariants before they are recorded.
 
-### Commerce mistakes that become impossible with the model:
+### Commerce mistakes the model rejects (each by the rule named):
 
 - Fulfilling a Cancelled Commitment
   (Cancelled → any state is not in the valid transitions list)
@@ -2063,7 +2067,7 @@ Invariant 1 — fourth clause added:
 - Six invariants stated
 - Commerce lifecycle state machine
 - Platform mappings: Shopify, SAP, Odoo, WooCommerce, Agora
-- AI contract with verification protocol and impossible mistakes list
+- AI contract with verification protocol and rejected-mistakes list
 - Formal sufficiency test with complete domain test results
 - All extensions from adversarial testing incorporated
 
