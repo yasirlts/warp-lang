@@ -14,8 +14,11 @@ universal way to use Warp from any stack is the **frozen schema** plus the
 - TypeScript / JavaScript: `npm install @warp-lang/commerce-types`
 - Python: `pip install warp-commerce-types`
 
-Both packages are generated from the same schema and are checked to agree by the
-conformance cross-check, so the rules below hold identically in either language.
+Both published packages are generated from the same schema. The conformance
+cross-check proves four bindings — TypeScript, Python, Rust, and Go — produce the
+identical verdict on every shared fixture (the Rust and Go bindings live in the
+repo rather than as published packages), so the rules below hold identically in
+every binding.
 
 ---
 

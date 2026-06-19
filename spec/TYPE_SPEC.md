@@ -36,11 +36,20 @@ an INTEGER column is declared, and it doesn't accept rows from one
 table claiming to belong to another. The commerce types in this spec
 play the same role for commerce workflows.
 
-**Compiler enforcement guarantee.** Every type in this document is
-enforced by the Warp compiler. A workflow that violates any of the
-invariants in any section below cannot be installed against a tenant;
-the compiler returns a [`CompileError`] naming the line and the
-violation.
+**Compiler enforcement.** The Warp compiler type-checks every workflow
+before it can be installed against a tenant, returning a [`CompileError`]
+that names the line and the violation. It does not treat every invariant
+identically today: value conservation (I-1, un-converted currency mixing —
+declaring an explicit conversion is the sanctioned escape), capacity (I-3),
+temporal integrity (I-4), and identity permanence (I-5) block compilation;
+state monotonicity (I-2) blocks compilation at the lifecycle-stage granularity
+the DSL exposes (Intent → Commitment → Fulfillment, no regression); and
+commitment-tree consistency (I-6) is partially checked (literal values). The
+model's audit layer (`auditCommerce` / `checkI*` and their twins in every
+binding) checks the invariants at runtime, proven equivalent by the conformance
+cross-check — so where the compiler's static check is coarser than the model
+(e.g. finer per-commitment-state transitions), the audit layer still rejects
+what the model forbids.
 
 [`CompileError`]: ../crates/warp-core/src/dsl/mod.rs
 
