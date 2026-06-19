@@ -227,22 +227,44 @@ pub enum TypeError {
         missing_key: String,
         line: usize,
     },
-    /// CHECK I-1 (Value Conservation, warning-level at P2): a single node
-    /// references more than one currency code. Surfaced by
-    /// [`check_currency_mixing`] — **not** pushed by [`check_types`], so it
-    /// never fails compilation. The full dataflow check is later work.
+    /// CHECK I-1 (Value Conservation) — **blocking**. A single node references
+    /// more than one currency code without declaring an explicit currency
+    /// conversion. Pushed by [`check_types`], so it fails compilation: mixing
+    /// currencies violates Value Conservation. The sanctioned path is an
+    /// explicit conversion construct (see [`declares_currency_conversion`]),
+    /// which compiles.
+    CurrencyMixing {
+        node_type: String,
+        instance_name: String,
+        currencies_found: Vec<String>,
+        line: usize,
+    },
+    /// CHECK I-1 (Value Conservation) — **warning-level, opt-in**. Same
+    /// detection as [`TypeError::CurrencyMixing`] but surfaced only by the
+    /// separate [`check_currency_mixing`] API for tools that want a non-blocking
+    /// report. [`check_types`] uses the blocking variant by default.
     CurrencyMixingWarning {
         node_type: String,
         instance_name: String,
         currencies_found: Vec<String>,
         line: usize,
     },
-    /// CHECK I-2 (State Monotonicity) placeholder. **Never emitted** — it
-    /// documents that the full workflow-level monotonicity check is deferred
-    /// to P3 (it needs per-node state-transition annotations in the node
-    /// registry that do not exist yet). The type-level guarantee already
-    /// holds in `types::model::validate_commitment_transition`.
-    StateMonotonicityNotChecked { workflow_name: String },
+    /// CHECK I-2 (State Monotonicity) — **blocking**. A node sits at an earlier
+    /// stage of the commerce lifecycle (Intent → Commitment → Fulfillment) than
+    /// a node already declared above it: the workflow regresses to an earlier
+    /// stage. The lifecycle only moves forward (a reversal is a new forward
+    /// commitment, not a backward edge). Enforced at the stage granularity the
+    /// DSL node vocabulary exposes (via [`model_level`]); finer per-commitment-
+    /// state edges (Draft→…→Refunded, the dispute/refund reversals) are enforced
+    /// by `types::model::validate_commitment_transition` at the type/runtime/
+    /// audit layer across every binding.
+    StateMonotonicityViolation {
+        prior_node: String,
+        regressed_node: String,
+        from_stage: String,
+        to_stage: String,
+        line: usize,
+    },
     /// CHECK I-3 (Capacity Verification): a workflow reaches
     /// Commitment(Accepted) via an Accepted-producing node without a prior
     /// capacity-verification step (Invariant 3).
@@ -312,6 +334,22 @@ impl fmt::Display for TypeError {
                 "Line {}: {} '{}' is missing required input '{}'.",
                 line, node_type, instance_name, missing_key
             ),
+            TypeError::CurrencyMixing {
+                node_type,
+                instance_name,
+                currencies_found,
+                line,
+            } => write!(
+                f,
+                "Line {}: Node '{}' ({}) references multiple currencies: {}. Mixed-currency \
+                 values violate Value Conservation (Invariant 1) — they cannot be combined \
+                 without loss. Convert to a single currency first; an explicit currency \
+                 conversion is the sanctioned path.",
+                line,
+                instance_name,
+                node_type,
+                currencies_found.join(", ")
+            ),
             TypeError::CurrencyMixingWarning {
                 node_type,
                 instance_name,
@@ -327,12 +365,20 @@ impl fmt::Display for TypeError {
                 node_type,
                 currencies_found.join(", ")
             ),
-            TypeError::StateMonotonicityNotChecked { workflow_name } => write!(
+            TypeError::StateMonotonicityViolation {
+                prior_node,
+                regressed_node,
+                from_stage,
+                to_stage,
+                line,
+            } => write!(
                 f,
-                "State monotonicity for workflow '{}' is enforced at the type level by \
-                 validate_commitment_transition; the workflow-level compiler check is deferred \
-                 (P3 placeholder — never emitted).",
-                workflow_name
+                "Line {}: State monotonicity violation. '{}' is a {}-stage node declared after \
+                 '{}' ({} stage); the commerce lifecycle (Intent → Commitment → Fulfillment) \
+                 only moves forward. Per Invariant 2 (State Monotonicity), a workflow cannot \
+                 regress to an earlier lifecycle stage — express a reversal as a new forward \
+                 commitment, not a backward step.",
+                line, regressed_node, to_stage, prior_node, from_stage
             ),
             TypeError::MissingCapacityVerification {
                 accepted_producing_node,
@@ -424,13 +470,12 @@ pub fn check_types(project: WarpProject) -> Result<TypedProject, Vec<TypeError>>
     // first Currency literal, if any (None when the value is a reference).
     let mut order_placed_nodes: Vec<OrderPlacedRecord> = Vec::new();
 
-    // CHECK I-2 (State Monotonicity) is intentionally NOT performed here.
-    // TODO P3: implement the full workflow-level monotonicity check once the
-    // node registry carries per-node Commitment-state-transition annotations.
-    // Until then, monotonicity is enforced at the type level by
-    // `types::model::validate_commitment_transition`. The
-    // `TypeError::StateMonotonicityNotChecked` placeholder documents this and
-    // is never emitted.
+    // CHECK I-2 (State Monotonicity) runs post-loop over `leveled_nodes`: the
+    // workflow's lifecycle stages (Intent → Commitment → Fulfillment) must not
+    // regress. This is the stage granularity the DSL node vocabulary exposes;
+    // finer per-commitment-state edges (Draft→…→Refunded, dispute/refund
+    // reversals) stay enforced by `types::model::validate_commitment_transition`
+    // at the type/runtime/audit layer across every binding.
 
     // Lines are reconstructed from a synthetic walk: the parser
     // discards the per-NodeDecl line because it captures only enough
@@ -523,6 +568,27 @@ pub fn check_types(project: WarpProject) -> Result<TypedProject, Vec<TypeError>>
             capacity_verified_seen = true;
         }
 
+        // CHECK I-1 (Value Conservation) — BLOCKING. A node referencing more
+        // than one distinct currency mixes currencies, which cannot be combined
+        // without loss. The sanctioned path is an explicit conversion construct
+        // (a `convert` / `conversion` / `currency_conversion` entry, or a
+        // `from`+`to` object): a conversion legitimately names two currencies,
+        // so a node that declares one is exempt.
+        let mut codes: Vec<String> = Vec::new();
+        for entry in &node.config {
+            collect_currency_codes(&entry.value, &mut codes);
+        }
+        codes.sort();
+        codes.dedup();
+        if codes.len() > 1 && !declares_currency_conversion(&node.config) {
+            errors.push(TypeError::CurrencyMixing {
+                node_type: node.node_type.clone(),
+                instance_name: node.instance_name.clone(),
+                currencies_found: codes,
+                line,
+            });
+        }
+
         // Collect for the post-loop I-4 (temporal order) and I-6 (commitment
         // tree) checks, which need the whole node list.
         if let Some(level) = model_level(&node.node_type) {
@@ -561,6 +627,32 @@ pub fn check_types(project: WarpProject) -> Result<TypedProject, Vec<TypeError>>
                 later_node: commit_name.clone(),
                 line: *commit_line,
             });
+        }
+    }
+
+    // CHECK I-2 (State Monotonicity) — the lifecycle stage of declared nodes
+    // (Intent=1 → Commitment=2 → Fulfillment=3, per `model_level`) must not
+    // regress. A node whose stage is below the highest stage already reached is
+    // a backward transition: the commerce lifecycle only moves forward (a
+    // reversal is a new forward commitment, not a backward edge). This is the
+    // single source for the stage ordering (`model_level`), not a second copy
+    // of the commitment transition table.
+    {
+        let mut max_level: u8 = 0;
+        let mut max_node: Option<&str> = None;
+        for (name, node_line, level) in &leveled_nodes {
+            if *level < max_level {
+                errors.push(TypeError::StateMonotonicityViolation {
+                    prior_node: max_node.unwrap_or("").to_string(),
+                    regressed_node: name.clone(),
+                    from_stage: stage_name(max_level).to_string(),
+                    to_stage: stage_name(*level).to_string(),
+                    line: *node_line,
+                });
+            } else {
+                max_level = *level;
+                max_node = Some(name);
+            }
         }
     }
 
@@ -760,6 +852,50 @@ pub fn check_currency_mixing(project: &WarpProject) -> Vec<TypeError> {
         }
     }
     out
+}
+
+/// The lifecycle stage name for a `model_level` (I-2 diagnostics).
+fn stage_name(level: u8) -> &'static str {
+    match level {
+        1 => "Intent",
+        2 => "Commitment",
+        3 => "Fulfillment",
+        _ => "unknown",
+    }
+}
+
+/// Does this node declare an explicit currency conversion — the sanctioned way
+/// to legitimately reference two currencies (I-1)? True when a config entry's
+/// key is `convert` / `conversion` / `currency_conversion` (case-insensitive),
+/// or when a nested object pairs a `from`/`from_currency` with a
+/// `to`/`to_currency` key (the model's `CurrencyConversion { from, to, … }`
+/// shape). A conversion node is exempt from the currency-mixing error; an
+/// un-converted mix is rejected.
+fn declares_currency_conversion(config: &[ConfigEntry]) -> bool {
+    config.iter().any(entry_is_conversion)
+}
+
+fn entry_is_conversion(entry: &ConfigEntry) -> bool {
+    let key = entry.key.to_ascii_lowercase();
+    if matches!(
+        key.as_str(),
+        "convert" | "conversion" | "currency_conversion"
+    ) {
+        return true;
+    }
+    if let ConfigValue::Object(entries) = &entry.value {
+        let keys: HashSet<String> = entries.iter().map(|e| e.key.to_ascii_lowercase()).collect();
+        let has_from = keys.contains("from") || keys.contains("from_currency");
+        let has_to = keys.contains("to") || keys.contains("to_currency");
+        if has_from && has_to {
+            return true;
+        }
+        // Recurse: a conversion construct may be nested deeper.
+        if entries.iter().any(entry_is_conversion) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Collect every currency code appearing in a config value, recursing into
@@ -1106,16 +1242,148 @@ mod tests {
     }
 
     #[test]
-    fn check_i2_placeholder_does_not_error() {
-        // I-2 is deferred; a valid workflow must type-check, and the
-        // placeholder variant is never produced (only renders for docs).
-        let project = parse_str(FULL_CART_RECOVERY);
-        assert!(check_types(project).is_ok());
-        let msg = TypeError::StateMonotonicityNotChecked {
-            workflow_name: "cart_recovery".to_string(),
+    fn check_i1_blocks_mixed_currencies_in_check_types() {
+        // BLOCKING by default: a node referencing MAD and EUR fails to compile,
+        // citing Invariant 1 — no explicit conversion is declared.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+
+                CartAbandoned trigger {
+                    min_value: Currency(200, MAD)
+                    after:     Duration(30, minutes)
+                    cap:       Currency(50, EUR)
+                }
+            }
+        "#;
+        let errors = check_types(parse_str(src)).expect_err("mixed currencies must block");
+        let mixing = errors
+            .iter()
+            .find(|e| matches!(e, TypeError::CurrencyMixing { .. }))
+            .expect("a blocking CurrencyMixing error");
+        let msg = mixing.to_string();
+        assert!(msg.contains("Invariant 1"), "got {msg}");
+        assert!(
+            !msg.contains("Warning"),
+            "blocking error must not be a warning: {msg}"
+        );
+        match mixing {
+            TypeError::CurrencyMixing {
+                currencies_found, ..
+            } => {
+                assert!(currencies_found.contains(&"MAD".to_string()));
+                assert!(currencies_found.contains(&"EUR".to_string()));
+            }
+            _ => unreachable!(),
         }
-        .to_string();
-        assert!(!msg.is_empty());
+    }
+
+    #[test]
+    fn check_i1_conversion_construct_compiles() {
+        // The sanctioned escape: a node that declares an explicit conversion
+        // legitimately names two currencies and must COMPILE (rigor, not
+        // rigidity). Single trigger node, no other invariant in play.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+
+                CartAbandoned trigger {
+                    min_value: Currency(200, MAD)
+                    after:     Duration(30, minutes)
+                    convert:   { from: Currency(50, EUR), to: Currency(550, MAD) }
+                }
+            }
+        "#;
+        let result = check_types(parse_str(src));
+        if let Err(errors) = &result {
+            assert!(
+                !errors
+                    .iter()
+                    .any(|e| matches!(e, TypeError::CurrencyMixing { .. })),
+                "conversion construct must be exempt from I-1; got {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn check_i1_single_currency_compiles_through_check_types() {
+        // A single-currency workflow has no mixing and compiles.
+        assert!(check_types(parse_str(
+            r#"project "x" { version="1.0.0" tenant="t"
+               CartAbandoned trigger { min_value: Currency(200, MAD) after: Duration(30, minutes) } }"#
+        ))
+        .is_ok());
+    }
+
+    #[test]
+    fn check_i2_rejects_backward_stage_transition() {
+        // OrderPlaced (Commitment stage) followed by OccasionTrigger (Intent
+        // stage) regresses the lifecycle Commitment -> Intent. ACP first keeps
+        // I-3 satisfied, isolating the I-2 failure.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                ACPGetCustomerProfile profile { customer_id: "c1" }
+                OrderPlaced ord { min_value: Currency(200, MAD) }
+                OccasionTrigger occ { occasion: "eid" days_before: "7" }
+            }
+        "#;
+        let errors = check_types(parse_str(src)).expect_err("backward stage must fail");
+        let mono = errors
+            .iter()
+            .find(|e| matches!(e, TypeError::StateMonotonicityViolation { .. }))
+            .expect("a StateMonotonicityViolation");
+        let msg = mono.to_string();
+        assert!(msg.contains("Invariant 2"), "got {msg}");
+        match mono {
+            TypeError::StateMonotonicityViolation {
+                from_stage,
+                to_stage,
+                ..
+            } => {
+                assert_eq!(from_stage, "Commitment");
+                assert_eq!(to_stage, "Intent");
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn check_i2_forward_lifecycle_compiles() {
+        // A monotone Intent -> Commitment -> Fulfillment workflow compiles; the
+        // sanctioned forward progression is not rejected. ACP precedes
+        // OrderPlaced for I-3.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                CartAbandoned trigger { min_value: Currency(200, MAD) after: Duration(30, minutes) }
+                ACPGetCustomerProfile profile { customer_id: trigger.customer_id }
+                OrderPlaced ord { min_value: Currency(200, MAD) }
+                WhatsAppSend msg { to: "+212661234567" template: "t" }
+            }
+        "#;
+        assert!(
+            check_types(parse_str(src)).is_ok(),
+            "monotone lifecycle must compile"
+        );
+    }
+
+    #[test]
+    fn check_i2_same_stage_repeats_compile() {
+        // Two Fulfillment-stage nodes in a row are NOT a regression (same stage).
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                WhatsAppSend a { to: "+212661234567" template: "t" }
+                DelayFor b { duration: Duration(1, hours) }
+            }
+        "#;
+        assert!(check_types(parse_str(src)).is_ok());
     }
 
     #[test]
@@ -1372,6 +1640,29 @@ mod tests {
         }
         .to_string();
         assert!(tree.contains("Invariant 6") && tree.contains("800 MAD"));
+
+        let mixing = TypeError::CurrencyMixing {
+            node_type: "CartAbandoned".to_string(),
+            instance_name: "trigger".to_string(),
+            currencies_found: vec!["EUR".to_string(), "MAD".to_string()],
+            line: 5,
+        }
+        .to_string();
+        assert!(mixing.contains("Line 5") && mixing.contains("Invariant 1"));
+        assert!(
+            !mixing.contains("Warning"),
+            "blocking error must not say Warning"
+        );
+
+        let mono = TypeError::StateMonotonicityViolation {
+            prior_node: "ord".to_string(),
+            regressed_node: "occ".to_string(),
+            from_stage: "Commitment".to_string(),
+            to_stage: "Intent".to_string(),
+            line: 6,
+        }
+        .to_string();
+        assert!(mono.contains("Line 6") && mono.contains("Invariant 2"));
     }
 
     #[test]
