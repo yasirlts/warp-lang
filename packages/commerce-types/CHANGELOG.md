@@ -4,6 +4,38 @@ All notable changes to the npm package. The package tracks the canonical
 [Warp Commerce Model schema](https://github.com/yasirlts/warp-lang/tree/main/schema),
 frozen at v1.0.0.
 
+## 1.2.0
+
+### Added
+
+- **Agent guardrail — `guardAction()` / `guardObject()`.** Validate a proposed
+  commerce action *before* it executes. `guardAction(world, { commitment, to,
+  actor })` applies the transition and audits the resulting world in one step,
+  returning `{ ok: true, next }` or `{ ok: false, violations }` where each
+  violation carries the invariant `rule`, a `message`, and a `fix`. `guardObject`
+  is the thin object-level form over `auditCommerce`. These compose the existing
+  transition + invariant logic — not a divergent code path — so a verdict from
+  the guard matches a direct `auditCommerce` run exactly. Built for putting an
+  AI agent near money: the agent proposes, the guard disposes.
+
+- **I-1 now catches over-refunds (amount conservation).** `auditCommerce` (and
+  therefore the guardrail) rejects a same-currency refund whose amount exceeds
+  what was committed. The refund amount is read from the commitment's `Refunded`
+  state; the committed amount from `subject.requested`. The bound is **refund ≤
+  committed, same currency** — a full refund (refund == committed) is accepted as
+  the conservation boundary, and a cross-currency refund is out of scope for this
+  check (it requires an explicit conversion). This is enforced identically across
+  all four language bindings and proven equivalent by the conformance cross-check.
+
+### Notes
+
+- Both additions are additive: every name exported by 1.1.0 is still exported,
+  with no signature changes. No schema change — amount conservation is expressed
+  entirely from existing fields of the frozen v1.0.0 model.
+- The guardrail is a **TypeScript convenience** layered on the shared checkers;
+  the amount-conservation clause itself lives in the cross-binding invariant
+  layer and holds in the Python, Rust, and Go bindings too.
+
 ## 1.1.0
 
 ### Added
