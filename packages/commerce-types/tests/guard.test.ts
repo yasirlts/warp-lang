@@ -93,6 +93,38 @@ describe("guardAction — rejections (composed, not reinvented)", () => {
     expect(direct).toContain("I-3");
   });
 
+  it("rejects an over-refund (refund exceeds the committed amount) citing I-1", () => {
+    // The visceral unsafe action: an agent refunds MORE than was ever captured.
+    // Fulfilled→Refunded IS a valid edge, but refunding 500 MAD against a 200 MAD
+    // commitment creates value from nothing — the resulting world fails I-1's
+    // amount-conservation clause. The guard catches it for free via composition.
+    const order = newCommitment(buyer, seller, { offered: [], requested: [moneyValue(200, "MAD")] });
+    const shipped = applyCommitmentPath(order, { type: "Fulfilled" }, seller);
+    const world: World = { commitments: [shipped], fulfillments: [], parties: [] };
+
+    // the edge itself is valid…
+    expect(
+      isValidCommitmentTransition(shipped.state, {
+        type: "Refunded",
+        amount: { amount: 500, currency: "MAD" },
+        at: "2026-02-01T00:00:00.000Z",
+      }),
+    ).toBe(true);
+
+    const verdict = guardAction(world, {
+      commitment: shipped.id,
+      to: { type: "Refunded", amount: { amount: 500, currency: "MAD" }, at: "2026-02-01T00:00:00.000Z" },
+      actor: seller,
+    });
+
+    // …but the resulting world over-refunds, so the guard rejects citing I-1.
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) {
+      expect(verdict.violations.some((v) => v.rule === "I-1")).toBe(true);
+      expect(verdict.violations.find((v) => v.rule === "I-1")?.fix.length).toBeGreaterThan(0);
+    }
+  });
+
   it("rejects an action targeting a commitment not in the world", () => {
     const draft = newCommitment(buyer, seller);
     const world: World = { commitments: [draft], fulfillments: [], parties: [] };
@@ -121,5 +153,22 @@ describe("guardObject — thin layer over auditCommerce", () => {
     if (!verdict.ok) expect(verdict.violations.some((v) => v.rule === "I-1")).toBe(true);
     // the guard is composition, not a divergent path:
     expect(auditCommerce([dirty], [], []).map((v) => v.invariant)).toContain("I-1");
+  });
+
+  it("rejects an over-refunded world citing I-1, matching auditCommerce", () => {
+    const shipped = applyCommitmentPath(
+      newCommitment(buyer, seller, { offered: [], requested: [moneyValue(200, "MAD")] }),
+      { type: "Fulfilled" },
+      seller,
+    );
+    const overRefunded: Commitment = {
+      ...shipped,
+      state: { type: "Refunded", amount: { amount: 500, currency: "MAD" }, at: "2026-02-01T00:00:00.000Z" },
+    };
+    const verdict = guardObject([overRefunded], [], []);
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.violations.some((v) => v.rule === "I-1")).toBe(true);
+    // composition, not a divergent path:
+    expect(auditCommerce([overRefunded], [], []).map((v) => v.invariant)).toContain("I-1");
   });
 });

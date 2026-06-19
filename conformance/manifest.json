@@ -11,6 +11,18 @@
       "regression": "bug-2-adapter-empty-history"
     },
     {
+      "id": "refund-within-committed",
+      "kind": "scene",
+      "path": "valid/refund-within-committed.json",
+      "expect": "accept"
+    },
+    {
+      "id": "refund-exact-committed",
+      "kind": "scene",
+      "path": "valid/refund-exact-committed.json",
+      "expect": "accept"
+    },
+    {
       "id": "money-breakdown-single-currency",
       "kind": "scene",
       "path": "valid/money-breakdown-single-currency.json",
@@ -117,6 +129,15 @@
       "rule": "I-1",
       "rule_name": "Value Conservation",
       "expected": "invalid/i1-currency-mixed.expected.json"
+    },
+    {
+      "id": "i1-over-refund",
+      "kind": "scene",
+      "path": "invalid/i1-over-refund.json",
+      "expect": "reject",
+      "rule": "I-1",
+      "rule_name": "Value Conservation",
+      "expected": "invalid/i1-over-refund.expected.json"
     },
     {
       "id": "i2-backward-transition",

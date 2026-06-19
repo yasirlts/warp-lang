@@ -263,6 +263,22 @@ pub fn audit_scene(
             out.push("I-1");
         }
     }
+    // I-1 amount conservation (over-refund): a Refunded commitment's refund
+    // amount must not exceed the original committed amount, in the same currency
+    // (same-currency only; a cross-currency refund is a separate concern).
+    for c in commitments {
+        if let CommitmentState::Refunded { amount: refund, .. } = &c.state {
+            let requested: Vec<&Value> = c.subject.requested.iter().collect();
+            if let Some((orig_amt, orig_cur)) = sum_money(&requested).total {
+                if refund.currency == orig_cur
+                    && refund.amount > orig_amt
+                    && !money_equals(refund.amount, orig_amt, &refund.currency)
+                {
+                    out.push("I-1");
+                }
+            }
+        }
+    }
 
     for c in commitments {
         // I-2 commitment transition table + timestamp monotonicity

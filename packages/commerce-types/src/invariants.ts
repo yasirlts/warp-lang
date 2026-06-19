@@ -78,6 +78,26 @@ export function checkI1ValueConservation(commitments: Commitment[]): InvariantVi
         fix: "Convert all monetary values to one currency with convert(), or record an explicit CurrencyConversion in the terms.",
       });
     }
+    // Amount conservation (over-refund): a refund cannot exceed what was
+    // committed, in the same currency. Same-currency only — a cross-currency
+    // refund is a separate concern and is not flagged here.
+    if (c.state.type === "Refunded") {
+      const refund = c.state.amount;
+      const orig = sumMoney(c.subject.requested).total;
+      if (
+        orig !== null &&
+        refund.currency === orig.currency &&
+        refund.amount > orig.amount &&
+        !moneyEquals(refund.amount, orig.amount, refund.currency)
+      ) {
+        out.push({
+          invariant: "I-1",
+          name: "Value Conservation",
+          description: `Commitment ${c.id} refunds ${refund.amount} ${refund.currency} but only ${orig.amount} ${orig.currency} was committed — a refund cannot exceed what was captured.`,
+          fix: `Refund at most the committed amount (${orig.amount} ${orig.currency}); to return more, the excess needs its own committed source.`,
+        });
+      }
+    }
   }
   return out;
 }

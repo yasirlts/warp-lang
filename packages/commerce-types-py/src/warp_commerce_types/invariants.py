@@ -105,6 +105,26 @@ def check_i1_value_conservation(commitments: List[Commitment]) -> List[Invariant
                     "conversion." % (c.id, ", ".join(currencies)),
                 )
             )
+        # Amount conservation (over-refund): a refund cannot exceed what was
+        # committed, in the same currency. Same-currency only — a cross-currency
+        # refund is a separate concern and is not flagged here.
+        if c.state.type == "Refunded":
+            refund = c.state.amount
+            orig, _, _ = _sum_money(c.subject.requested)
+            if (
+                orig is not None
+                and refund.currency == orig.currency
+                and refund.amount > orig.amount
+                and not money_equals(refund.amount, orig.amount, refund.currency)
+            ):
+                out.append(
+                    _violation(
+                        "I-1",
+                        "Commitment %s refunds %s %s but only %s %s was committed — a refund "
+                        "cannot exceed what was captured."
+                        % (c.id, refund.amount, refund.currency, orig.amount, orig.currency),
+                    )
+                )
     return out
 
 
