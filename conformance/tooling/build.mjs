@@ -187,6 +187,70 @@ add({
   },
 });
 
+// A refund for LESS than the committed amount (40.00 MAD refunded against a
+// 100.00 MAD order). Value is conserved — the refund does not exceed what was
+// committed — so the amount-conservation clause of I-1 is satisfied. The clean
+// side of the over-refund check below.
+add({
+  id: "refund-within-committed",
+  kind: "scene",
+  dir: "valid",
+  expect: "accept",
+  title: "Partial refund within the committed amount (I-1 amount conservation clean)",
+  doc: "A Fulfilled→Refunded commitment that refunds 40.00 MAD against a 100.00 MAD committed amount. The refund is less than what was committed, so Value Conservation (I-1) holds — value cannot be created by refunding more than was captured, and here it isn't.",
+  payload: {
+    parties: [buyer(), seller()],
+    commitments: [
+      commitment("commitment:refund-ok", {
+        initiator: "party:buyer",
+        counterparty: "party:seller",
+        requested: [moneyValue(100, "MAD", "value:refund-ok-total")],
+        state: { type: "Refunded", amount: { amount: 40, currency: "MAD" }, at: T.t4 },
+        history: [
+          { from: S.draft, to: S.proposed, at: T.t0, actor: "party:buyer" },
+          { from: S.proposed, to: S.accepted, at: T.t1, actor: "party:seller" },
+          { from: S.accepted, to: S.partial, at: T.t2, actor: "party:seller" },
+          { from: S.partial, to: S.fulfilled, at: T.t3, actor: "party:seller" },
+          { from: S.fulfilled, to: { type: "Refunded", amount: { amount: 40, currency: "MAD" }, at: T.t4 }, at: T.t4, actor: "party:seller" },
+        ],
+      }),
+    ],
+    fulfillments: [],
+  },
+});
+
+// A FULL refund — exactly the committed amount (100.00 MAD against 100.00 MAD).
+// The boundary case: refund == committed is conservation, not over-refund, so
+// I-1 accepts. (refund > committed is the rejection below; refund == committed
+// must not be falsely flagged.)
+add({
+  id: "refund-exact-committed",
+  kind: "scene",
+  dir: "valid",
+  expect: "accept",
+  title: "Full refund equal to the committed amount (I-1 boundary)",
+  doc: "A Fulfilled→Refunded commitment that refunds exactly 100.00 MAD against a 100.00 MAD committed amount. Refund == committed is the conservation boundary: value is returned in full, none created. I-1 accepts — the amount-conservation clause flags only refund > committed.",
+  payload: {
+    parties: [buyer(), seller()],
+    commitments: [
+      commitment("commitment:refund-exact", {
+        initiator: "party:buyer",
+        counterparty: "party:seller",
+        requested: [moneyValue(100, "MAD", "value:refund-exact-total")],
+        state: { type: "Refunded", amount: { amount: 100, currency: "MAD" }, at: T.t4 },
+        history: [
+          { from: S.draft, to: S.proposed, at: T.t0, actor: "party:buyer" },
+          { from: S.proposed, to: S.accepted, at: T.t1, actor: "party:seller" },
+          { from: S.accepted, to: S.partial, at: T.t2, actor: "party:seller" },
+          { from: S.partial, to: S.fulfilled, at: T.t3, actor: "party:seller" },
+          { from: S.fulfilled, to: { type: "Refunded", amount: { amount: 100, currency: "MAD" }, at: T.t4 }, at: T.t4, actor: "party:seller" },
+        ],
+      }),
+    ],
+    fulfillments: [],
+  },
+});
+
 // A single-currency MoneyBreakdown (multiple line items, one currency) that does
 // NOT mix currencies — the clean side of I-1.
 add({
@@ -573,6 +637,40 @@ add({
         requested: [moneyValue(100, "MAD"), moneyValue(50, "EUR")],
         state: S.draft,
         history: [],
+      }),
+    ],
+    fulfillments: [],
+  },
+});
+
+// Amount-conservation clause of I-1: a refund larger than the committed amount
+// (150.00 MAD refunded against a 100.00 MAD order, same currency). Value would be
+// created out of nothing — the merchant pays out more than was ever captured. This
+// is the visceral unsafe action an AI agent must never take; the audit rejects it.
+add({
+  id: "i1-over-refund",
+  kind: "scene",
+  dir: "invalid",
+  expect: "reject",
+  rule: "I-1",
+  ruleName: "Value Conservation",
+  title: "Refund exceeding the committed amount (over-refund)",
+  doc: "A Fulfilled→Refunded commitment that refunds 150.00 MAD against a 100.00 MAD committed amount, same currency. A refund cannot exceed what was captured — paying out more than was committed creates value from nothing. Value Conservation (I-1) rejects it. (History reaches Accepted with a capable buyer so I-2/I-3/I-4 stay clean and the rejection is unambiguously the over-refund.)",
+  payload: {
+    parties: [buyer(), seller()],
+    commitments: [
+      commitment("commitment:over-refund", {
+        initiator: "party:buyer",
+        counterparty: "party:seller",
+        requested: [moneyValue(100, "MAD", "value:over-refund-total")],
+        state: { type: "Refunded", amount: { amount: 150, currency: "MAD" }, at: T.t4 },
+        history: [
+          { from: S.draft, to: S.proposed, at: T.t0, actor: "party:buyer" },
+          { from: S.proposed, to: S.accepted, at: T.t1, actor: "party:seller" },
+          { from: S.accepted, to: S.partial, at: T.t2, actor: "party:seller" },
+          { from: S.partial, to: S.fulfilled, at: T.t3, actor: "party:seller" },
+          { from: S.fulfilled, to: { type: "Refunded", amount: { amount: 150, currency: "MAD" }, at: T.t4 }, at: T.t4, actor: "party:seller" },
+        ],
       }),
     ],
     fulfillments: [],

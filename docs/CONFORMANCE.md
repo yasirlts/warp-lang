@@ -47,7 +47,7 @@ Your binding must reproduce, over the fixtures, the model's verdicts:
 
   | id | name | what it forbids |
   |----|------|-----------------|
-  | I-1 | Value Conservation | mixing currencies in one subject without explicit conversion |
+  | I-1 | Value Conservation | mixing currencies in one subject without explicit conversion; a `Refunded` commitment refunding more than was committed, same currency (over-refund) |
   | I-2 | State Monotonicity | a transition not in the table (e.g. `Fulfilled → Accepted`); backdated history |
   | I-3 | Capacity Verification | reaching `Accepted` when the initiator's `can_buy` is false |
   | I-4 | Temporal Integrity | a fulfillment executing before its commitment was accepted |

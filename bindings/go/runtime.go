@@ -267,6 +267,23 @@ func AuditScene(commitments []gen.Commitment, fulfillments []gen.Fulfillment, pa
 			out["I-1"] = true
 		}
 	}
+	// I-1 amount conservation (over-refund): a Refunded commitment's refund
+	// amount must not exceed the original committed amount, in the same currency
+	// (same-currency only; a cross-currency refund is a separate concern).
+	for i := range commitments {
+		c := &commitments[i]
+		if c.State.Type == "Refunded" && c.State.Amount != nil {
+			var requested []*gen.Value
+			for j := range c.Subject.Requested {
+				requested = append(requested, &c.Subject.Requested[j])
+			}
+			orig := sumMoney(requested).total
+			r := c.State.Amount
+			if orig != nil && string(r.Currency) == orig.currency && r.Amount > orig.amount && !MoneyEquals(r.Amount, orig.amount, orig.currency) {
+				out["I-1"] = true
+			}
+		}
+	}
 
 	for i := range commitments {
 		c := &commitments[i]

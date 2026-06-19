@@ -190,6 +190,19 @@ function auditScene(scene) {
   const byId = new Map(commitments.map((c) => [c.id, c]));
   // I-1 no_currency_mixing
   for (const c of commitments) if (sumMoney([...c.subject.offered, ...c.subject.requested]).mixed) out.push("I-1");
+  // I-1 amount conservation (over-refund): a Refunded commitment's refund amount
+  // must not exceed the original committed amount, in the same currency. Value is
+  // conserved — you cannot refund more than was committed. (Same-currency only; a
+  // cross-currency refund is a separate concern and not flagged here.)
+  for (const c of commitments) {
+    if (c.state.type === "Refunded" && c.state.amount) {
+      const orig = sumMoney(c.subject.requested).total;
+      const r = c.state.amount;
+      if (orig && r.currency === orig.currency && r.amount > orig.amount && !moneyEquals(r.amount, orig.amount, r.currency)) {
+        out.push("I-1");
+      }
+    }
+  }
   for (const c of commitments) {
     // I-2 commitment transition table + timestamp monotonicity
     for (const h of c.history) if (!isValidTransition("commitment", h.from, h.to)) out.push("I-2");

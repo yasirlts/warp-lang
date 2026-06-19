@@ -1,0 +1,7 @@
+{
+  "fixture": "i1-over-refund",
+  "expect": "reject",
+  "rule": "I-1",
+  "rule_name": "Value Conservation",
+  "because": "A Fulfilled→Refunded commitment that refunds 150.00 MAD against a 100.00 MAD committed amount, same currency. A refund cannot exceed what was captured — paying out more than was committed creates value from nothing. Value Conservation (I-1) rejects it. (History reaches Accepted with a capable buyer so I-2/I-3/I-4 stay clean and the rejection is unambiguously the over-refund.)"
+}

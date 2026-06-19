@@ -1516,6 +1516,17 @@ For physical goods and money:
 Value is never created or destroyed by a commerce operation. It transfers.
 The originating party no longer holds the transferred value.
 
+A direct consequence for refunds: a refund returns value that was
+committed, so its amount cannot exceed what was committed in the first
+place — in the same currency. A Commitment in Refunded state whose refund
+amount is greater than the amount it requested would create value out of
+nothing. The audit layer enforces this same-currency bound (refund ≤
+committed) and is proven equivalent across all four language bindings by
+the conformance cross-check. A larger return is not a single refund: the
+excess needs its own committed source (e.g. a separate goodwill credit).
+A cross-currency refund is a distinct concern — it requires an explicit
+conversion and is out of scope for this same-currency check.
+
 For non-exclusive digital goods (software licenses, streaming, API access):
 Access rights are granted or revoked. The provider retains their copy.
 Conservation applies to access rights, not to the goods themselves.
