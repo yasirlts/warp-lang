@@ -187,6 +187,51 @@ silently producing a wrong number.
 
 ---
 
+## Putting an AI agent near money? Validate its actions before they execute
+
+An LLM agent processing refunds or orders can propose something dangerous — revert
+a shipped order, double-refund, accept a sale it never verified. Your options today
+are "don't let the agent touch money" or "hand-write a validation guard for every
+action." The **agent guardrail** is a third option: a drop-in check that says
+**safe** or **not-safe-with-an-actionable-reason** *before* the action runs — so you
+ship the agent feature without writing the guards. (TypeScript first; Python / Rust
+/ Go ports are on the roadmap.)
+
+```ts
+import { guardAction, newCommitment, applyCommitmentPath, partyId } from "@warp-lang/commerce-types";
+
+// A real, shipped (Fulfilled) order in your system.
+const shipped = applyCommitmentPath(newCommitment(partyId("buyer_1"), partyId("seller_1")), { type: "Fulfilled" }, partyId("seller_1"));
+const world = { commitments: [shipped], fulfillments: [], parties: [] };
+
+// The agent "helpfully" reverts a shipped order. The guard rejects it first.
+const verdict = guardAction(world, { commitment: shipped.id, to: { type: "Accepted" }, actor: "support_agent" });
+
+if (verdict.ok === false) {
+  const v = verdict.violations[0];
+  console.log(`BLOCKED [${v.rule}] ${v.message}`);   // I-2: Fulfilled → Accepted is not a valid transition…
+  console.log(`FIX: ${v.fix}`);                        // …model a reversal as a new forward commitment
+}
+```
+
+`guardAction(world, proposedAction)` returns
+`{ ok: true, next }` (the resulting valid world) **or**
+`{ ok: false, violations: [{ rule, message, fix }] }` — it never throws on a
+rejected action and never coerces an unsafe one into looking safe. The reasons are
+written for an agent to read and self-correct (the auto-correct loop). A second
+entry point, `guardObject(commitments, fulfillments, parties)`, is the thin
+"the agent built the whole world, check it" case.
+
+The guard does not *reimplement* any checks — it **composes** the proven
+`transitionCommitment` (the transition table = Invariant 2) and `auditCommerce`
+(the six-invariant audit) that the cross-check holds equivalent across all four
+bindings. So it validates a proposed action against the model's invariants and
+explains any rejection; it makes unsafe actions easy to **catch**, not impossible
+to express. Runnable:
+[`examples/agent-guardrail.mjs`](packages/commerce-types/examples/agent-guardrail.mjs).
+
+---
+
 ## What the model checks — and what it does not
 
 The runtime validators check commerce objects against the six invariants. They do
