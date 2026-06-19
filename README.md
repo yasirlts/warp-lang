@@ -195,17 +195,20 @@ compile time:
 
 | Invariant | Compile-time behavior |
 |-----------|------------------------|
+| **I-1 Value Conservation** | **Blocking** — a node mixing currencies without an explicit conversion fails compilation; declaring a conversion (the sanctioned path) compiles |
+| **I-2 State Monotonicity** | **Blocking (stage-level)** — a workflow that regresses across the Intent → Commitment → Fulfillment lifecycle fails compilation; finer per-commitment-state edges are enforced by the type/audit layer |
 | **I-3 Capacity Verification** | **Blocking** — a violation fails compilation |
 | **I-4 Temporal Integrity** | **Blocking** — a violation fails compilation |
 | **I-5 Identity Permanence** | **Blocking** — a violation fails compilation |
 | **I-6 Commitment Tree Consistency** | **Partial / best-effort** — checks literal child-vs-parent values |
-| **I-1 Value Conservation** | **Warning** — currency mixing compiles *with a warning*; it does not block |
-| **I-2 State Monotonicity** | **Not yet enforced at compile time** (see Roadmap) |
 
-> In one line: the compiler blocks on Capacity (I-3), Temporal Integrity (I-4),
-> and Identity Permanence (I-5); partially checks Tree Consistency (I-6); warns on
-> currency mixing (I-1); and does not yet enforce State Monotonicity (I-2). It
-> does not enforce all six, and it is not a proof of correctness.
+> In one line: the compiler blocks on Value Conservation (I-1, un-converted
+> currency mixing), Capacity (I-3), Temporal Integrity (I-4), and Identity
+> Permanence (I-5); blocks State Monotonicity (I-2) at the lifecycle-stage
+> granularity the DSL exposes (Intent → Commitment → Fulfillment, no regression),
+> with finer per-commitment-state transition validity enforced by the type/audit
+> layer; and partially checks Tree Consistency (I-6). It does not enforce all six
+> identically, and passing it is not a proof of correctness.
 
 The library validators (`auditCommerce` / `audit_commerce` and the `checkI*`
 functions) cover all six invariants as *runtime* checks; the table above is
@@ -304,13 +307,19 @@ release.
 
 ## Roadmap
 
+**Recently shipped:** the conformance cross-check now proves **four** bindings
+equivalent (TypeScript, Python, Rust, Go). The DSL compiler now **blocks** I-1
+(un-converted currency mixing) and **blocks** I-2 state monotonicity at the
+lifecycle-stage granularity the DSL exposes (see the invariant table above).
+
 These are **planned, not present**. They are listed here so the line between what
 ships today and what is intended is unambiguous.
 
-- **I-1 blocking and I-2 enforcement** — promote currency mixing from warning to a
-  blocking error, and enforce state monotonicity statically in the compiler.
-- **Rust binding in the cross-check** — add a third binding to the conformance
-  cross-check so TS, Python, and Rust are all proven equivalent.
+- **Per-commitment-state I-2 in the compiler** — extend the static I-2 check from
+  lifecycle-stage granularity to per-commitment-state transitions (Draft → … →
+  Refunded, the dispute/refund reversals) once the node registry carries per-node
+  commitment-state annotations. Until then the type/audit layer enforces those
+  edges via `validate_commitment_transition`.
 - **More platform adapters** — beyond the current Shopify / WooCommerce / Stripe
   type mappings.
 - **A profile system** — schema profiles for subsets of the model.

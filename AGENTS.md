@@ -21,25 +21,26 @@ conformance cross-check, so the rules below hold identically in either language.
 
 ## What the model checks — and what it does not
 
-Be precise. The Warp compiler does **not** enforce all six invariants, and the
-types do **not** make every mistake impossible. Passing the checks is **not** a
-proof of correctness or safety — it is a set of specific, named checks. Here is
-exactly how the DSL compiler treats each invariant at compile time:
+Be precise. The Warp compiler does **not** enforce all six invariants identically,
+and the types do **not** make every mistake impossible. Passing the checks is
+**not** a proof of correctness or safety — it is a set of specific, named checks.
+Here is exactly how the DSL compiler treats each invariant at compile time:
 
 | Invariant | Compile-time behavior |
 |-----------|------------------------|
+| **I-1 Value Conservation** | **Blocking** — a node mixing currencies without an explicit conversion fails compilation; declaring a conversion (the sanctioned path) compiles |
+| **I-2 State Monotonicity** | **Blocking (stage-level)** — a workflow that regresses across the Intent → Commitment → Fulfillment lifecycle fails compilation; finer per-commitment-state edges are enforced by the type/audit layer |
 | **I-3 Capacity Verification** | **Blocking** — a violation fails compilation |
 | **I-4 Temporal Integrity** | **Blocking** — a violation fails compilation |
 | **I-5 Identity Permanence** | **Blocking** — a violation fails compilation |
 | **I-6 Commitment Tree Consistency** | **Partial / best-effort** — checks literal child-vs-parent values |
-| **I-1 Value Conservation** | **Warning** — currency mixing compiles *with a warning*; it does not block |
-| **I-2 State Monotonicity** | **Not yet enforced at compile time** (on the roadmap) |
 
-For the invariants the compiler does not block, the agent must enforce them
-itself: use the `transition*` functions (which reject invalid state moves) and the
-runtime validators (`auditCommerce` / `checkI*` in TypeScript, `audit_commerce` /
-`check_i*` in Python). The rules below are the standard to code to regardless of
-what the compiler blocks.
+For finer-grained checks than the compiler makes statically (e.g. per-commitment-
+state transition validity, or I-6 beyond literal values), the agent should also
+use the `transition*` functions (which reject invalid state moves) and the runtime
+validators (`auditCommerce` / `checkI*` in TypeScript, `audit_commerce` /
+`check_i*` in Python, and the Rust/Go equivalents). The rules below are the
+standard to code to regardless of what the compiler blocks.
 
 ---
 

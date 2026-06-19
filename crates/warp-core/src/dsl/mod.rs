@@ -118,18 +118,24 @@ pub struct GenerateResult {
     pub warnings: Vec<TypeError>,
 }
 
-/// End-to-end compile: lex → parse → type-check, plus the warning pass.
-/// Returns the typed project (consumable by [`generate`]) and any warnings,
-/// or the first failing stage's error(s). Type-check errors are collected —
-/// a project with three independent mistakes returns all three.
+/// End-to-end compile: lex → parse → type-check.
+/// Returns the typed project (consumable by [`generate`]), or the first failing
+/// stage's error(s). Type-check errors are collected — a project with three
+/// independent mistakes returns all three.
+///
+/// Currency mixing (I-1) is now a **blocking** type error inside
+/// [`check_types`], not a warning — an un-converted mix fails compilation. The
+/// opt-in [`check_currency_mixing`] still offers a non-blocking report for tools
+/// that want one. `CompileResult::warnings` is retained for genuinely non-fatal
+/// future diagnostics and is currently always empty.
 pub fn compile(source: &str) -> Result<CompileResult, CompileError> {
     let tokens = lexer::lex(source)?;
     let project = parser::parse(tokens)?;
-    // I-1 (currency mixing) is warning-level: computed from the parsed AST
-    // before check_types consumes it, surfaced regardless of success.
-    let warnings = check_currency_mixing(&project);
     let project = check_types(project).map_err(CompileError::TypeErrors)?;
-    Ok(CompileResult { project, warnings })
+    Ok(CompileResult {
+        project,
+        warnings: Vec::new(),
+    })
 }
 
 /// Full pipeline: lex → parse → type-check → codegen. The output
@@ -177,15 +183,25 @@ mod tests {
     }
 
     #[test]
-    fn compile_result_includes_currency_warning_when_mixed() {
-        let result = compile(MIXED_CURRENCY).expect("mixed currency still compiles (warning only)");
-        assert!(
-            result
-                .warnings
-                .iter()
-                .any(|w| matches!(w, TypeError::CurrencyMixingWarning { .. })),
-            "got {:?}",
-            result.warnings
-        );
+    fn compile_rejects_mixed_currency() {
+        // I-1 is now BLOCKING: an un-converted currency mix fails to compile,
+        // citing Invariant 1. (The opt-in check_currency_mixing still reports it
+        // as a non-blocking warning for tools that want that.)
+        let err = compile(MIXED_CURRENCY).expect_err("mixed currency must fail to compile");
+        match err {
+            CompileError::TypeErrors(errors) => {
+                let mixing = errors
+                    .iter()
+                    .find(|e| matches!(e, TypeError::CurrencyMixing { .. }))
+                    .expect("a blocking CurrencyMixing error");
+                assert!(mixing.to_string().contains("Invariant 1"));
+            }
+            other => panic!("expected TypeErrors, got {other:?}"),
+        }
+        // The opt-in warning path still detects the same mix.
+        let project = parser::parse(lexer::lex(MIXED_CURRENCY).unwrap()).unwrap();
+        assert!(check_currency_mixing(&project)
+            .iter()
+            .any(|w| matches!(w, TypeError::CurrencyMixingWarning { .. })));
     }
 }

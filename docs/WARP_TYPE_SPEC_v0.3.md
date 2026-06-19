@@ -41,14 +41,19 @@ before it can be installed against a tenant, returning a [`CompileError`]
 that names the line and the violation. The six commerce invariants are
 enforced to different degrees today:
 
+- **I-1 Value Conservation** — enforced at compile time; a node that mixes
+  currencies without an explicit conversion blocks compilation. Declaring a
+  conversion (the sanctioned path) compiles.
+- **I-2 State Monotonicity** — enforced at compile time at the lifecycle-stage
+  granularity the DSL exposes: a workflow that regresses across the
+  Intent → Commitment → Fulfillment lifecycle blocks compilation. Finer
+  per-commitment-state transition validity (Draft → … → Refunded, the
+  dispute/refund reversals) is enforced by `validate_commitment_transition` at
+  the type/runtime/audit layer.
 - **I-3 Capacity Verification**, **I-4 Temporal Integrity**, **I-5 Identity
   Permanence** — enforced at compile time; a violation blocks compilation.
 - **I-6 Commitment Tree Consistency** — partially checked (literal
   child/parent values; best-effort).
-- **I-1 Value Conservation** — emits a *warning*; currency mixing compiles
-  with a warning rather than blocking.
-- **I-2 State Monotonicity** — not yet enforced at compile time; on the
-  roadmap.
 
 The `@warp-lang/commerce-types` npm package additionally provides runtime
 validators (`auditCommerce`, `checkI*`) for these invariants.
