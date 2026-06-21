@@ -23,7 +23,7 @@
 import { auditCommerce, type InvariantViolation } from "./invariants.js";
 import type { Commitment, Fulfillment, Party, PartyID } from "./primitives.js";
 import type { CommitmentState } from "./states.js";
-import { transitionCommitment } from "./transitions.js";
+import { transitionCommitment, validTransitions } from "./transitions.js";
 
 /** The current commerce world the agent is acting on — however you already hold it. */
 export interface World {
@@ -59,13 +59,42 @@ export interface GuardViolation {
 }
 
 /**
+ * A legal target state from the current state — a move the agent may pick
+ * instead of the rejected one. This is the planning-oracle payload: when an
+ * action is rejected, the guard returns the set of legal moves so an agent can
+ * choose a valid one rather than blindly retrying.
+ *
+ * These are **legal transitions from the current state**, read from the model's
+ * generated transition table — NOT guaranteed-safe actions. A listed move is a
+ * valid state transition; reaching it with particular data may still be rejected
+ * by another invariant. The absence of `bounded` does not promise safety.
+ */
+export interface TransitionAlternative {
+  /** The legal target state type, from the model's transition table. */
+  to: CommitmentState["type"];
+  /** A short, agent-readable label for the move. */
+  label: string;
+  /**
+   * Present when this target is a legal transition but reaching it with the
+   * proposed data was rejected by another invariant — e.g. a Fulfilled →
+   * Refunded move whose amount exceeds what was committed (I-1). The string
+   * states the constraint to satisfy: retry the SAME move with corrected data,
+   * don't pick a different state.
+   */
+  bounded?: string;
+}
+
+/**
  * The guard's verdict. On success, `next` is the resulting valid world (for
  * {@link guardObject} it is the same world, validated). On rejection, `violations`
- * lists every reason, each actionable.
+ * lists every reason, each actionable; `alternatives` (when present) lists the
+ * legal transitions from the current state so an agent can self-correct. The
+ * field is additive — existing consumers that read only `violations` are
+ * unaffected.
  */
 export type GuardResult =
   | { ok: true; next: World }
-  | { ok: false; violations: GuardViolation[] };
+  | { ok: false; violations: GuardViolation[]; alternatives?: TransitionAlternative[] };
 
 /** Map an audit `InvariantViolation` to the guard's actionable shape. */
 function fromInvariant(v: InvariantViolation): GuardViolation {
@@ -76,6 +105,48 @@ function fromInvariant(v: InvariantViolation): GuardViolation {
 function ruleFromTransitionError(error: string): string {
   const m = /Invariant (\d)/.exec(error);
   return m ? `I-${m[1]}` : "I-2";
+}
+
+/** Short, agent-readable labels for each commitment move. */
+const COMMITMENT_MOVE_LABELS: Record<CommitmentState["type"], string> = {
+  Draft: "return to draft",
+  Proposed: "propose to the counterparty",
+  Tendered: "tender as an open offer",
+  Accepted: "accept the commitment",
+  Modified: "modify the terms",
+  PartiallyFulfilled: "mark partially fulfilled",
+  Active: "activate the commitment",
+  Fulfilled: "mark fulfilled",
+  Cancelled: "cancel the commitment",
+  Disputed: "open a dispute",
+  Refunded: "refund the commitment",
+};
+
+/**
+ * The legal moves from `from`, read from the generated transition table (via
+ * {@link validTransitions}). If `bounded` is given, the matching target is
+ * annotated as reachable-but-constrained.
+ */
+function commitmentAlternatives(
+  from: CommitmentState,
+  bounded?: { to: CommitmentState["type"]; constraint: string },
+): TransitionAlternative[] {
+  return validTransitions(from).map((to) => {
+    const alt: TransitionAlternative = { to, label: COMMITMENT_MOVE_LABELS[to] };
+    if (bounded && bounded.to === to) alt.bounded = bounded.constraint;
+    return alt;
+  });
+}
+
+/** A one-line, human-readable summary of the legal moves, for the `fix` field. */
+function summarizeAlternatives(alts: TransitionAlternative[]): string {
+  if (alts.length === 0) {
+    return "There are no legal transitions from this state — it is terminal.";
+  }
+  const list = alts
+    .map((a) => (a.bounded ? `${a.to} (${a.bounded})` : a.to))
+    .join(", ");
+  return `Legal transitions from here: ${list}.`;
 }
 
 /**
@@ -111,13 +182,35 @@ export function guardAction(world: World, action: ProposedAction): GuardResult {
   //    the transition table is Invariant 2; timestamp monotonicity is Invariant 4).
   const moved = transitionCommitment(target, action.to, action.actor as PartyID, action.reason);
   if (!moved.ok) {
+    const rule = ruleFromTransitionError(moved.error);
+    // A transition-table rejection (I-2) is the planning case: enumerate the
+    // legal moves from the current state so the agent can pick a valid one. A
+    // timestamp rejection (I-4) is NOT fixed by choosing a different target, so
+    // no alternatives are offered there.
+    if (rule === "I-2") {
+      const alternatives = commitmentAlternatives(target.state);
+      return {
+        ok: false,
+        violations: [
+          {
+            rule,
+            message: moved.error,
+            fix:
+              `Only the model's valid transitions are allowed. ${summarizeAlternatives(alternatives)} ` +
+              `Pick one of those, or model a reversal as a NEW forward commitment with the parties ` +
+              `exchanged — never move a finalized state backward.`,
+          },
+        ],
+        alternatives,
+      };
+    }
     return {
       ok: false,
       violations: [
         {
-          rule: ruleFromTransitionError(moved.error),
+          rule,
           message: moved.error,
-          fix: "Only the model's valid transitions are allowed. Pick a target state reachable from the current one, or model a reversal as a NEW forward commitment with the parties exchanged — never move a finalized state backward.",
+          fix: "The target state is reachable, but the transition timestamp is not monotonic — record the move at a time no earlier than the last transition (Invariant 4: Temporal Integrity).",
         },
       ],
     };
@@ -135,7 +228,22 @@ export function guardAction(world: World, action: ProposedAction): GuardResult {
   // 3. Audit the RESULTING world (composes auditCommerce: the six invariants).
   const violations = auditCommerce(next.commitments, next.fulfillments, next.parties);
   if (violations.length > 0) {
-    return { ok: false, violations: violations.map(fromInvariant) };
+    // The move itself was a LEGAL transition (it passed step 1), but the
+    // resulting world is rejected. List the legal moves from the original state,
+    // and where a violation cites the moved commitment, annotate the attempted
+    // target as reachable-but-bounded — so the agent corrects the DATA (e.g. a
+    // refund amount) rather than picking a different state.
+    const movedId = target.id as string;
+    const cited = violations.filter((v) => v.description.includes(movedId));
+    const bounded =
+      cited.length > 0
+        ? { to: action.to.type, constraint: cited.map((v) => v.fix).join(" ") }
+        : undefined;
+    return {
+      ok: false,
+      violations: violations.map(fromInvariant),
+      alternatives: commitmentAlternatives(target.state, bounded),
+    };
   }
 
   // 4. Valid edge + clean world → safe.

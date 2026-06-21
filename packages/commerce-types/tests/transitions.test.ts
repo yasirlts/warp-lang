@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type CommitmentState,
+  type IntentState,
   type Result,
   isValidCommitmentTransition,
   isValidFulfillmentTransition,
@@ -12,7 +13,15 @@ import {
   transitionCommitment,
   transitionFulfillment,
   transitionIntent,
+  validTransitions,
+  validFulfillmentTransitions,
+  validIntentTransitions,
 } from "../src/index.js";
+import {
+  COMMITMENT_TRANSITIONS,
+  FULFILLMENT_TRANSITIONS,
+  INTENT_TRANSITIONS,
+} from "../src/generated/transitions.generated.js";
 
 /** Assert a Result is ok and return its value — narrows the union, so no `!`. */
 function unwrap<T>(r: Result<T>): T {
@@ -194,5 +203,51 @@ describe("fulfillment transitions", () => {
     expect(f1.started_at).toBeDefined();
     const r2 = transitionFulfillment(f1, { type: "Completed" }, buyer);
     expect(unwrap(r2).completed_at).toBeDefined();
+  });
+});
+
+describe("validTransitions — pure read of the generated table", () => {
+  it("returns exactly the table row for representative states", () => {
+    expect(validTransitions({ type: "Fulfilled" })).toEqual(["Disputed", "Refunded"]);
+    expect(validTransitions({ type: "Draft" })).toEqual(["Proposed", "Tendered", "Cancelled"]);
+    expect(validTransitions({ type: "Disputed", by: buyer, reason: "x", opened_at: "2099-01-01T00:00:00.000Z" })).toEqual([
+      "Fulfilled",
+      "Refunded",
+      "Cancelled",
+    ]);
+  });
+
+  it("returns an empty array for terminal states", () => {
+    expect(validTransitions({ type: "Refunded", amount: { amount: 1, currency: "MAD" }, at: "2099-01-01T00:00:00.000Z" })).toEqual([]);
+    expect(validTransitions({ type: "Cancelled", by: buyer, reason: "x", at: "2099-01-01T00:00:00.000Z" })).toEqual([]);
+  });
+
+  it("equals COMMITMENT_TRANSITIONS for EVERY state (it is a read, not a copy)", () => {
+    for (const from of Object.keys(COMMITMENT_TRANSITIONS) as (keyof typeof COMMITMENT_TRANSITIONS)[]) {
+      expect(validTransitions({ type: from } as CommitmentState)).toEqual([...COMMITMENT_TRANSITIONS[from]]);
+    }
+  });
+
+  it("agrees with isValidCommitmentTransition for every (from, to) pair", () => {
+    const states = Object.keys(COMMITMENT_TRANSITIONS) as (keyof typeof COMMITMENT_TRANSITIONS)[];
+    for (const from of states) {
+      const legal = new Set(validTransitions({ type: from } as CommitmentState));
+      for (const to of states) {
+        expect(isValidCommitmentTransition({ type: from } as CommitmentState, { type: to } as CommitmentState)).toBe(
+          legal.has(to),
+        );
+      }
+    }
+  });
+
+  it("intent: returns the table row (terminal → empty)", () => {
+    expect(validIntentTransitions({ type: "Active" })).toEqual([...INTENT_TRANSITIONS.Active]);
+    expect(validIntentTransitions({ type: "Converted" } as IntentState)).toEqual([]);
+  });
+
+  it("fulfillment: reads the table, and applies the Failed→Planned recoverable rule", () => {
+    expect(validFulfillmentTransitions({ type: "Planned" })).toEqual([...FULFILLMENT_TRANSITIONS.Planned]);
+    expect(validFulfillmentTransitions({ type: "Failed", reason: "x", recoverable: true })).toEqual(["Planned"]);
+    expect(validFulfillmentTransitions({ type: "Failed", reason: "x", recoverable: false })).toEqual([]);
   });
 });

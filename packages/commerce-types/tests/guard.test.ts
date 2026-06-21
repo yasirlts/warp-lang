@@ -11,7 +11,7 @@ import {
   type Party,
   type Value,
 } from "../src/primitives.js";
-import { applyCommitmentPath, isValidCommitmentTransition } from "../src/transitions.js";
+import { applyCommitmentPath, isValidCommitmentTransition, validTransitions } from "../src/transitions.js";
 
 const buyer = partyId("buyer_1");
 const seller = partyId("seller_1");
@@ -170,5 +170,91 @@ describe("guardObject — thin layer over auditCommerce", () => {
     if (!verdict.ok) expect(verdict.violations.some((v) => v.rule === "I-1")).toBe(true);
     // composition, not a divergent path:
     expect(auditCommerce([overRefunded], [], []).map((v) => v.invariant)).toContain("I-1");
+  });
+});
+
+describe("guardAction — planning oracle (alternatives on rejection)", () => {
+  it("an invalid transition returns the legal moves from the current state", () => {
+    const shipped = applyCommitmentPath(newCommitment(buyer, seller), { type: "Fulfilled" }, seller);
+    const world: World = { commitments: [shipped], fulfillments: [], parties: [] };
+
+    const verdict = guardAction(world, { commitment: shipped.id, to: { type: "Accepted" }, actor: seller });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) {
+      expect(verdict.violations[0]?.rule).toBe("I-2");
+      // alternatives are EXACTLY the table's legal moves from Fulfilled.
+      const tos = (verdict.alternatives ?? []).map((a) => a.to);
+      expect(tos).toEqual(validTransitions({ type: "Fulfilled" }));
+      expect(tos).toEqual(["Disputed", "Refunded"]);
+      // each carries a short label; none of these is bounded (the move itself is clean).
+      expect(verdict.alternatives?.every((a) => a.label.length > 0)).toBe(true);
+      expect(verdict.alternatives?.every((a) => a.bounded === undefined)).toBe(true);
+      // the human summary in fix echoes the structured list.
+      expect(verdict.violations[0]?.fix).toContain("Disputed");
+    }
+  });
+
+  it("an agent can pick a returned alternative and the retry succeeds", () => {
+    const shipped = applyCommitmentPath(newCommitment(buyer, seller), { type: "Fulfilled" }, seller);
+    const world: World = { commitments: [shipped], fulfillments: [], parties: [] };
+
+    const rejected = guardAction(world, { commitment: shipped.id, to: { type: "Accepted" }, actor: seller });
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) {
+      const choice = (rejected.alternatives ?? []).find((a) => a.bounded === undefined);
+      expect(choice).toBeDefined();
+      if (choice) {
+        const retry = guardAction(world, { commitment: shipped.id, to: { type: choice.to } as never, actor: seller });
+        expect(retry.ok).toBe(true);
+      }
+    }
+  });
+
+  it("over-refund frames Refunded as reachable-but-bounded, not a clean alternative", () => {
+    const order = newCommitment(buyer, seller, { offered: [], requested: [moneyValue(200, "MAD")] });
+    const shipped = applyCommitmentPath(order, { type: "Fulfilled" }, seller);
+    const world: World = { commitments: [shipped], fulfillments: [], parties: [] };
+
+    const verdict = guardAction(world, {
+      commitment: shipped.id,
+      to: { type: "Refunded", amount: { amount: 500, currency: "MAD" }, at: "2026-02-01T00:00:00.000Z" },
+      actor: seller,
+    });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) {
+      expect(verdict.violations.some((v) => v.rule === "I-1")).toBe(true);
+      const refundAlt = (verdict.alternatives ?? []).find((a) => a.to === "Refunded");
+      const disputeAlt = (verdict.alternatives ?? []).find((a) => a.to === "Disputed");
+      // Refunded IS a legal transition — but bounded by the amount that just failed.
+      expect(refundAlt?.bounded).toBeDefined();
+      expect(refundAlt?.bounded).toContain("at most");
+      // Disputed is a different legal move and is NOT falsely marked bounded.
+      expect(disputeAlt?.bounded).toBeUndefined();
+    }
+  });
+
+  it("a terminal-state action returns no alternatives (the table row is empty)", () => {
+    const refunded = applyCommitmentPath(
+      newCommitment(buyer, seller),
+      { type: "Refunded", amount: { amount: 0, currency: "MAD" }, at: "2026-02-01T00:00:00.000Z" },
+      seller,
+    );
+    const world: World = { commitments: [refunded], fulfillments: [], parties: [] };
+
+    const verdict = guardAction(world, { commitment: refunded.id, to: { type: "Disputed", by: seller, reason: "x", opened_at: "2026-03-01T00:00:00.000Z" }, actor: seller });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) {
+      expect(verdict.violations[0]?.rule).toBe("I-2");
+      expect(verdict.alternatives).toEqual([]);
+      expect(validTransitions({ type: "Refunded", amount: { amount: 0, currency: "MAD" }, at: "2026-02-01T00:00:00.000Z" })).toEqual([]);
+    }
+  });
+
+  it("is backward-compatible: a rejection still carries violations (alternatives is additive)", () => {
+    const shipped = applyCommitmentPath(newCommitment(buyer, seller), { type: "Fulfilled" }, seller);
+    const world: World = { commitments: [shipped], fulfillments: [], parties: [] };
+    const verdict = guardAction(world, { commitment: shipped.id, to: { type: "Accepted" }, actor: seller });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.violations.length).toBeGreaterThan(0);
   });
 });

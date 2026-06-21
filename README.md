@@ -216,10 +216,10 @@ if (verdict.ok === false) {
 
 `guardAction(world, proposedAction)` returns
 `{ ok: true, next }` (the resulting valid world) **or**
-`{ ok: false, violations: [{ rule, message, fix }] }` — it never throws on a
-rejected action and never coerces an unsafe one into looking safe. The reasons are
-written for an agent to read and self-correct (the auto-correct loop). A second
-entry point, `guardObject(commitments, fulfillments, parties)`, is the thin
+`{ ok: false, violations: [{ rule, message, fix }], alternatives? }` — it never
+throws on a rejected action and never coerces an unsafe one into looking safe. The
+reasons are written for an agent to read and self-correct (the auto-correct loop). A
+second entry point, `guardObject(commitments, fulfillments, parties)`, is the thin
 "the agent built the whole world, check it" case.
 
 The guard does not *reimplement* any checks — it **composes** the proven
@@ -229,6 +229,32 @@ bindings. So it validates a proposed action against the model's invariants and
 explains any rejection; it makes unsafe actions easy to **catch**, not impossible
 to express. Runnable:
 [`examples/agent-guardrail.mjs`](packages/commerce-types/examples/agent-guardrail.mjs).
+
+### The planning oracle — "no, and here are your valid moves"
+
+A gate that only says **no** makes an agent guess again. When `guardAction`
+rejects a move, it also returns `alternatives`: the **legal transitions from the
+current state**, read from the same generated table the bindings agree on (exposed
+directly as `validTransitions(state)`). The agent reads the list and picks a valid
+move instead of blindly retrying.
+
+```ts
+const verdict = guardAction(world, { commitment: shipped.id, to: { type: "Accepted" }, actor: "agent" });
+if (verdict.ok === false) {
+  verdict.alternatives; // [{ to: "Disputed", label: "open a dispute" }, { to: "Refunded", label: "refund the commitment" }]
+  // the agent picks one and retries — guided, not blind.
+}
+```
+
+These are **legal transitions, not guaranteed-safe actions**: a listed move is a
+valid state transition, but reaching it with particular data may still be rejected
+by another invariant. Where a move is legal yet the *data* is the problem — an
+over-refund is a valid `Fulfilled → Refunded` transition that fails I-1 on amount —
+that target is returned with a `bounded` note ("refund at most the committed
+amount"), so the agent corrects the amount rather than picking a different state.
+The field is additive: consumers that read only `violations` are unaffected.
+TypeScript first; Python / Rust / Go ports are on the roadmap. Runnable:
+[`examples/planning-oracle.mjs`](packages/commerce-types/examples/planning-oracle.mjs).
 
 ---
 
