@@ -65,6 +65,12 @@ export * from "./guard.js";
 // that single-action guardAction cannot see. Composes guardAction + the canonical
 // I-1 check; it does not fork invariant logic. TypeScript first; ports roadmap.
 export * from "./session.js";
+// `unify` / `toStripeAction` / `toShopifyAction` / `toWooCommerceAction` — the
+// interop CIR: merge caller-corresponded platform objects into one validated Warp
+// commitment (inbound), and translate a validated Warp action into a platform-shaped
+// descriptor (outbound). Composes the inbound adapters + guardObject; it does not
+// auto-reconcile correspondences and does not execute anything. TS first; ports roadmap.
+export * from "./interop.js";
 
 // ── ADVANCED type vocabulary ────────────────────────────────────────────────
 // State machines, the v0.3 commerce vocabulary, and the market-making /
