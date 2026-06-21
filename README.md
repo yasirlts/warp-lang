@@ -309,6 +309,56 @@ and audit still run unchanged.
 TypeScript first; Python / Rust / Go ports are on the roadmap. Runnable:
 [`examples/agent-session.mjs`](packages/commerce-types/examples/agent-session.mjs).
 
+### Interop — Warp as the neutral model between platforms
+
+The inbound adapters (`platforms/shopify`, `platforms/stripe`, `platforms/woocommerce`)
+already map one platform object into a Warp commitment. The interop layer adds the two
+pieces that make Warp a canonical intermediate representation — **map each platform in
+once, reason in one model, emit a validated platform payload out** — by composing those
+adapters with the validators.
+
+**Inbound — `unify(sources)`** merges several platform objects that the **caller asserts
+correspond** (a Shopify order + the Stripe charge that paid it) into one Warp commitment,
+and checks that value is conserved across them. A disagreement — the order total is 200
+but the charge is 150 — is surfaced as an **I-1 (Value Conservation)** violation; the
+merged commitment is then validated by the full six-invariant audit.
+
+```ts
+const u = unify([
+  { platform: "shopify", commitment: fromShopifyOrder(order) },   // 200 MAD
+  { platform: "stripe",  commitment: fromStripePaymentIntent(pi) }, // 200 MAD
+], { id: "order_123" });
+// u.ok → one validated commitment; a 200-vs-150 mismatch → { ok: false, violations: [I-1] }
+```
+
+> **Mechanism, not discovery.** The correspondence is an **input** — the caller passes the
+> objects together. Warp does **not** auto-reconcile or infer which order matches which
+> charge; that is application glue. A mismatch is surfaced, never silently reconciled.
+
+**Outbound — `toStripeAction` / `toShopifyAction` / `toWooCommerceAction`** translate a
+**validated** Warp action into a structured, platform-shaped **descriptor** of the call
+the application should make:
+
+```ts
+toStripeAction(refundAction); // { ok: true, descriptor: { kind: "stripe.refund", payment_intent, amount: 4000, currency: "mad" } }
+```
+
+> **Description, not execution.** The emitters return a descriptor object only — **no
+> network calls, no credentials, nothing executed** on any platform. Sending it is the
+> application's job. Per-platform coverage is explicit: **Refunded → refund** and
+> **Cancelled → cancel** on all three; any other action returns a clear *not representable
+> on `<platform>`* result rather than a lossy guess.
+
+**Where this sits.** Payment-authorization protocols for AI agents (Google's AP2, the
+Agentic Commerce Protocol, and MCP for tool access) answer *"is this agent authorized to
+act/pay?"* Warp answers a **different, complementary** question: *"is this commerce action
+internally consistent?"* — value conserved, the transition legal, no over-refund across
+the session. Warp sits **beneath** those protocols as the integrity check on the action
+itself; it does not authorize agents, move money, or replace them.
+
+TypeScript first; other-language interop is on the roadmap. Runnable:
+[`examples/cross-platform.mjs`](packages/commerce-types/examples/cross-platform.mjs).
+
 ---
 
 ## What the model checks — and what it does not
