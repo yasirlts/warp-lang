@@ -82,6 +82,39 @@ export function isValidFulfillmentTransition(
 }
 
 // ---------------------------------------------------------------------------
+// Move enumeration — the legal target states from a given state. These are a
+// pure read of the SAME generated tables the `isValid*` checks consult, so the
+// set is correct by construction: `validTransitions(s)` lists exactly the
+// targets for which `isValidCommitmentTransition(s, { type })` is true. A
+// terminal state (Cancelled, Refunded) returns an empty array.
+//
+// This is the planning-oracle primitive: when an action is rejected, an agent
+// can read the legal alternatives from the current state and pick one, instead
+// of blindly retrying. The returned targets are LEGAL TRANSITIONS — not
+// guaranteed-safe actions: a move may be a valid transition yet still be
+// rejected by another invariant (e.g. Fulfilled -> Refunded is legal, but an
+// over-refund still fails I-1 on amount).
+// ---------------------------------------------------------------------------
+
+export function validTransitions(from: CommitmentState): CommitmentState["type"][] {
+  return [...COMMITMENT_TRANSITIONS[from.type]];
+}
+
+export function validIntentTransitions(from: IntentState): IntentState["type"][] {
+  return [...INTENT_TRANSITIONS[from.type]];
+}
+
+export function validFulfillmentTransitions(from: FulfillmentState): FulfillmentState["type"][] {
+  // Mirror isValidFulfillmentTransition: the Failed -> Planned retry is gated on
+  // `recoverable` and is intentionally NOT in the generated table, so apply the
+  // same rule here rather than reading a non-existent row entry.
+  if (from.type === "Failed") {
+    return from.recoverable ? ["Planned"] : [];
+  }
+  return [...FULFILLMENT_TRANSITIONS[from.type]];
+}
+
+// ---------------------------------------------------------------------------
 // Temporal integrity (Invariant 4)
 // ---------------------------------------------------------------------------
 

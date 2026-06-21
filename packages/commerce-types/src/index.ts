@@ -44,8 +44,9 @@
 //   primitives.js  → CORE: newCommitment, newIntent, newFulfillment, partyId
 //                    ADVANCED: commitmentId/intentId/fulfillmentId/valueId,
 //                    individual/organization/system, unverifiedCapacity, now, the types
-//   transitions.js → CORE: transitionCommitment
+//   transitions.js → CORE: transitionCommitment, validTransitions
 //                    ADVANCED: transitionIntent/Fulfillment, isValid*Transition,
+//                    validIntentTransitions/validFulfillmentTransitions,
 //                    applyCommitmentPath/applyFulfillmentPath, Result, error classes
 //   invariants.js  → CORE: auditCommerce
 //                    ADVANCED: checkI1…I6, checkI1MoneyBreakdownSum, checkLoyaltyLiability
