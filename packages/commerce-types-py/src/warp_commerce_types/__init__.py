@@ -66,6 +66,9 @@ from .transitions import (  # noqa: F401
     transition_commitment,
     transition_fulfillment,
     transition_intent,
+    valid_fulfillment_transitions,
+    valid_intent_transitions,
+    valid_transitions,
 )
 
 # Invariants.
@@ -87,6 +90,28 @@ from .invariants import (  # noqa: F401
     verify_invariant4,
     verify_invariant5,
     verify_invariant6,
+)
+
+# Agent toolkit — guardrail (composes transition + audit), planning oracle
+# (valid_transitions + alternatives), session coherence, interop CIR.
+from .guard import (  # noqa: F401
+    GuardResult,
+    GuardViolation,
+    ProposedAction,
+    TransitionAlternative,
+    World,
+    guard_action,
+    guard_object,
+)
+from .session import Session, create_session  # noqa: F401
+from .interop import (  # noqa: F401
+    EmitResult,
+    UnifyResult,
+    UnifySource,
+    to_shopify_action,
+    to_stripe_action,
+    to_woocommerce_action,
+    unify,
 )
 
 __version__ = SCHEMA_VERSION

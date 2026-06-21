@@ -96,6 +96,31 @@ def is_valid_fulfillment_transition(from_state: Any, to_state: Any) -> bool:
     return to_type in _FULFILLMENT_EDGES.get(from_type, [])
 
 
+# --- move enumeration (the planning-oracle primitive) -----------------------
+# The legal target states from a given state — a PURE READ of the same generated
+# tables the ``is_valid_*`` checks consult, so the set is correct by construction:
+# ``valid_transitions(s)`` lists exactly the targets for which
+# ``is_valid_commitment_transition(s, {type})`` is true. A terminal state returns
+# []. These are LEGAL TRANSITIONS, not guaranteed-safe actions: a move may be a
+# valid transition yet still be rejected by another invariant (e.g. an over-refund
+# is a valid Fulfilled -> Refunded transition that still fails I-1 on amount).
+
+def valid_transitions(from_state: Any) -> List[str]:
+    return list(_COMMITMENT_EDGES.get(_type_of(from_state), []))
+
+
+def valid_intent_transitions(from_state: Any) -> List[str]:
+    return list(_INTENT_EDGES.get(_type_of(from_state), []))
+
+
+def valid_fulfillment_transitions(from_state: Any) -> List[str]:
+    # Mirror is_valid_fulfillment_transition: the Failed -> Planned retry is gated
+    # on `recoverable` and is intentionally NOT in the table, so apply the same rule.
+    if _type_of(from_state) == "Failed":
+        return ["Planned"] if bool(_field_of(from_state, "recoverable")) else []
+    return list(_FULFILLMENT_EDGES.get(_type_of(from_state), []))
+
+
 # --- temporal integrity (Invariant 4) ---------------------------------------
 
 def _parse(ts: str) -> Optional[datetime]:

@@ -44,3 +44,6 @@ plugins = ["pydantic.mypy"]
 packages = ["warp_commerce_types"]
 mypy_path = "src"
 ignore_missing_imports = true
+# Runnable example scripts are illustrative (the TS twins are untyped .mjs); they
+# are exercised by tests, not type-checked.
+exclude = "^examples/"
