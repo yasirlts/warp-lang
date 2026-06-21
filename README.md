@@ -256,6 +256,59 @@ The field is additive: consumers that read only `violations` are unaffected.
 TypeScript first; Python / Rust / Go ports are on the roadmap. Runnable:
 [`examples/planning-oracle.mjs`](packages/commerce-types/examples/planning-oracle.mjs).
 
+### Sessions — catching violations that only emerge across steps
+
+`guardAction` validates one action against the current world. Some violations are
+invisible to any single check and only appear across a **sequence**. The headline
+case is a **cumulative over-refund**: three partial refunds of 80 MAD against a 200
+MAD order each pass on their own (80 ≤ 200), but they sum to 240 > 200. The
+point-in-time I-1 check looks at a commitment's *current* `Refunded` state, so a
+naive `guardAction`-in-a-loop catches none of them.
+
+`createSession(world)` accumulates. Its `propose(action)` validates against the
+running world *and* a cross-step refund ledger, advances only on success, and
+returns the same `{ ok, ... }` shape (with planning-oracle `alternatives`).
+
+```ts
+import { createSession } from "@warp-lang/commerce-types";
+
+const session = createSession({ commitments: [order /* committed 200 MAD, Fulfilled */], fulfillments: [], parties: [] });
+const refund = (amount) => ({ commitment: order.id, to: { type: "Refunded", amount: { amount, currency: "MAD" }, at }, actor: "agent" });
+
+session.propose(refund(80)); // ok — refunded so far 80
+session.propose(refund(80)); // ok — refunded so far 160
+const v = session.propose(refund(80)); // BLOCKED [I-1]: cumulative 240 > committed 200
+v.alternatives; // [{ to: "Refunded", bounded: "…40 MAD remains refundable" }]
+```
+
+The cumulative check is **derived from the canonical I-1**, not a second copy: the
+session probes the same `checkI1ValueConservation` with the running total. It is a
+**composition** over `guardAction` + that check — the per-action transition table
+and audit still run unchanged.
+
+**What is covered, precisely:**
+
+- **Cumulative refund conservation** — the sum of refunds against an order may not
+  exceed its committed amount (same currency). This is the property single-action
+  checks miss.
+- **Refund-before-capture ordering** — a refund on an order that was never
+  fulfilled is rejected, because `Refunded` is not a legal transition from a
+  pre-fulfilment state; `guardAction` supplies the legal alternatives.
+
+**Known limits (not faked):**
+
+- The schema models a refund as a single terminal `Refunded` state with one
+  amount — there is no partial-refund state. The session therefore tracks partial
+  refunds in its **own ledger** (a TypeScript-layer accumulation, not a schema
+  change) and keeps the order in `Fulfilled` until it is fully refunded.
+- Cross-*object* ordering (e.g. coordinating sequence across independent
+  commitments) is covered only to the extent the per-action audit (I-4 temporal
+  integrity) already expresses it. Properties the data model cannot express are
+  left as limits rather than emitting false violations.
+
+TypeScript first; Python / Rust / Go ports are on the roadmap. Runnable:
+[`examples/agent-session.mjs`](packages/commerce-types/examples/agent-session.mjs).
+
 ---
 
 ## What the model checks — and what it does not

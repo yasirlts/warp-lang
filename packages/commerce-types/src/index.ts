@@ -60,6 +60,11 @@ export * from "./builder.js";
 // executes. A composition over transitionCommitment + auditCommerce (the proven
 // logic); it does not re-derive invariants. TypeScript first; other bindings roadmap.
 export * from "./guard.js";
+// `createSession` — validate a SEQUENCE of actions against the accumulated world,
+// catching cross-step violations (cumulative over-refund, refund-before-capture)
+// that single-action guardAction cannot see. Composes guardAction + the canonical
+// I-1 check; it does not fork invariant logic. TypeScript first; ports roadmap.
+export * from "./session.js";
 
 // ── ADVANCED type vocabulary ────────────────────────────────────────────────
 // State machines, the v0.3 commerce vocabulary, and the market-making /
