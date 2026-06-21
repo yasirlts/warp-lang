@@ -54,6 +54,59 @@ assert not bad.ok and "Invariant 2" in bad.error   # Draft -> Fulfilled is illeg
 violations = audit_commerce(commitments=[c], fulfillments=[], parties=[])
 ```
 
+## The agent toolkit
+
+The same agent toolkit that ships in the TypeScript package is now available in
+Python, **behaviour-equivalent** (the conformance cross-check proves the bindings
+agree on the model these compose). It is a thin composition over the primitives
+above — it does not re-derive invariant or transition logic.
+
+```python
+from warp_commerce_types import (
+    guard_action, guard_object, valid_transitions, create_session,
+    unify, to_stripe_action, World, ProposedAction, UnifySource,
+)
+
+# Guardrail — validate a proposed action BEFORE it executes.
+verdict = guard_action(world, ProposedAction(commitment=cid, to={"type": "Accepted"}, actor="agent"))
+# verdict.ok -> True/False; on rejection, verdict.violations = [{rule, message, fix}]
+
+# Planning oracle — on rejection, the legal moves from the current state.
+valid_transitions({"type": "Fulfilled"})   # ['Disputed', 'Refunded']  (a pure read of the table)
+verdict.alternatives                         # [{to, label, bounded?}] — LEGAL transitions, not guaranteed-safe
+
+# Session coherence — catch cross-step violations a single check misses.
+session = create_session(world)
+session.propose(refund_80); session.propose(refund_80)
+session.propose(refund_80)  # BLOCKED [I-1]: cumulative 240 > committed 200, with the remaining-refundable bound
+
+# Interop CIR — unify caller-corresponded platform objects; emit validated descriptors.
+unify([UnifySource("shopify", order), UnifySource("stripe", charge)])  # mismatch -> I-1 (not auto-reconciled)
+to_stripe_action(refund_action).descriptor   # {"kind": "stripe.refund", ...} — a descriptor, NOT an executed call
+```
+
+- **`guard_action` / `guard_object`** — compose `transition_commitment` (I-2) +
+  `audit_commerce` (the six invariants); never raise on rejection, never coerce.
+- **`valid_transitions`** — the legal target states from a state, a pure read of
+  the transition table. These are **legal transitions, not guaranteed-safe
+  actions**; the absence of a `bounded` note promises nothing.
+- **`create_session`** — accumulates a world + a refund ledger; catches a
+  **cumulative over-refund** (three 80s against a 200 order) the point-in-time
+  check cannot see. The cumulative check probes the **same** `check_i1_value_conservation`.
+- **`unify`** — merges objects the **caller asserts correspond** (a mechanism, not
+  auto-reconciliation); a value mismatch is surfaced as I-1. The outbound emitters
+  return platform-shaped **descriptors** only — **no network, no credentials, no
+  execution**. (Python ships inbound mappers for Shopify and Stripe; `unify` itself
+  is platform-agnostic.)
+
+Runnable twins of the TypeScript examples live in
+[`examples/`](examples/): `agent_guardrail.py`, `planning_oracle.py`,
+`agent_session.py`, `cross_platform.py`.
+
+> **Binding coverage:** the agent toolkit is available in **TypeScript and Python**.
+> Rust and Go carry the model (primitives, invariants, transitions, cross-checked)
+> but not yet the toolkit — those ports are on the roadmap.
+
 ## The model
 
 Five primitives — **Party, Value, Intent, Commitment, Fulfillment** — plus the
