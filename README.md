@@ -309,6 +309,35 @@ and audit still run unchanged.
 Available in all four bindings (TypeScript, Python, Rust, Go). Runnable:
 [`examples/agent-session.mjs`](packages/commerce-types/examples/agent-session.mjs).
 
+#### Idempotency — a retried action does not double-apply
+
+Agents retry and networks duplicate, so the **same action applied twice must not
+double-apply** — a retried refund must not refund twice. The session records the
+identity of each accepted action and treats a repeat as a **replay**: it does not
+re-apply, does not advance the world, and returns `{ ok: true, replay: true }` so
+the caller learns *already done*, not *applied again*.
+
+```ts
+const r1 = session.propose({ commitment, to: refunded(50), actor, idempotencyKey: "rk-1" });
+// r1.ok === true, r1.replay !== true — applied (refunded 50)
+const r2 = session.propose({ commitment, to: refunded(50), actor, idempotencyKey: "rk-1" });
+// r2.ok === true, r2.replay === true — a no-op; still refunded 50, not 100
+```
+
+Identity is the caller-supplied `idempotencyKey` (the unambiguous, standard
+approach), or a derived **fingerprint** (commitment + target type + amount + actor)
+when none is given. So two *genuinely distinct* but structurally-identical refunds
+need **distinct keys** to apply separately; an identical retry with the same key (or
+no key) is deduped. This composes with the cumulative check: three distinct refunds
+of 80 still accumulate to 240 and are caught, but the same refund retried counts
+once.
+
+> **Scope:** per-session and **in-memory**. Durable, cross-session idempotency would
+> need a persistent store and is **not** provided here — a known limit, not a
+> guarantee the session makes. TypeScript first; other bindings on the roadmap.
+
+Runnable: [`examples/idempotency.mjs`](packages/commerce-types/examples/idempotency.mjs).
+
 ### Interop — Warp as the neutral model between platforms
 
 The inbound adapters (`platforms/shopify`, `platforms/stripe`, `platforms/woocommerce`)

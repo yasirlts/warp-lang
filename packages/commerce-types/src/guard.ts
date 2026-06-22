@@ -46,6 +46,16 @@ export interface ProposedAction {
   actor: PartyID | string;
   /** Optional human/agent note recorded on the transition. */
   reason?: string;
+  /**
+   * Optional idempotency key — a stable, caller-supplied identity for this action,
+   * so a retried/duplicated action is recognized as the SAME operation (see
+   * {@link createSession}'s replay detection). This is a runtime input, NOT a
+   * schema field; the model schema stays frozen. When omitted, a session derives a
+   * fingerprint (commitment + target type + amount + actor) instead — so two
+   * genuinely-distinct but structurally-identical actions (e.g. two separate refunds
+   * of the same order) must carry distinct keys to be applied separately.
+   */
+  idempotencyKey?: string;
 }
 
 /** One reason an action or world was rejected — written for an agent to act on. */
@@ -93,7 +103,7 @@ export interface TransitionAlternative {
  * unaffected.
  */
 export type GuardResult =
-  | { ok: true; next: World }
+  | { ok: true; next: World; replay?: boolean }
   | { ok: false; violations: GuardViolation[]; alternatives?: TransitionAlternative[] };
 
 /** Map an audit `InvariantViolation` to the guard's actionable shape. */

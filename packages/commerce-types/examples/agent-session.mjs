@@ -23,12 +23,16 @@ const order = applyCommitmentPath(
 );
 
 const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
-const refund = (amount) => ({ commitment: order.id, to: { type: "Refunded", amount: { amount, currency: "MAD" }, at: "2026-02-01T00:00:00.000Z" }, actor: "support_agent" });
+// Each refund carries an idempotency key so these DISTINCT partial refunds are
+// applied separately (a retry with the same key would be deduped — see
+// examples/idempotency.mjs).
+const refund = (amount, key) => ({ commitment: order.id, to: { type: "Refunded", amount: { amount, currency: "MAD" }, at: "2026-02-01T00:00:00.000Z" }, actor: "support_agent", idempotencyKey: key });
 
 // The agent issues three partial refunds of 80 MAD. Each ALONE passes the
 // point-in-time check (80 ≤ 200) — but they accumulate.
+let n = 0;
 for (const amount of [80, 80, 80]) {
-  const verdict = session.propose(refund(amount));
+  const verdict = session.propose(refund(amount, `r${n++}`));
   const sofar = session.refundedSoFar(order.id);
   if (verdict.ok) {
     console.log(`refund ${amount} MAD → accepted. refunded so far: ${sofar.amount} ${sofar.currency}`);
@@ -43,6 +47,6 @@ for (const amount of [80, 80, 80]) {
 }
 
 // The agent reads the bounded guidance (40 MAD remaining) and refunds within it.
-const corrected = session.propose(refund(40));
+const corrected = session.propose(refund(40, "r-correct"));
 const total = session.refundedSoFar(order.id);
 console.log(`\ncorrected refund 40 MAD → ${corrected.ok ? "accepted" : "blocked"}. total refunded: ${total.amount} ${total.currency} (== committed 200; order is now ${session.world.commitments[0].state.type})`);

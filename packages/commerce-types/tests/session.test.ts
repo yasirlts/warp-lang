@@ -22,8 +22,17 @@ function fulfilledOrder(amount: number) {
   );
 }
 
-function refund(commitment: string, amount: number): { commitment: string; to: CommitmentState; actor: string } {
-  return { commitment, to: { type: "Refunded", amount: { amount, currency: "MAD" }, at: "2026-02-01T00:00:00.000Z" }, actor: seller };
+function refund(
+  commitment: string,
+  amount: number,
+  idempotencyKey?: string,
+): { commitment: string; to: CommitmentState; actor: string; idempotencyKey?: string } {
+  return {
+    commitment,
+    to: { type: "Refunded", amount: { amount, currency: "MAD" }, at: "2026-02-01T00:00:00.000Z" },
+    actor: seller,
+    ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
+  };
 }
 
 describe("createSession — cumulative over-refund (the cross-step gap)", () => {
@@ -31,9 +40,11 @@ describe("createSession — cumulative over-refund (the cross-step gap)", () => 
     const order = fulfilledOrder(200);
     const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
 
-    expect(session.propose(refund(order.id, 80)).ok).toBe(true); // 80 ≤ 200
-    expect(session.propose(refund(order.id, 80)).ok).toBe(true); // 160 ≤ 200
-    const third = session.propose(refund(order.id, 80)); // 240 > 200 — cumulative
+    // Three DISTINCT partial refunds — distinct keys so they accumulate (a retry
+    // with the same key would instead be deduped; see the idempotency tests).
+    expect(session.propose(refund(order.id, 80, "r1")).ok).toBe(true); // 80 ≤ 200
+    expect(session.propose(refund(order.id, 80, "r2")).ok).toBe(true); // 160 ≤ 200
+    const third = session.propose(refund(order.id, 80, "r3")); // 240 > 200 — cumulative
     expect(third.ok).toBe(false);
     if (!third.ok) {
       expect(third.violations[0]?.rule).toBe("I-1");
@@ -49,12 +60,12 @@ describe("createSession — cumulative over-refund (the cross-step gap)", () => 
   it("does NOT advance the ledger or world on a rejected refund", () => {
     const order = fulfilledOrder(200);
     const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
-    session.propose(refund(order.id, 80));
-    session.propose(refund(order.id, 80));
+    session.propose(refund(order.id, 80, "r1"));
+    session.propose(refund(order.id, 80, "r2"));
     const before = session.refundedSoFar(order.id);
     expect(before?.amount).toBe(160);
 
-    const rejected = session.propose(refund(order.id, 80));
+    const rejected = session.propose(refund(order.id, 80, "r3"));
     expect(rejected.ok).toBe(false);
     // unchanged: the rejected refund is not counted.
     expect(session.refundedSoFar(order.id)?.amount).toBe(160);
@@ -67,7 +78,7 @@ describe("createSession — cumulative over-refund (the cross-step gap)", () => 
     const order = fulfilledOrder(200);
     const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
     // Two accepted (cumulative 160 ≤ 200), the third rejected (240 > 200).
-    const verdicts = [80, 80, 80].map((a) => session.propose(refund(order.id, a)).ok);
+    const verdicts = [80, 80, 80].map((a, i) => session.propose(refund(order.id, a, `r${i}`)).ok);
     expect(verdicts).toEqual([true, true, false]);
   });
 });
@@ -124,5 +135,74 @@ describe("createSession — non-refund actions compose guardAction", () => {
     const bad = session.propose({ commitment: draft.id, to: { type: "Fulfilled" }, actor: buyer });
     expect(bad.ok).toBe(false);
     expect(session.world.commitments[0]?.state.type).toBe("Proposed");
+  });
+});
+
+describe("createSession — idempotency & replay-safety", () => {
+  it("a same-key retry is a no-op reporting the original outcome (no double refund)", () => {
+    const order = fulfilledOrder(200);
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+
+    const first = session.propose(refund(order.id, 50, "rk-1"));
+    expect(first.ok).toBe(true);
+    if (first.ok) expect(first.replay).not.toBe(true); // first application, not a replay
+    expect(session.refundedSoFar(order.id)?.amount).toBe(50);
+
+    const retry = session.propose(refund(order.id, 50, "rk-1"));
+    expect(retry.ok).toBe(true);
+    if (retry.ok) expect(retry.replay).toBe(true); // recognized as a replay
+    // the headline: the retry did NOT refund again.
+    expect(session.refundedSoFar(order.id)?.amount).toBe(50);
+  });
+
+  it("a new key applies normally", () => {
+    const order = fulfilledOrder(200);
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+    session.propose(refund(order.id, 50, "rk-1"));
+    const second = session.propose(refund(order.id, 30, "rk-2"));
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.replay).not.toBe(true);
+    expect(session.refundedSoFar(order.id)?.amount).toBe(80);
+  });
+
+  it("distinct refunds still accumulate; the same refund retried does NOT inflate the tally", () => {
+    const order = fulfilledOrder(200);
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+    // Two distinct 80s accumulate to 160…
+    expect(session.propose(refund(order.id, 80, "a")).ok).toBe(true);
+    expect(session.propose(refund(order.id, 80, "b")).ok).toBe(true);
+    expect(session.refundedSoFar(order.id)?.amount).toBe(160);
+    // …retrying the first (same key "a") is a replay — the tally stays 160, NOT 240.
+    const replay = session.propose(refund(order.id, 80, "a"));
+    expect(replay.ok).toBe(true);
+    if (replay.ok) expect(replay.replay).toBe(true);
+    expect(session.refundedSoFar(order.id)?.amount).toBe(160);
+  });
+
+  it("derived-fingerprint fallback dedups an identical keyless retry", () => {
+    const order = fulfilledOrder(200);
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+    const first = session.propose(refund(order.id, 40)); // no key
+    expect(first.ok).toBe(true);
+    const retry = session.propose(refund(order.id, 40)); // identical, no key → same fingerprint
+    expect(retry.ok).toBe(true);
+    if (retry.ok) expect(retry.replay).toBe(true);
+    expect(session.refundedSoFar(order.id)?.amount).toBe(40); // counted once
+  });
+
+  it("a replay does not advance the world", () => {
+    const order = fulfilledOrder(200);
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+    // Full refund moves the order to Refunded.
+    session.propose(refund(order.id, 200, "full"));
+    expect(session.world.commitments[0]?.state.type).toBe("Refunded");
+    const worldBefore = session.world;
+    // Retrying the full refund is a replay — same world object, no re-transition.
+    const replay = session.propose(refund(order.id, 200, "full"));
+    expect(replay.ok).toBe(true);
+    if (replay.ok) {
+      expect(replay.replay).toBe(true);
+      expect(replay.next).toBe(worldBefore);
+    }
   });
 });
