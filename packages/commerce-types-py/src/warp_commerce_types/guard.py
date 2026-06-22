@@ -39,12 +39,23 @@ class World:
 
 @dataclass
 class ProposedAction:
-    """A proposed commerce action: move one commitment in the world to a new state."""
+    """A proposed commerce action: move one commitment in the world to a new state.
+
+    ``idempotency_key`` and ``expected_version`` are runtime inputs (NOT schema
+    fields). ``idempotency_key`` gives a stable identity so a retried action is
+    recognized as a replay (see :func:`create_session`); when omitted a session
+    derives a fingerprint. ``expected_version`` is the version the caller planned
+    against (from :func:`commitment_version`, derived from the commitment's
+    append-only history + state); if it no longer matches, the action is rejected as
+    an optimistic-concurrency CONFLICT. The model schema stays frozen.
+    """
 
     commitment: str
     to: Any
     actor: str
     reason: Optional[str] = None
+    idempotency_key: Optional[str] = None
+    expected_version: Optional[str] = None
 
 
 @dataclass
@@ -82,10 +93,69 @@ class GuardResult:
     next: Optional[World] = None
     violations: List[GuardViolation] = field(default_factory=list)
     alternatives: List[TransitionAlternative] = field(default_factory=list)
+    # Idempotency: True when this accepted result is a replay of an already-applied
+    # action (a no-op; nothing was applied again).
+    replay: bool = False
+    # Optimistic-conflict: set when the rejection is a stale-version CONFLICT
+    # (distinct from an invariant violation). ``expected`` is the caller's planned
+    # version, ``actual`` is the commitment's current version.
+    conflict: bool = False
+    expected: Optional[str] = None
+    actual: Optional[str] = None
 
 
 def _from_invariant(v: InvariantViolation) -> GuardViolation:
     return GuardViolation(rule=v.invariant, message=v.description, fix=v.fix)
+
+
+def _state_fingerprint(s: Any) -> str:
+    """A short fingerprint of a commitment state — the type, plus the amount for a Refunded."""
+    t = s["type"] if isinstance(s, dict) else s.type
+    if t == "Refunded":
+        amt = s["amount"] if isinstance(s, dict) else s.amount
+        a = amt["amount"] if isinstance(amt, dict) else amt.amount
+        cur = amt["currency"] if isinstance(amt, dict) else amt.currency
+        return "Refunded:%s:%s" % (a, cur)
+    return t
+
+
+def commitment_version(c: Commitment) -> str:
+    """The optimistic-concurrency version of a commitment, derived from its existing
+    append-only history + state (history length + a state fingerprint) — NOT a schema
+    field. A caller passes it back as ``ProposedAction.expected_version``.
+
+    Scope: OPTIMISTIC concurrency over the caller's view — it detects a stale plan. It
+    is not a lock, distributed consensus, or a transaction manager; Warp does not
+    serialize concurrent writers."""
+    return "%s:%s" % (len(c.history), _state_fingerprint(c.state))
+
+
+def check_version(target: Commitment, expected_version: Optional[str]) -> Optional[GuardResult]:
+    """If ``expected_version`` is supplied and no longer matches the commitment's
+    current version, return the CONFLICT result; otherwise None. Used by
+    :func:`guard_action` and the session layer."""
+    if expected_version is None:
+        return None
+    actual = commitment_version(target)
+    if expected_version == actual:
+        return None
+    return GuardResult(
+        ok=False,
+        conflict=True,
+        expected=expected_version,
+        actual=actual,
+        violations=[
+            GuardViolation(
+                rule="version-conflict",
+                message="This action was planned against version '%s', but commitment '%s' is now at "
+                "version '%s' — it changed since you planned (a concurrent actor advanced it). The "
+                "change conflicts, so it was not applied." % (expected_version, target.id, actual),
+                fix="Re-read the commitment, recompute its version with commitment_version(), and re-plan "
+                "your action against the current version. This is optimistic concurrency — Warp detects "
+                "the stale plan; it does not lock or serialize writers.",
+            )
+        ],
+    )
 
 
 def _rule_from_transition_error(error: str) -> str:
@@ -146,6 +216,13 @@ def guard_action(world: World, action: ProposedAction) -> GuardResult:
                 )
             ],
         )
+
+    # 0. Optimistic-concurrency check: a stale expected_version means the commitment
+    #    advanced under the caller — reject as a CONFLICT (distinct from an invariant
+    #    violation). Backward-compatible: no expected_version is a no-op.
+    conflict = check_version(target, action.expected_version)
+    if conflict is not None:
+        return conflict
 
     # 1. Validate the proposed move + replay history (composes transition_commitment).
     moved = transition_commitment(target, action.to, action.actor, action.reason)

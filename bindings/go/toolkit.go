@@ -39,6 +39,14 @@ type ProposedAction struct {
 	Commitment string
 	To         gen.CommitmentState
 	Actor      string
+	// IdempotencyKey gives a stable identity so a retried action is recognized as a
+	// replay (see CreateSession); empty means none (a session derives a fingerprint).
+	IdempotencyKey string
+	// ExpectedVersion is the version the caller planned against (from
+	// CommitmentVersion); if it no longer matches, the action is rejected as an
+	// optimistic-concurrency conflict. Empty means unconditional. Both are runtime
+	// inputs, NOT schema fields — the model schema stays frozen.
+	ExpectedVersion string
 }
 
 // GuardViolation is one reason an action or world was rejected.
@@ -65,6 +73,14 @@ type GuardResult struct {
 	Next         *World
 	Violations   []GuardViolation
 	Alternatives []TransitionAlternative
+	// Replay is true when this accepted result is a replay of an already-applied
+	// action (a no-op — nothing was applied again).
+	Replay bool
+	// Conflict is set when the rejection is a stale-version CONFLICT (distinct from
+	// an invariant violation); Expected/Actual are the planned vs current version.
+	Conflict bool
+	Expected string
+	Actual   string
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +251,65 @@ func overRefundBound(target *gen.Commitment, to gen.CommitmentState) *boundHint 
 }
 
 // GuardAction guards a proposed transition-level action: validate the move against
+// stateFingerprint is a short fingerprint of a commitment state — the type, plus
+// the amount for a Refunded.
+func stateFingerprint(s gen.CommitmentState) string {
+	if s.Type == "Refunded" && s.Amount != nil {
+		return fmt.Sprintf("Refunded:%v:%s", s.Amount.Amount, string(s.Amount.Currency))
+	}
+	return s.Type
+}
+
+// CommitmentVersion is the optimistic-concurrency version of a commitment, derived
+// from its existing append-only history + state (history length + a state
+// fingerprint) — NOT a schema field. A caller passes it back as
+// ProposedAction.ExpectedVersion.
+//
+// Scope: OPTIMISTIC concurrency over the caller's view — it detects a stale plan. It
+// is not a lock, distributed consensus, or a transaction manager; Warp does not
+// serialize concurrent writers.
+func CommitmentVersion(c *gen.Commitment) string {
+	return fmt.Sprintf("%d:%s", len(c.History), stateFingerprint(c.State))
+}
+
+// checkVersion returns a CONFLICT result if expectedVersion is supplied and no
+// longer matches the commitment's current version; else nil.
+func checkVersion(target *gen.Commitment, expectedVersion string) *GuardResult {
+	if expectedVersion == "" {
+		return nil
+	}
+	actual := CommitmentVersion(target)
+	if expectedVersion == actual {
+		return nil
+	}
+	return &GuardResult{
+		OK:       false,
+		Conflict: true,
+		Expected: expectedVersion,
+		Actual:   actual,
+		Violations: []GuardViolation{{
+			Rule: "version-conflict",
+			Message: fmt.Sprintf("This action was planned against version '%s', but commitment '%s' is now at version '%s' — it changed since you planned (a concurrent actor advanced it). The change conflicts, so it was not applied.",
+				expectedVersion, target.Id, actual),
+			Fix: "Re-read the commitment, recompute its version with CommitmentVersion(), and re-plan your action against the current version. This is optimistic concurrency — Warp detects the stale plan; it does not lock or serialize writers.",
+		}},
+	}
+}
+
+// actionKey is the identity of an action for replay detection: an explicit
+// IdempotencyKey, else a fingerprint of commitment + target type + amount (for a
+// Refunded) + actor.
+func actionKey(action ProposedAction) string {
+	if action.IdempotencyKey != "" {
+		return "key:" + action.IdempotencyKey
+	}
+	parts := []string{action.Commitment, action.To.Type, action.Actor}
+	if action.To.Type == "Refunded" && action.To.Amount != nil {
+		parts = append(parts, fmt.Sprintf("%v", action.To.Amount.Amount), string(action.To.Amount.Currency))
+	}
+	return "fp:" + strings.Join(parts, "|")
+}
+
 // the table, advance the target's state, and audit the resulting world — composing
 // IsValidTransition + AuditScene. Never panics on rejection.
 func GuardAction(world World, action ProposedAction) GuardResult {
@@ -248,6 +323,13 @@ func GuardAction(world World, action ProposedAction) GuardResult {
 				Fix:     "Reference a commitment id that exists in the world you pass to GuardAction.",
 			}},
 		}
+	}
+
+	// Optimistic-concurrency check: a stale ExpectedVersion means the commitment
+	// advanced under the caller — reject as a CONFLICT (distinct from an invariant
+	// violation). Backward-compatible: empty ExpectedVersion is a no-op.
+	if conflict := checkVersion(target, action.ExpectedVersion); conflict != nil {
+		return *conflict
 	}
 
 	if !IsValidTransition("commitment", State{Type: target.State.Type}, State{Type: action.To.Type}) {
@@ -308,11 +390,14 @@ type tally struct {
 type Session struct {
 	world  World
 	ledger map[string]*tally
+	// applied holds keys of actions ALREADY APPLIED. Per-session, in-memory —
+	// durable cross-session idempotency is not provided (see the docs).
+	applied map[string]bool
 }
 
 // CreateSession returns a Session holding the given world.
 func CreateSession(world World) *Session {
-	return &Session{world: world, ledger: map[string]*tally{}}
+	return &Session{world: world, ledger: map[string]*tally{}, applied: map[string]bool{}}
 }
 
 // World returns the current accumulated world.
@@ -344,6 +429,19 @@ func isCumulativeOverRefund(order *gen.Commitment, total float64, currency strin
 // ledger), applies it on success, and returns the same verdict as GuardAction. On
 // rejection the world is not advanced.
 func (s *Session) Propose(action ProposedAction) GuardResult {
+	// Ordering: replay → conflict → process. A same-key retry is a replay (no-op);
+	// a different action planned against a stale version is a conflict.
+	key := actionKey(action)
+	if s.applied[key] {
+		w := s.world
+		return GuardResult{OK: true, Next: &w, Replay: true}
+	}
+	if c := findCommitment(&s.world, action.Commitment); c != nil {
+		if conflict := checkVersion(c, action.ExpectedVersion); conflict != nil {
+			return *conflict
+		}
+	}
+
 	if action.To.Type == "Refunded" && action.To.Amount != nil {
 		order := findCommitment(&s.world, action.Commitment)
 		if order == nil || !IsValidTransition("commitment", State{Type: order.State.Type}, State{Type: "Refunded"}) {
@@ -381,10 +479,12 @@ func (s *Session) Propose(action ProposedAction) GuardResult {
 				if verdict.OK {
 					s.world = *verdict.Next
 					s.ledger[action.Commitment] = &tally{amount: cumulative, currency: cur, count: priorCount + 1}
+					s.applied[key] = true
 				}
 				return verdict
 			}
 			s.ledger[action.Commitment] = &tally{amount: cumulative, currency: cur, count: priorCount + 1}
+			s.applied[key] = true
 			w := s.world
 			return GuardResult{OK: true, Next: &w}
 		}
@@ -393,6 +493,7 @@ func (s *Session) Propose(action ProposedAction) GuardResult {
 	verdict := GuardAction(s.world, action)
 	if verdict.OK {
 		s.world = *verdict.Next
+		s.applied[key] = true
 	}
 	return verdict
 }

@@ -334,7 +334,8 @@ once.
 
 > **Scope:** per-session and **in-memory**. Durable, cross-session idempotency would
 > need a persistent store and is **not** provided here — a known limit, not a
-> guarantee the session makes. TypeScript first; other bindings on the roadmap.
+> guarantee the session makes. Available in **all four bindings** (TypeScript,
+> Python, Rust, Go).
 
 Runnable: [`examples/idempotency.mjs`](packages/commerce-types/examples/idempotency.mjs).
 
@@ -364,8 +365,12 @@ where useful.
 > **Scope:** this is **optimistic** concurrency over the caller's world view — it
 > detects that a planned-against version no longer matches. It is **not** a lock,
 > distributed consensus, or a transaction manager, and Warp does **not** serialize
-> concurrent writers; those need infrastructure Warp is not. TypeScript first; other
-> bindings on the roadmap.
+> concurrent writers; those need infrastructure Warp is not. Available in **all four
+> bindings** (TypeScript, Python, Rust, Go) — the version *string* differs in form
+> between the history-appending bindings (TS/Python: `"2:Accepted"`) and the
+> conformance-shaped ones (Rust/Go advance state without re-appending history, so the
+> version moves via the state fingerprint: `"0:Accepted"` → `"0:Active"`); the
+> conflict verdict is identical.
 
 Runnable: [`examples/concurrency.mjs`](packages/commerce-types/examples/concurrency.mjs).
 

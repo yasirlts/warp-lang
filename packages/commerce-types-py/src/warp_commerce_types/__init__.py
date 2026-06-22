@@ -100,6 +100,8 @@ from .guard import (  # noqa: F401
     ProposedAction,
     TransitionAlternative,
     World,
+    check_version,
+    commitment_version,
     guard_action,
     guard_object,
 )

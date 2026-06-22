@@ -44,11 +44,39 @@ pub struct World {
 }
 
 /// A proposed commerce action: move one commitment in the world to a new state.
+///
+/// `idempotency_key` and `expected_version` are runtime inputs (NOT schema fields).
+/// `idempotency_key` gives a stable identity so a retried action is recognized as a
+/// replay (see [`create_session`]); when omitted a session derives a fingerprint.
+/// `expected_version` is the version the caller planned against (from
+/// [`commitment_version`]); if it no longer matches, the action is rejected as an
+/// optimistic-concurrency conflict. The model schema stays frozen.
 #[derive(Debug, Clone)]
 pub struct ProposedAction {
     pub commitment: String,
     pub to: CommitmentState,
     pub actor: String,
+    pub idempotency_key: Option<String>,
+    pub expected_version: Option<String>,
+}
+
+impl ProposedAction {
+    /// A proposed action with no idempotency key or expected version (the common
+    /// case). Set `.idempotency_key` / `.expected_version` afterwards for
+    /// replay-safety / optimistic concurrency.
+    pub fn new(
+        commitment: impl Into<String>,
+        to: CommitmentState,
+        actor: impl Into<String>,
+    ) -> Self {
+        ProposedAction {
+            commitment: commitment.into(),
+            to,
+            actor: actor.into(),
+            idempotency_key: None,
+            expected_version: None,
+        }
+    }
 }
 
 /// One reason an action or world was rejected — written for an agent to act on.
@@ -78,16 +106,55 @@ pub struct TransitionAlternative {
 pub enum GuardResult {
     Accepted {
         next: World,
+        /// True when this accepted result is a replay of an already-applied action
+        /// (a no-op — nothing was applied again).
+        replay: bool,
     },
     Rejected {
         violations: Vec<GuardViolation>,
         alternatives: Vec<TransitionAlternative>,
+        /// Set when the rejection is a stale-version CONFLICT (distinct from an
+        /// invariant violation). `expected`/`actual` are the planned vs current
+        /// version.
+        conflict: bool,
+        expected: Option<String>,
+        actual: Option<String>,
     },
 }
 
 impl GuardResult {
+    /// An accepted result (not a replay).
+    pub fn accepted(next: World) -> Self {
+        GuardResult::Accepted {
+            next,
+            replay: false,
+        }
+    }
+    /// An accepted result that is a replay of an already-applied action.
+    pub fn replayed(next: World) -> Self {
+        GuardResult::Accepted { next, replay: true }
+    }
+    /// A rejection that is not a conflict (an invariant/transition violation).
+    pub fn rejected(
+        violations: Vec<GuardViolation>,
+        alternatives: Vec<TransitionAlternative>,
+    ) -> Self {
+        GuardResult::Rejected {
+            violations,
+            alternatives,
+            conflict: false,
+            expected: None,
+            actual: None,
+        }
+    }
     pub fn is_ok(&self) -> bool {
         matches!(self, GuardResult::Accepted { .. })
+    }
+    pub fn is_replay(&self) -> bool {
+        matches!(self, GuardResult::Accepted { replay: true, .. })
+    }
+    pub fn is_conflict(&self) -> bool {
+        matches!(self, GuardResult::Rejected { conflict: true, .. })
     }
 }
 
@@ -211,6 +278,73 @@ fn violations_from_ids(ids: &[String]) -> Vec<GuardViolation> {
 }
 
 // ---------------------------------------------------------------------------
+// Optimistic-concurrency version + idempotency key (both runtime-derived; no schema)
+// ---------------------------------------------------------------------------
+
+/// A short fingerprint of a commitment state — the type, plus the amount for a Refunded.
+fn state_fingerprint(s: &CommitmentState) -> String {
+    if let CommitmentState::Refunded { amount, .. } = s {
+        format!("Refunded:{}:{}", amount.amount, amount.currency)
+    } else {
+        commitment_state_type(s).to_string()
+    }
+}
+
+/// The optimistic-concurrency version of a commitment, derived from its existing
+/// append-only history + state (history length + a state fingerprint) — NOT a schema
+/// field. A caller passes it back as `ProposedAction.expected_version`.
+///
+/// Scope: OPTIMISTIC concurrency over the caller's view — it detects a stale plan. It
+/// is not a lock, distributed consensus, or a transaction manager; Warp does not
+/// serialize concurrent writers.
+pub fn commitment_version(c: &Commitment) -> String {
+    format!("{}:{}", c.history.len(), state_fingerprint(&c.state))
+}
+
+/// If `expected_version` is supplied and no longer matches the commitment's current
+/// version, return the CONFLICT result; else None. Used by `guard_action` and the
+/// session layer.
+pub fn check_version(target: &Commitment, expected_version: Option<&str>) -> Option<GuardResult> {
+    let expected = expected_version?;
+    let actual = commitment_version(target);
+    if expected == actual {
+        return None;
+    }
+    Some(GuardResult::Rejected {
+        violations: vec![GuardViolation {
+            rule: "version-conflict".to_string(),
+            message: format!(
+                "This action was planned against version '{}', but commitment '{}' is now at version '{}' — it changed since you planned (a concurrent actor advanced it). The change conflicts, so it was not applied.",
+                expected, target.id, actual
+            ),
+            fix: "Re-read the commitment, recompute its version with commitment_version(), and re-plan your action against the current version. This is optimistic concurrency — Warp detects the stale plan; it does not lock or serialize writers.".to_string(),
+        }],
+        alternatives: vec![],
+        conflict: true,
+        expected: Some(expected.to_string()),
+        actual: Some(actual),
+    })
+}
+
+/// The identity of an action for replay detection: an explicit `idempotency_key`,
+/// else a fingerprint of commitment + target type + amount (for a Refunded) + actor.
+fn action_key(action: &ProposedAction) -> String {
+    if let Some(k) = &action.idempotency_key {
+        return format!("key:{k}");
+    }
+    let mut parts = vec![
+        action.commitment.clone(),
+        commitment_state_type(&action.to).to_string(),
+        action.actor.clone(),
+    ];
+    if let CommitmentState::Refunded { amount, .. } = &action.to {
+        parts.push(amount.amount.to_string());
+        parts.push(amount.currency.clone());
+    }
+    format!("fp:{}", parts.join("|"))
+}
+
+// ---------------------------------------------------------------------------
 // Guardrail
 // ---------------------------------------------------------------------------
 
@@ -242,8 +376,8 @@ fn over_refund_bound(target: &Commitment, to: &CommitmentState) -> Option<(Strin
 /// `is_valid_transition` + `audit_scene`. Never panics on rejection.
 pub fn guard_action(world: &World, action: &ProposedAction) -> GuardResult {
     let Some(target) = world.commitments.iter().find(|c| c.id == action.commitment) else {
-        return GuardResult::Rejected {
-            violations: vec![GuardViolation {
+        return GuardResult::rejected(
+            vec![GuardViolation {
                 rule: "unknown-commitment".to_string(),
                 message: format!(
                     "No commitment '{}' exists in the current world; an action must target a commitment that is present.",
@@ -251,9 +385,16 @@ pub fn guard_action(world: &World, action: &ProposedAction) -> GuardResult {
                 ),
                 fix: "Reference a commitment id that exists in the world you pass to guard_action.".to_string(),
             }],
-            alternatives: vec![],
-        };
+            vec![],
+        );
     };
+
+    // 0. Optimistic-concurrency check: a stale expected_version means the commitment
+    //    advanced under the caller — reject as a CONFLICT (distinct from an invariant
+    //    violation). Backward-compatible: no expected_version is a no-op.
+    if let Some(conflict) = check_version(target, action.expected_version.as_deref()) {
+        return conflict;
+    }
 
     // 1. Validate the proposed move (composes is_valid_transition; the table = I-2).
     let from_json = json!({ "type": commitment_state_type(&target.state) });
@@ -270,10 +411,7 @@ pub fn guard_action(world: &World, action: &ProposedAction) -> GuardResult {
             "Only the model's valid transitions are allowed. {} Pick one of those, or model a reversal as a new forward commitment.",
             summarize_alternatives(&alternatives)
         );
-        return GuardResult::Rejected {
-            violations: vec![v],
-            alternatives,
-        };
+        return GuardResult::rejected(vec![v], alternatives);
     }
 
     // 2. Build the resulting world: the target commitment, with its state advanced.
@@ -301,13 +439,13 @@ pub fn guard_action(world: &World, action: &ProposedAction) -> GuardResult {
     let ids = audit_scene(&next.commitments, &next.fulfillments, &next.parties);
     if !ids.is_empty() {
         let bound = over_refund_bound(target, &action.to);
-        return GuardResult::Rejected {
-            violations: violations_from_ids(&ids),
-            alternatives: commitment_alternatives(&target.state, bound),
-        };
+        return GuardResult::rejected(
+            violations_from_ids(&ids),
+            commitment_alternatives(&target.state, bound),
+        );
     }
 
-    GuardResult::Accepted { next }
+    GuardResult::accepted(next)
 }
 
 /// Guard a fully-constructed world (the object-level case). A thin layer over
@@ -319,18 +457,13 @@ pub fn guard_object(
 ) -> GuardResult {
     let ids = audit_scene(commitments, fulfillments, parties);
     if !ids.is_empty() {
-        return GuardResult::Rejected {
-            violations: violations_from_ids(&ids),
-            alternatives: vec![],
-        };
+        return GuardResult::rejected(violations_from_ids(&ids), vec![]);
     }
-    GuardResult::Accepted {
-        next: World {
-            commitments: commitments.to_vec(),
-            fulfillments: fulfillments.to_vec(),
-            parties: parties.to_vec(),
-        },
-    }
+    GuardResult::accepted(World {
+        commitments: commitments.to_vec(),
+        fulfillments: fulfillments.to_vec(),
+        parties: parties.to_vec(),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -347,6 +480,9 @@ struct Tally {
 pub struct Session {
     world: World,
     ledger: HashMap<String, Tally>,
+    /// Idempotency: keys of actions ALREADY APPLIED. Per-session, in-memory —
+    /// durable cross-session idempotency is not provided (see the module docs).
+    applied: std::collections::HashSet<String>,
 }
 
 /// Is a cumulative refund of `total` over the committed amount? Derived from the
@@ -385,6 +521,23 @@ impl Session {
     /// ledger), apply it on success, and return the same verdict as
     /// `guard_action`. On rejection the world is not advanced.
     pub fn propose(&mut self, action: &ProposedAction) -> GuardResult {
+        // Ordering: replay → conflict → process. A same-key retry is a replay
+        // (no-op); a different action planned against a stale version is a conflict.
+        let key = action_key(action);
+        if self.applied.contains(&key) {
+            return GuardResult::replayed(self.world.clone());
+        }
+        if let Some(c) = self
+            .world
+            .commitments
+            .iter()
+            .find(|c| c.id == action.commitment)
+        {
+            if let Some(conflict) = check_version(c, action.expected_version.as_deref()) {
+                return conflict;
+            }
+        }
+
         if let CommitmentState::Refunded { amount: refund, .. } = &action.to {
             let order = self
                 .world
@@ -418,8 +571,8 @@ impl Session {
 
                     if is_cumulative_over_refund(&order, cumulative, &cur) {
                         let remaining = (committed - prior_amt).max(0.0);
-                        return GuardResult::Rejected {
-                            violations: vec![GuardViolation {
+                        return GuardResult::rejected(
+                            vec![GuardViolation {
                                 rule: "I-1".to_string(),
                                 message: format!(
                                     "Cumulative refunds on {} would reach {} {} across {} refund(s), but only {} {} was committed — value is not conserved across the session (the point-in-time check sees each refund alone).",
@@ -430,7 +583,7 @@ impl Session {
                                     fmt_amount(remaining), cur, fmt_amount(committed), fmt_amount(prior_amt)
                                 ),
                             }],
-                            alternatives: vec![TransitionAlternative {
+                            vec![TransitionAlternative {
                                 to: "Refunded".to_string(),
                                 label: move_label("Refunded"),
                                 bounded: Some(format!(
@@ -438,7 +591,7 @@ impl Session {
                                     fmt_amount(committed), cur, fmt_amount(remaining), cur
                                 )),
                             }],
-                        };
+                        );
                     }
 
                     // Accepted refund. Keep the order Fulfilled for a PARTIAL refund;
@@ -446,7 +599,7 @@ impl Session {
                     let fully = money_equals(cumulative, committed, &cur);
                     if fully {
                         let verdict = guard_action(&self.world, action);
-                        if let GuardResult::Accepted { next } = &verdict {
+                        if let GuardResult::Accepted { next, .. } = &verdict {
                             self.world = next.clone();
                             self.ledger.insert(
                                 action.commitment.clone(),
@@ -456,6 +609,7 @@ impl Session {
                                     count: prior_count + 1,
                                 },
                             );
+                            self.applied.insert(key);
                         }
                         return verdict;
                     }
@@ -467,17 +621,17 @@ impl Session {
                             count: prior_count + 1,
                         },
                     );
-                    return GuardResult::Accepted {
-                        next: self.world.clone(),
-                    };
+                    self.applied.insert(key);
+                    return GuardResult::accepted(self.world.clone());
                 }
             }
         }
 
         // Non-refund action: pure compose over guard_action.
         let verdict = guard_action(&self.world, action);
-        if let GuardResult::Accepted { next } = &verdict {
+        if let GuardResult::Accepted { next, .. } = &verdict {
             self.world = next.clone();
+            self.applied.insert(key);
         }
         verdict
     }
@@ -487,6 +641,7 @@ pub fn create_session(world: World) -> Session {
     Session {
         world,
         ledger: HashMap::new(),
+        applied: std::collections::HashSet::new(),
     }
 }
 
@@ -561,7 +716,7 @@ pub fn unify(sources: &[UnifySource], id: Option<&str>) -> UnifyResult {
 
     match guard_object(std::slice::from_ref(&commitment), &[], &[]) {
         GuardResult::Rejected { violations, .. } => UnifyResult::Rejected { violations },
-        GuardResult::Accepted { next } => UnifyResult::Unified {
+        GuardResult::Accepted { next, .. } => UnifyResult::Unified {
             commitment: Box::new(commitment),
             world: next,
         },
@@ -706,6 +861,7 @@ mod tests {
             GuardResult::Rejected {
                 violations,
                 alternatives,
+                ..
             } => (violations, alternatives),
             GuardResult::Accepted { .. } => panic!("expected Rejected"),
         }
@@ -743,11 +899,7 @@ mod tests {
             fulfillments: vec![],
             parties: vec![],
         };
-        let action = ProposedAction {
-            commitment: "order_1".to_string(),
-            to: CommitmentState::Accepted,
-            actor: "agent".to_string(),
-        };
+        let action = ProposedAction::new("order_1", CommitmentState::Accepted, "agent");
         let r = guard_action(&world, &action);
         let (violations, alternatives) = rejected(&r);
         assert_eq!(violations[0].rule, "I-2");
@@ -764,11 +916,7 @@ mod tests {
             fulfillments: vec![],
             parties: vec![],
         };
-        let action = ProposedAction {
-            commitment: "order_1".to_string(),
-            to: refund_state(500.0),
-            actor: "agent".to_string(),
-        };
+        let action = ProposedAction::new("order_1", refund_state(500.0), "agent");
         let r = guard_action(&world, &action);
         let (violations, alternatives) = rejected(&r);
         assert!(violations.iter().any(|v| v.rule == "I-1"));
@@ -785,11 +933,7 @@ mod tests {
             fulfillments: vec![],
             parties: vec![],
         };
-        let action = ProposedAction {
-            commitment: "nope".to_string(),
-            to: CommitmentState::Proposed,
-            actor: "a".to_string(),
-        };
+        let action = ProposedAction::new("nope", CommitmentState::Proposed, "a");
         let verdict = guard_action(&world, &action);
         let (violations, _) = rejected(&verdict);
         assert_eq!(violations[0].rule, "unknown-commitment");
@@ -803,14 +947,16 @@ mod tests {
             fulfillments: vec![],
             parties: vec![],
         });
-        let r = |amt: f64| ProposedAction {
-            commitment: "order_1".to_string(),
-            to: refund_state(amt),
-            actor: "a".to_string(),
+        // Distinct keys so these distinct partial refunds accumulate (a same-key
+        // retry would be deduped — see the idempotency test).
+        let r = |amt: f64, key: &str| {
+            let mut a = ProposedAction::new("order_1", refund_state(amt), "a");
+            a.idempotency_key = Some(key.to_string());
+            a
         };
-        assert!(s.propose(&r(80.0)).is_ok());
-        assert!(s.propose(&r(80.0)).is_ok());
-        let third = s.propose(&r(80.0));
+        assert!(s.propose(&r(80.0, "r1")).is_ok());
+        assert!(s.propose(&r(80.0, "r2")).is_ok());
+        let third = s.propose(&r(80.0, "r3"));
         let (violations, alternatives) = rejected(&third);
         assert_eq!(violations[0].rule, "I-1");
         assert!(violations[0].message.contains("240"));
@@ -828,11 +974,7 @@ mod tests {
             fulfillments: vec![],
             parties: vec![],
         });
-        let v = s.propose(&ProposedAction {
-            commitment: "order_1".to_string(),
-            to: refund_state(200.0),
-            actor: "a".to_string(),
-        });
+        let v = s.propose(&ProposedAction::new("order_1", refund_state(200.0), "a"));
         assert!(v.is_ok());
         assert_eq!(
             commitment_state_type(&s.world().commitments[0].state),
@@ -888,11 +1030,7 @@ mod tests {
 
     #[test]
     fn emitters_and_not_representable() {
-        let refund = ProposedAction {
-            commitment: "order_123".to_string(),
-            to: refund_state(40.0),
-            actor: "a".to_string(),
-        };
+        let refund = ProposedAction::new("order_123", refund_state(40.0), "a");
         match to_stripe_action(&refund) {
             EmitResult::Descriptor { descriptor, .. } => {
                 assert_eq!(descriptor["kind"], "stripe.refund");
@@ -905,14 +1043,141 @@ mod tests {
             EmitResult::Descriptor { descriptor, .. } => assert_eq!(descriptor["amount"], "40"),
             EmitResult::NotRepresentable { .. } => panic!("expected descriptor"),
         }
-        let accept = ProposedAction {
-            commitment: "order_123".to_string(),
-            to: CommitmentState::Accepted,
-            actor: "a".to_string(),
-        };
+        let accept = ProposedAction::new("order_123", CommitmentState::Accepted, "a");
         match to_stripe_action(&accept) {
             EmitResult::NotRepresentable { reason, .. } => assert!(reason.contains("Accepted")),
             EmitResult::Descriptor { .. } => panic!("expected not-representable"),
         }
+    }
+
+    // --- F4 idempotency + F3 optimistic-conflict (mirror the TS suites) -------
+
+    fn accepted_order(id: &str) -> Commitment {
+        serde_json::from_value(json!({
+            "id": id,
+            "parties": { "initiator": "buyer", "counterparty": "seller", "intermediaries": [] },
+            "subject": { "offered": [], "requested": [
+                { "id": "v", "form": { "kind": "Money", "money": { "amount": 200, "currency": "MAD" } }, "quantity": 1, "state": { "type": "Available" } }
+            ] },
+            "state": { "type": "Accepted" },
+            "history": [],
+            "children": [],
+            "created_at": "2026-01-02T08:00:00.000Z"
+        }))
+        .expect("valid commitment")
+    }
+
+    fn refund_keyed(amount: f64, key: &str) -> ProposedAction {
+        let mut a = ProposedAction::new("order_1", refund_state(amount), "a");
+        a.idempotency_key = Some(key.to_string());
+        a
+    }
+
+    #[test]
+    fn same_key_retry_is_replay_no_double_refund() {
+        let mut s = create_session(World {
+            commitments: vec![fulfilled_order("order_1", 200.0)],
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        let first = s.propose(&refund_keyed(50.0, "rk-1"));
+        assert!(first.is_ok() && !first.is_replay());
+        assert_eq!(s.refunded_so_far("order_1").unwrap().amount, 50.0);
+        let retry = s.propose(&refund_keyed(50.0, "rk-1"));
+        assert!(retry.is_ok() && retry.is_replay());
+        assert_eq!(s.refunded_so_far("order_1").unwrap().amount, 50.0); // no double refund
+    }
+
+    #[test]
+    fn fingerprint_fallback_dedups_keyless_retry() {
+        let mut s = create_session(World {
+            commitments: vec![fulfilled_order("order_1", 200.0)],
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        assert!(s
+            .propose(&ProposedAction::new("order_1", refund_state(40.0), "a"))
+            .is_ok());
+        let retry = s.propose(&ProposedAction::new("order_1", refund_state(40.0), "a"));
+        assert!(retry.is_ok() && retry.is_replay());
+        assert_eq!(s.refunded_so_far("order_1").unwrap().amount, 40.0); // counted once
+    }
+
+    #[test]
+    fn stale_version_is_a_conflict_not_applied() {
+        let mut s = create_session(World {
+            commitments: vec![accepted_order("order_1")],
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        let planned = commitment_version(&s.world().commitments[0]);
+
+        let mut a = ProposedAction::new("order_1", CommitmentState::Active, "s");
+        a.expected_version = Some(planned.clone());
+        a.idempotency_key = Some("A".to_string());
+        assert!(s.propose(&a).is_ok());
+        let after = commitment_version(&s.world().commitments[0]);
+        assert_ne!(after, planned);
+
+        let disputed = CommitmentState::Disputed {
+            by: "buyer".to_string(),
+            reason: "x".to_string(),
+            opened_at: "2026-03-01T00:00:00.000Z".to_string(),
+        };
+        let mut b = ProposedAction::new("order_1", disputed, "b");
+        b.expected_version = Some(planned.clone());
+        b.idempotency_key = Some("B".to_string());
+        let verdict = s.propose(&b);
+        assert!(verdict.is_conflict());
+        if let GuardResult::Rejected {
+            violations,
+            conflict,
+            expected,
+            actual,
+            ..
+        } = &verdict
+        {
+            assert!(conflict);
+            assert_eq!(expected.as_deref(), Some(planned.as_str()));
+            assert_eq!(actual.as_deref(), Some(after.as_str()));
+            assert_eq!(violations[0].rule, "version-conflict");
+        }
+        assert_eq!(
+            commitment_state_type(&s.world().commitments[0].state),
+            "Active"
+        ); // not applied
+    }
+
+    #[test]
+    fn no_expected_version_is_backward_compatible() {
+        let mut s = create_session(World {
+            commitments: vec![accepted_order("order_1")],
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        assert!(s
+            .propose(&ProposedAction::new(
+                "order_1",
+                CommitmentState::Active,
+                "s"
+            ))
+            .is_ok());
+    }
+
+    #[test]
+    fn replay_is_not_conflict() {
+        let mut s = create_session(World {
+            commitments: vec![accepted_order("order_1")],
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        let planned = commitment_version(&s.world().commitments[0]);
+        let mut a = ProposedAction::new("order_1", CommitmentState::Active, "s");
+        a.expected_version = Some(planned.clone());
+        a.idempotency_key = Some("A".to_string());
+        s.propose(&a);
+        // planned is now stale, but the same key is a replay, not a conflict.
+        let replay = s.propose(&a);
+        assert!(replay.is_replay() && !replay.is_conflict());
     }
 }
