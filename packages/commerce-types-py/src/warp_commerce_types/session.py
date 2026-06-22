@@ -27,7 +27,15 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from ._models import Commitment, CommitmentStateRefunded, Money
-from .guard import GuardResult, GuardViolation, ProposedAction, TransitionAlternative, World, guard_action
+from .guard import (
+    GuardResult,
+    GuardViolation,
+    ProposedAction,
+    TransitionAlternative,
+    World,
+    check_version,
+    guard_action,
+)
 from .invariants import check_i1_value_conservation
 from .money import add, money_equals
 from .transitions import _type_of, is_valid_commitment_transition
@@ -36,6 +44,22 @@ from .transitions import _type_of, is_valid_commitment_transition
 def _fmt(x: float) -> str:
     """Print whole amounts without a trailing .0 (200, not 200.0)."""
     return str(int(x)) if float(x).is_integer() else str(x)
+
+
+def _action_key(action: ProposedAction) -> str:
+    """The identity of an action for replay detection. An explicit
+    ``idempotency_key`` is used when supplied; otherwise a fingerprint is derived
+    from commitment + target type + amount (for a Refunded) + actor. Distinct
+    operations therefore need distinct keys to be applied separately."""
+    if action.idempotency_key is not None:
+        return "key:%s" % action.idempotency_key
+    parts = [action.commitment, _type_of(action.to), str(action.actor)]
+    if _type_of(action.to) == "Refunded":
+        amt = action.to["amount"] if isinstance(action.to, dict) else action.to.amount
+        a = amt["amount"] if isinstance(amt, dict) else amt.amount
+        cur = amt["currency"] if isinstance(amt, dict) else amt.currency
+        parts.extend([str(a), cur])
+    return "fp:%s" % "|".join(parts)
 
 
 def _committed_total(c: Commitment) -> Optional[Money]:
@@ -74,6 +98,9 @@ class Session:
     def __init__(self, initial_world: World) -> None:
         self._world = initial_world
         self._ledger: Dict[str, Dict[str, Any]] = {}  # commitment_id -> {total: Money, count: int}
+        # Idempotency: keys of actions ALREADY APPLIED in this session. Per-session,
+        # in-memory — durable cross-session idempotency is not provided (see docs).
+        self._applied: set = set()
 
     @property
     def world(self) -> World:
@@ -88,7 +115,26 @@ class Session:
     def propose(self, action: ProposedAction) -> GuardResult:
         """Validate ``action`` against the accumulated world (and the cross-step
         refund ledger), apply it on success, and return the same verdict as
-        :func:`guard_action`. On rejection the world is not advanced."""
+        :func:`guard_action`. On rejection the world is not advanced.
+
+        Ordering: replay check → conflict check → process. A same-key retry is a
+        replay (no-op); a different action planned against a stale version is a
+        conflict; an unsafe action is an invariant violation."""
+        key = _action_key(action)
+        # Replay: an already-applied action is a no-op (world not advanced).
+        if key in self._applied:
+            return GuardResult(ok=True, next=self._world, replay=True)
+
+        # Optimistic-concurrency conflict (distinct from a replay): if the action was
+        # planned against a version the commitment has since moved past, reject as a
+        # CONFLICT. Checked here too because the partial-refund path does not route
+        # through guard_action.
+        conflict_target = next((c for c in self._world.commitments if str(c.id) == action.commitment), None)
+        if conflict_target is not None:
+            conflict = check_version(conflict_target, action.expected_version)
+            if conflict is not None:
+                return conflict
+
         if _type_of(action.to) == "Refunded":
             order = next((c for c in self._world.commitments if str(c.id) == action.commitment), None)
             # If the order can't legally reach Refunded from its current state (e.g. a
@@ -145,14 +191,17 @@ class Session:
                         return verdict
                     self._world = verdict.next
                     self._ledger[action.commitment] = {"total": new_total, "count": prior_count + 1}
+                    self._applied.add(key)
                     return verdict
                 self._ledger[action.commitment] = {"total": new_total, "count": prior_count + 1}
+                self._applied.add(key)
                 return GuardResult(ok=True, next=self._world)
 
         # Non-refund action: pure compose over guard_action.
         verdict = guard_action(self._world, action)
         if verdict.ok and verdict.next is not None:
             self._world = verdict.next
+            self._applied.add(key)
         return verdict
 
 

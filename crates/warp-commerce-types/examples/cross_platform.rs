@@ -70,15 +70,12 @@ fn main() {
         // An agent over-refunds 500 vs 200 — caught with bounded guidance.
         let over = guard_action(
             &world,
-            &ProposedAction {
-                commitment: "order_123".into(),
-                to: refund(500.0),
-                actor: "agent".into(),
-            },
+            &ProposedAction::new("order_123", refund(500.0), "agent"),
         );
         if let GuardResult::Rejected {
             violations,
             alternatives,
+            ..
         } = &over
         {
             let b = alternatives
@@ -93,11 +90,7 @@ fn main() {
         }
 
         // A valid refund of 40 MAD: validate, then emit the Stripe-shaped descriptor.
-        let action = ProposedAction {
-            commitment: "order_123".into(),
-            to: refund(40.0),
-            actor: "agent".into(),
-        };
+        let action = ProposedAction::new("order_123", refund(40.0), "agent");
         let verdict = guard_action(&world, &action);
         println!("\nvalid refund 40 MAD -> accepted: {}", verdict.is_ok());
         if verdict.is_ok() {

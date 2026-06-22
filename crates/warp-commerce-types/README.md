@@ -21,13 +21,18 @@ cross-check.
   `audit_scene`, and `breakdown_is_valid` (`money_breakdown_sum`).
 - `src/toolkit.rs` — the **agent toolkit**: the planning oracle
   (`valid_transitions`), guardrail (`guard_action` / `guard_object`), session
-  coherence (`create_session`), and interop (`unify` + `to_*_action` emitters). A
+  coherence (`create_session`, incl. **idempotency / replay-safety** via
+  `idempotency_key` and **optimistic-conflict** via `expected_version` /
+  `commitment_version`), and interop (`unify` + `to_*_action` emitters). A
   composition over `runtime.rs` + the generated table, behaviour-equivalent to the
-  TypeScript / Python / Go toolkits (same verdicts on the same scenarios; the four
-  `examples/*.rs` run them). Two honest binding limits, documented in the module:
+  TypeScript / Python / Go toolkits (same verdicts on the same scenarios; the
+  `examples/*.rs` run them). Honest binding notes, documented in the module:
   `audit_scene` returns invariant *ids*, so guard messages are standard
-  per-invariant text; and the conformance-focused runtime ships no platform inbound
-  mappers, so `unify` is platform-agnostic (callers map platform objects via serde).
+  per-invariant text; the conformance-focused runtime ships no platform inbound
+  mappers, so `unify` is platform-agnostic (callers map platform objects via serde);
+  and because that runtime advances state without re-appending history, the
+  optimistic-concurrency version moves via the state fingerprint (`"0:Accepted"` →
+  `"0:Active"`) rather than the history length — the conflict verdict is identical.
 - `src/bin/crosscheck-rust.rs` — the `crosscheck-rust` binary: emits per-fixture
   verdicts in the shared JSON shape for the three-way cross-check.
 

@@ -50,15 +50,12 @@ fn main() {
     // 1) An invalid revert — rejected WITH the legal alternatives.
     let verdict = guard_action(
         &world,
-        &ProposedAction {
-            commitment: "order_1".into(),
-            to: CommitmentState::Accepted,
-            actor: "support_agent".into(),
-        },
+        &ProposedAction::new("order_1", CommitmentState::Accepted, "support_agent"),
     );
     if let GuardResult::Rejected {
         violations,
         alternatives,
+        ..
     } = &verdict
     {
         println!(
@@ -84,11 +81,7 @@ fn main() {
         let disputed: CommitmentState = serde_json::from_value(json!({"type":"Disputed","by":"seller","reason":"customer dispute","opened_at":"2026-03-01T00:00:00.000Z"})).unwrap();
         let retry = guard_action(
             &world,
-            &ProposedAction {
-                commitment: "order_1".into(),
-                to: disputed,
-                actor: "support_agent".into(),
-            },
+            &ProposedAction::new("order_1", disputed, "support_agent"),
         );
         println!("Retry accepted? {}", retry.is_ok());
     }
@@ -102,15 +95,12 @@ fn main() {
     };
     let over = guard_action(
         &world2,
-        &ProposedAction {
-            commitment: "order_2".into(),
-            to: refund(500.0),
-            actor: "support_agent".into(),
-        },
+        &ProposedAction::new("order_2", refund(500.0), "support_agent"),
     );
     if let GuardResult::Rejected {
         violations,
         alternatives,
+        ..
     } = &over
     {
         let refunded = alternatives
@@ -124,11 +114,7 @@ fn main() {
         );
         let corrected = guard_action(
             &world2,
-            &ProposedAction {
-                commitment: "order_2".into(),
-                to: refund(200.0),
-                actor: "support_agent".into(),
-            },
+            &ProposedAction::new("order_2", refund(200.0), "support_agent"),
         );
         println!("Corrected refund (200 MAD) accepted? {}", corrected.is_ok());
     }

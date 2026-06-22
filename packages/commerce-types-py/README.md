@@ -93,6 +93,12 @@ to_stripe_action(refund_action).descriptor   # {"kind": "stripe.refund", ...} �
 - **`create_session`** — accumulates a world + a refund ledger; catches a
   **cumulative over-refund** (three 80s against a 200 order) the point-in-time
   check cannot see. The cumulative check probes the **same** `check_i1_value_conservation`.
+  It also provides **idempotency / replay-safety** (a same-key — or same-fingerprint
+  — retry is a no-op returning `replay=True`, never a double-apply; per-session,
+  in-memory) and **optimistic-conflict detection** (pass `expected_version` from
+  `commitment_version`; a stale plan is rejected as a conflict, `rule="version-conflict"`,
+  so you re-read and re-plan — optimistic, not a lock). Both are available in all four
+  bindings.
 - **`unify`** — merges objects the **caller asserts correspond** (a mechanism, not
   auto-reconciliation); a value mismatch is surfaced as I-1. The outbound emitters
   return platform-shaped **descriptors** only — **no network, no credentials, no

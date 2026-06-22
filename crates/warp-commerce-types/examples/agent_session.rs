@@ -22,18 +22,22 @@ fn fulfilled_order(id: &str, amount: f64) -> Commitment {
     .expect("valid commitment")
 }
 
-fn refund(amount: f64) -> ProposedAction {
-    ProposedAction {
-        commitment: "order_1".into(),
-        to: CommitmentState::Refunded {
+fn refund(amount: f64, key: &str) -> ProposedAction {
+    // Each refund carries an idempotency key so these DISTINCT partial refunds are
+    // applied separately (a retry with the same key would be deduped).
+    let mut a = ProposedAction::new(
+        "order_1",
+        CommitmentState::Refunded {
             amount: Money {
                 amount,
                 currency: "MAD".to_string(),
             },
             at: "2026-02-01T00:00:00.000Z".to_string(),
         },
-        actor: "support_agent".into(),
-    }
+        "support_agent",
+    );
+    a.idempotency_key = Some(key.to_string());
+    a
 }
 
 fn main() {
@@ -45,8 +49,9 @@ fn main() {
     });
 
     // Three partial refunds of 80 MAD. Each alone passes (80 <= 200) — but they accumulate.
-    for amount in [80.0, 80.0, 80.0] {
-        let verdict = session.propose(&refund(amount));
+    for (i, amount) in [80.0, 80.0, 80.0].iter().enumerate() {
+        let verdict = session.propose(&refund(*amount, &format!("r{i}")));
+        let amount = *amount;
         let sofar = session
             .refunded_so_far("order_1")
             .map(|m| m.amount)
@@ -61,6 +66,7 @@ fn main() {
             GuardResult::Rejected {
                 violations,
                 alternatives,
+                ..
             } => {
                 println!(
                     "\nrefund {} MAD -> BLOCKED [{}]",
@@ -78,7 +84,7 @@ fn main() {
     }
 
     // The agent reads the bounded guidance (40 MAD remaining) and refunds within it.
-    let corrected = session.propose(&refund(40.0));
+    let corrected = session.propose(&refund(40.0, "r-correct"));
     let total = session
         .refunded_so_far("order_1")
         .map(|m| m.amount)

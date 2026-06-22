@@ -38,6 +38,19 @@ func bounded(a warp.TransitionAlternative) string {
 	return ""
 }
 
+func acceptedOrder(id string) gen.Commitment {
+	var c gen.Commitment
+	j := fmt.Sprintf(`{"id":"%s","parties":{"initiator":"buyer","counterparty":"seller","intermediaries":[]},"subject":{"offered":[],"requested":[{"id":"v","form":{"kind":"Money","money":{"amount":200,"currency":"MAD"}},"quantity":1,"state":{"type":"Available"}}]},"state":{"type":"Accepted"},"history":[],"children":[],"created_at":"2026-01-02T08:00:00.000Z"}`, id)
+	_ = json.Unmarshal([]byte(j), &c)
+	return c
+}
+
+func disputed() gen.CommitmentState {
+	var s gen.CommitmentState
+	_ = json.Unmarshal([]byte(`{"type":"Disputed","by":"buyer","reason":"x","opened_at":"2026-03-01T00:00:00.000Z"}`), &s)
+	return s
+}
+
 func main() {
 	world := warp.World{Commitments: []gen.Commitment{order("order_1", 200)}}
 
@@ -62,8 +75,9 @@ func main() {
 
 	fmt.Println("\n== session coherence ==")
 	s := warp.CreateSession(warp.World{Commitments: []gen.Commitment{order("order_1", 200)}})
-	for _, amt := range []float64{80, 80, 80} {
-		v := s.Propose(warp.ProposedAction{Commitment: "order_1", To: refund(amt), Actor: "agent"})
+	for i, amt := range []float64{80, 80, 80} {
+		// Distinct keys so these distinct partial refunds accumulate.
+		v := s.Propose(warp.ProposedAction{Commitment: "order_1", To: refund(amt), Actor: "agent", IdempotencyKey: fmt.Sprintf("r%d", i)})
 		sofar, _, _ := s.RefundedSoFar("order_1")
 		if v.OK {
 			fmt.Printf("refund %.0f MAD -> accepted. refunded so far: %.0f MAD\n", amt, sofar)
@@ -87,4 +101,24 @@ func main() {
 	}
 	mism := warp.Unify([]warp.UnifySource{{Platform: "shopify", Commitment: order("order_123", 200)}, {Platform: "stripe", Commitment: order("pi_short", 150)}}, nil)
 	fmt.Printf("unify (200 vs 150) -> BLOCKED [%s]: %s\n", mism.Violations[0].Rule, mism.Violations[0].Message)
+
+	fmt.Println("\n== idempotency (F4) ==")
+	si := warp.CreateSession(warp.World{Commitments: []gen.Commitment{order("order_1", 200)}})
+	r1 := si.Propose(warp.ProposedAction{Commitment: "order_1", To: refund(50), Actor: "agent", IdempotencyKey: "rk-1"})
+	r2 := si.Propose(warp.ProposedAction{Commitment: "order_1", To: refund(50), Actor: "agent", IdempotencyKey: "rk-1"})
+	amt, _, _ := si.RefundedSoFar("order_1")
+	fmt.Printf("refund 50 (key rk-1) -> ok:%v replay:%v | retry (same key) -> ok:%v replay:%v | refunded once: %.0f MAD (no double refund)\n", r1.OK, r1.Replay, r2.OK, r2.Replay, amt)
+
+	fmt.Println("\n== optimistic-conflict (F3) ==")
+	sc := warp.CreateSession(warp.World{Commitments: []gen.Commitment{acceptedOrder("order_1")}})
+	planned := warp.CommitmentVersion(&sc.World().Commitments[0])
+	a := sc.Propose(warp.ProposedAction{Commitment: "order_1", To: gen.CommitmentState{Type: "Active"}, Actor: "s", ExpectedVersion: planned, IdempotencyKey: "A"})
+	now := warp.CommitmentVersion(&sc.World().Commitments[0])
+	fmt.Printf("Actor A activate (planned %s) -> ok:%v. now version %s\n", planned, a.OK, now)
+	b := sc.Propose(warp.ProposedAction{Commitment: "order_1", To: disputed(), Actor: "b", ExpectedVersion: planned, IdempotencyKey: "B"})
+	fmt.Printf("Actor B dispute (stale %s) -> CONFLICT:%v (expected %s, actual %s)\n", planned, b.Conflict, b.Expected, b.Actual)
+	b2 := sc.Propose(warp.ProposedAction{Commitment: "order_1", To: disputed(), Actor: "b", ExpectedVersion: now, IdempotencyKey: "B2"})
+	fmt.Printf("Actor B re-reads (%s) -> ok:%v. now %s\n", now, b2.OK, sc.World().Commitments[0].State.Type)
+	replay := sc.Propose(warp.ProposedAction{Commitment: "order_1", To: gen.CommitmentState{Type: "Active"}, Actor: "s", ExpectedVersion: planned, IdempotencyKey: "A"})
+	fmt.Printf("replay of A (same key, stale) -> replay:%v conflict:%v\n", replay.Replay, replay.Conflict)
 }

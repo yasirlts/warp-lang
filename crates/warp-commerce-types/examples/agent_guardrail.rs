@@ -43,11 +43,7 @@ fn main() {
     // NIGHTMARE 1: revert a shipped order to Accepted — blocked first.
     let reverted = guard_action(
         &world,
-        &ProposedAction {
-            commitment: "order_1".into(),
-            to: CommitmentState::Accepted,
-            actor: "support_agent".into(),
-        },
+        &ProposedAction::new("order_1", CommitmentState::Accepted, "support_agent"),
     );
     if let GuardResult::Rejected { violations, .. } = &reverted {
         println!("BLOCKED [{}] {}", violations[0].rule, violations[0].message);
@@ -57,11 +53,7 @@ fn main() {
     // NIGHTMARE 2: refund 500 against a 200 order — blocked, I-1.
     let over = guard_action(
         &world,
-        &ProposedAction {
-            commitment: "order_1".into(),
-            to: refund(500.0),
-            actor: "support_agent".into(),
-        },
+        &ProposedAction::new("order_1", refund(500.0), "support_agent"),
     );
     if let GuardResult::Rejected { violations, .. } = &over {
         let v = violations.iter().find(|v| v.rule == "I-1").expect("I-1");
@@ -71,11 +63,7 @@ fn main() {
     // SAFE: a refund of at most the committed amount is approved.
     let ok = guard_action(
         &world,
-        &ProposedAction {
-            commitment: "order_1".into(),
-            to: refund(200.0),
-            actor: "support_agent".into(),
-        },
+        &ProposedAction::new("order_1", refund(200.0), "support_agent"),
     );
     println!("refund (200 MAD) approved? {}", ok.is_ok());
 }
