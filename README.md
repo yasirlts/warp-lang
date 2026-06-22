@@ -338,6 +338,37 @@ once.
 
 Runnable: [`examples/idempotency.mjs`](packages/commerce-types/examples/idempotency.mjs).
 
+#### Optimistic-conflict — reject an action planned against a stale version
+
+Two actors (two agents, or an agent and a human) act on the **same** commitment.
+Each action is individually valid, but one was **planned against a stale version**:
+actor A advanced the commitment while actor B was still planning. Supply the version
+you planned against (`commitmentVersion(commitment)`, derived from the commitment's
+append-only history + state — not a schema field) and Warp rejects the stale action
+as a **conflict**, distinct from an invariant violation, so you re-read and re-plan.
+
+```ts
+const planned = commitmentVersion(commitment);     // e.g. "2:Accepted"
+// …another actor advances the commitment to "3:Active"…
+const v = session.propose({ commitment: id, to: { type: "Disputed", /* … */ }, actor, expectedVersion: planned });
+// v.ok === false, v.conflict === true, v.expected "2:Accepted", v.actual "3:Active"
+// → re-read, recompute commitmentVersion(), and re-plan against the current version.
+```
+
+A **conflict** (planned-against-stale) is distinct from an **invariant violation**
+(the action is unsafe) and from a **replay** (the same action retried — that dedups,
+it does not conflict). With no `expectedVersion`, behaviour is unchanged
+(unconditional). Pair the conflict signal with the planning-oracle alternatives
+where useful.
+
+> **Scope:** this is **optimistic** concurrency over the caller's world view — it
+> detects that a planned-against version no longer matches. It is **not** a lock,
+> distributed consensus, or a transaction manager, and Warp does **not** serialize
+> concurrent writers; those need infrastructure Warp is not. TypeScript first; other
+> bindings on the roadmap.
+
+Runnable: [`examples/concurrency.mjs`](packages/commerce-types/examples/concurrency.mjs).
+
 ### Interop — Warp as the neutral model between platforms
 
 The inbound adapters (`platforms/shopify`, `platforms/stripe`, `platforms/woocommerce`)

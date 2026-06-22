@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createSession } from "../src/session.js";
-import type { World } from "../src/guard.js";
+import { commitmentVersion, type World } from "../src/guard.js";
 import { newCommitment, partyId, valueId, type Value } from "../src/primitives.js";
 import { applyCommitmentPath } from "../src/transitions.js";
 import type { CommitmentState } from "../src/states.js";
@@ -204,5 +204,73 @@ describe("createSession — idempotency & replay-safety", () => {
       expect(replay.replay).toBe(true);
       expect(replay.next).toBe(worldBefore);
     }
+  });
+});
+
+describe("createSession — optimistic-conflict detection", () => {
+  function acceptedOrder() {
+    return applyCommitmentPath(newCommitment(buyer, seller), { type: "Accepted" }, seller);
+  }
+
+  it("a matching expectedVersion applies", () => {
+    const order = acceptedOrder();
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+    const v = commitmentVersion(session.world.commitments[0]!);
+    const r = session.propose({ commitment: order.id, to: { type: "Active" }, actor: seller, expectedVersion: v });
+    expect(r.ok).toBe(true);
+  });
+
+  it("a stale expectedVersion is rejected as a CONFLICT (not an invariant violation), not applied", () => {
+    const order = acceptedOrder();
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+    const planned = commitmentVersion(session.world.commitments[0]!);
+
+    // Actor A advances the commitment (Accepted → Active).
+    expect(session.propose({ commitment: order.id, to: { type: "Active" }, actor: seller, expectedVersion: planned, idempotencyKey: "A" }).ok).toBe(true);
+    const after = commitmentVersion(session.world.commitments[0]!);
+    expect(after).not.toBe(planned);
+
+    // Actor B planned against the stale version → conflict.
+    const b = session.propose({ commitment: order.id, to: { type: "Disputed", by: buyer, reason: "x", opened_at: "2026-03-01T00:00:00.000Z" }, actor: buyer, expectedVersion: planned, idempotencyKey: "B" });
+    expect(b.ok).toBe(false);
+    if (!b.ok) {
+      expect(b.conflict).toBe(true);
+      expect(b.expected).toBe(planned);
+      expect(b.actual).toBe(after);
+      expect(b.violations[0]?.rule).toBe("version-conflict"); // distinct from "I-n"
+    }
+    // not applied: the commitment is still Active, not Disputed.
+    expect(session.world.commitments[0]?.state.type).toBe("Active");
+  });
+
+  it("re-reading the current version resolves the conflict", () => {
+    const order = acceptedOrder();
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+    const planned = commitmentVersion(session.world.commitments[0]!);
+    session.propose({ commitment: order.id, to: { type: "Active" }, actor: seller, expectedVersion: planned, idempotencyKey: "A" });
+
+    const current = commitmentVersion(session.world.commitments[0]!);
+    const b2 = session.propose({ commitment: order.id, to: { type: "Disputed", by: buyer, reason: "x", opened_at: "2026-03-01T00:00:00.000Z" }, actor: buyer, expectedVersion: current, idempotencyKey: "B2" });
+    expect(b2.ok).toBe(true);
+    expect(session.world.commitments[0]?.state.type).toBe("Disputed");
+  });
+
+  it("no expectedVersion is backward-compatible (unconditional)", () => {
+    const order = acceptedOrder();
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+    const r = session.propose({ commitment: order.id, to: { type: "Active" }, actor: seller });
+    expect(r.ok).toBe(true);
+  });
+
+  it("a replay (same key) is a replay, NOT a conflict — even when its version is stale", () => {
+    const order = acceptedOrder();
+    const session = createSession({ commitments: [order], fulfillments: [], parties: [] });
+    const planned = commitmentVersion(session.world.commitments[0]!);
+    session.propose({ commitment: order.id, to: { type: "Active" }, actor: seller, expectedVersion: planned, idempotencyKey: "A" });
+    // The commitment advanced, so `planned` is now stale; but the SAME key is a replay.
+    const replay = session.propose({ commitment: order.id, to: { type: "Active" }, actor: seller, expectedVersion: planned, idempotencyKey: "A" });
+    expect(replay.ok).toBe(true);
+    if (replay.ok) expect(replay.replay).toBe(true);
+    if (!replay.ok) expect(replay.conflict).toBeUndefined();
   });
 });

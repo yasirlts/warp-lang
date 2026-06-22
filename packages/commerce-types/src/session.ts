@@ -47,10 +47,21 @@
  * need a persistent store and is not provided here (a documented limit, not a
  * guarantee the session can make).
  *
+ * OPTIMISTIC CONCURRENCY: when two actors act on the same commitment, an action
+ * may be individually valid yet planned against a STALE version (the other actor
+ * advanced the commitment first). A caller passes the version they planned against
+ * (`expectedVersion`, from {@link commitmentVersion}, derived from the commitment's
+ * append-only history + state — not a schema field); if it no longer matches, the
+ * action is rejected as a CONFLICT (`{ ok: false, conflict: true, expected, actual }`)
+ * so the caller re-reads and re-plans. A conflict is distinct from an invariant
+ * violation (unsafe) and from a replay (a retry, which dedups). This is OPTIMISTIC
+ * concurrency over the caller's view — NOT a lock, consensus, or distributed
+ * transaction manager; Warp does not serialize concurrent writers.
+ *
  * TypeScript first. Ports to Python / Rust / Go are roadmap.
  */
 
-import { guardAction, type GuardResult, type ProposedAction, type World } from "./guard.js";
+import { checkVersion, guardAction, type GuardResult, type ProposedAction, type World } from "./guard.js";
 import { checkI1ValueConservation } from "./invariants.js";
 import { add, moneyEquals } from "./money.js";
 import type { Money } from "./money.js";
@@ -142,6 +153,17 @@ export function createSession(initialWorld: World): Session {
     const key = actionKey(action);
     if (applied.has(key)) {
       return { ok: true, next: world, replay: true };
+    }
+
+    // Optimistic-concurrency conflict (distinct from a replay): if this action was
+    // planned against a version the commitment has since moved past (a concurrent
+    // actor advanced it in this accumulated world), reject as a CONFLICT so the
+    // caller re-reads. Checked here too because the partial-refund path below does
+    // not route through guardAction. A replay (handled above) is NOT a conflict.
+    const conflictTarget = world.commitments.find((c) => (c.id as string) === action.commitment);
+    if (conflictTarget !== undefined) {
+      const conflict = checkVersion(conflictTarget, action.expectedVersion);
+      if (conflict) return conflict;
     }
 
     // Refund actions get the cross-step cumulative check; everything else is a

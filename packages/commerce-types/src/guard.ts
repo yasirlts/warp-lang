@@ -56,6 +56,17 @@ export interface ProposedAction {
    * of the same order) must carry distinct keys to be applied separately.
    */
   idempotencyKey?: string;
+  /**
+   * Optional optimistic-concurrency token — the version the caller PLANNED
+   * against, as returned by {@link commitmentVersion} when they read the
+   * commitment. If supplied and it no longer matches the commitment's current
+   * version (a concurrent actor advanced it), the action is rejected as a
+   * CONFLICT (re-read and re-plan) rather than applied. This is a runtime input,
+   * NOT a schema field — the version is derived from the commitment's existing
+   * append-only history + state, so the model schema stays frozen. Omit it for
+   * the unconditional, backward-compatible behaviour.
+   */
+  expectedVersion?: string;
 }
 
 /** One reason an action or world was rejected — written for an agent to act on. */
@@ -104,11 +115,78 @@ export interface TransitionAlternative {
  */
 export type GuardResult =
   | { ok: true; next: World; replay?: boolean }
-  | { ok: false; violations: GuardViolation[]; alternatives?: TransitionAlternative[] };
+  | {
+      ok: false;
+      violations: GuardViolation[];
+      alternatives?: TransitionAlternative[];
+      /**
+       * Set when the rejection is an optimistic-concurrency CONFLICT (the action
+       * was planned against a stale version), distinct from an invariant
+       * violation. `expected` is the caller's planned version, `actual` is the
+       * commitment's current version. The caller should re-read and re-plan.
+       */
+      conflict?: boolean;
+      expected?: string;
+      actual?: string;
+    };
 
 /** Map an audit `InvariantViolation` to the guard's actionable shape. */
 function fromInvariant(v: InvariantViolation): GuardViolation {
   return { rule: v.invariant, message: v.description, fix: v.fix };
+}
+
+/** A short fingerprint of a commitment state — the type, plus the amount for a Refunded. */
+function stateFingerprint(s: CommitmentState): string {
+  if (s.type === "Refunded") return `Refunded:${s.amount.amount}:${s.amount.currency}`;
+  return s.type;
+}
+
+/**
+ * The optimistic-concurrency version of a commitment, derived entirely from its
+ * existing append-only history and current state (NOT a schema field). It is the
+ * history length plus a state fingerprint, so it advances when a new transition is
+ * appended ("more entries") and when the current state changes ("state changed").
+ * A caller computes this when they read a commitment and passes it back as
+ * {@link ProposedAction.expectedVersion}; if the commitment has since advanced,
+ * the action is rejected as a conflict.
+ *
+ * Scope: this is OPTIMISTIC concurrency over the caller's world view — it detects
+ * a stale plan. It is **not** a lock, distributed consensus, or a transaction
+ * manager; Warp does not serialize concurrent writers.
+ */
+export function commitmentVersion(c: Commitment): string {
+  return `${c.history.length}:${stateFingerprint(c.state)}`;
+}
+
+/**
+ * If `expectedVersion` is supplied and no longer matches the commitment's current
+ * version, return the CONFLICT result (re-read and re-plan); otherwise null. Used
+ * by {@link guardAction} and by the session layer (whose partial-refund path does
+ * not route through guardAction).
+ */
+export function checkVersion(target: Commitment, expectedVersion: string | undefined): GuardResult | null {
+  if (expectedVersion === undefined) return null;
+  const actual = commitmentVersion(target);
+  if (expectedVersion === actual) return null;
+  return {
+    ok: false,
+    conflict: true,
+    expected: expectedVersion,
+    actual,
+    violations: [
+      {
+        rule: "version-conflict",
+        message:
+          `This action was planned against version '${expectedVersion}', but commitment ` +
+          `'${target.id}' is now at version '${actual}' — it changed since you planned (a ` +
+          `concurrent actor advanced it). The change conflicts, so it was not applied.`,
+        fix:
+          "Re-read the commitment, recompute its version with commitmentVersion(), and re-plan " +
+          "your action against the current version. This is optimistic concurrency — Warp detects " +
+          "the stale plan; it does not lock or serialize writers.",
+      },
+    ],
+  };
 }
 
 /** Name the invariant a transition error cites, so the rule matches the message. */
@@ -187,6 +265,13 @@ export function guardAction(world: World, action: ProposedAction): GuardResult {
       ],
     };
   }
+
+  // 0. Optimistic-concurrency check: if the caller planned against a version that
+  //    no longer matches, the commitment advanced under them — reject as a CONFLICT
+  //    (re-read and re-plan), distinct from an invariant violation. Backward-
+  //    compatible: with no expectedVersion this is a no-op.
+  const conflict = checkVersion(target, action.expectedVersion);
+  if (conflict) return conflict;
 
   // 1. Validate the proposed move + replay history (composes transitionCommitment:
   //    the transition table is Invariant 2; timestamp monotonicity is Invariant 4).

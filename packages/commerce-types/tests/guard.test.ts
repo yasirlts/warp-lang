@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { guardAction, guardObject, type World } from "../src/guard.js";
+import { commitmentVersion, guardAction, guardObject, type World } from "../src/guard.js";
 import { auditCommerce } from "../src/invariants.js";
 import {
   individual,
@@ -256,5 +256,44 @@ describe("guardAction — planning oracle (alternatives on rejection)", () => {
     const verdict = guardAction(world, { commitment: shipped.id, to: { type: "Accepted" }, actor: seller });
     expect(verdict.ok).toBe(false);
     if (!verdict.ok) expect(verdict.violations.length).toBeGreaterThan(0);
+  });
+});
+
+describe("guardAction — optimistic-conflict (expectedVersion)", () => {
+  it("commitmentVersion advances when the commitment's state/history changes", () => {
+    const accepted = applyCommitmentPath(newCommitment(buyer, seller), { type: "Accepted" }, seller);
+    const v1 = commitmentVersion(accepted);
+    const world: World = { commitments: [accepted], fulfillments: [], parties: [] };
+    const moved = guardAction(world, { commitment: accepted.id, to: { type: "Active" }, actor: seller });
+    expect(moved.ok).toBe(true);
+    if (moved.ok) {
+      const v2 = commitmentVersion(moved.next.commitments[0]!);
+      expect(v2).not.toBe(v1);
+    }
+  });
+
+  it("a matching expectedVersion applies; a stale one is a CONFLICT (not applied)", () => {
+    const accepted = applyCommitmentPath(newCommitment(buyer, seller), { type: "Accepted" }, seller);
+    const world: World = { commitments: [accepted], fulfillments: [], parties: [] };
+    const current = commitmentVersion(accepted);
+
+    // matching version → applies
+    expect(guardAction(world, { commitment: accepted.id, to: { type: "Active" }, actor: seller, expectedVersion: current }).ok).toBe(true);
+
+    // stale version → conflict
+    const stale = guardAction(world, { commitment: accepted.id, to: { type: "Active" }, actor: seller, expectedVersion: "0:Draft" });
+    expect(stale.ok).toBe(false);
+    if (!stale.ok) {
+      expect(stale.conflict).toBe(true);
+      expect(stale.expected).toBe("0:Draft");
+      expect(stale.actual).toBe(current);
+      expect(stale.violations[0]?.rule).toBe("version-conflict");
+    }
+  });
+
+  it("no expectedVersion is backward-compatible", () => {
+    const accepted = applyCommitmentPath(newCommitment(buyer, seller), { type: "Accepted" }, seller);
+    const world: World = { commitments: [accepted], fulfillments: [], parties: [] };
+    expect(guardAction(world, { commitment: accepted.id, to: { type: "Active" }, actor: seller }).ok).toBe(true);
   });
 });
