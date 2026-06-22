@@ -32,6 +32,21 @@
  * at which point it transitions to `Refunded`. The cumulative cap is enforced by
  * the session against the order's committed amount.
  *
+ * IDEMPOTENCY & REPLAY-SAFETY: agents retry and networks duplicate, so the SAME
+ * action applied twice must not double-apply (a retried refund must not refund
+ * twice). The session records the identity of each ACCEPTED action — a
+ * caller-supplied `idempotencyKey`, or a derived fingerprint (commitment + target
+ * type + amount + actor) when none is given — and treats a repeat as a replay: it
+ * does not re-apply, does not advance the world, and returns
+ * `{ ok: true, next, replay: true }` so the caller learns "already done", not
+ * "applied again". Distinct operations therefore need distinct keys (two
+ * structurally-identical refunds with no key are deduped by fingerprint). This is
+ * also why a session, not a single `guardAction`, is the home for replay safety:
+ * it is the layer that accumulates an applied-action record. Scope is
+ * **per-session and in-memory only** — durable, cross-session idempotency would
+ * need a persistent store and is not provided here (a documented limit, not a
+ * guarantee the session can make).
+ *
  * TypeScript first. Ports to Python / Rust / Go are roadmap.
  */
 
@@ -93,11 +108,42 @@ function isCumulativeOverRefund(order: Commitment, total: number, currency: Mone
   );
 }
 
+/**
+ * The identity of an action for replay detection. Two actions are "the same" iff
+ * this key is equal. An explicit `idempotencyKey` is used when supplied (the
+ * unambiguous, standard approach); otherwise a fingerprint is derived from the
+ * fields that define the operation — commitment, target type, amount (for a
+ * Refunded move), and actor. Two genuinely-distinct but structurally-identical
+ * actions therefore need distinct keys to be applied separately.
+ */
+function actionKey(action: ProposedAction): string {
+  if (action.idempotencyKey !== undefined) return `key:${action.idempotencyKey}`;
+  const parts = [action.commitment, action.to.type, String(action.actor)];
+  if (action.to.type === "Refunded") {
+    parts.push(String(action.to.amount.amount), action.to.amount.currency);
+  }
+  return `fp:${parts.join("|")}`;
+}
+
 export function createSession(initialWorld: World): Session {
   let world = initialWorld;
   const ledger = new Map<string, RefundTally>();
+  // Idempotency / replay-safety: keys of actions ALREADY APPLIED in this session.
+  // Scope is per-session and in-memory — durable, cross-session idempotency would
+  // need a persistent store and is not provided here (see the module docs).
+  const applied = new Set<string>();
 
   function propose(action: ProposedAction): GuardResult {
+    // Replay detection: if this exact action was already applied in this session,
+    // it is a no-op — do NOT apply it again, do NOT advance the world. Report the
+    // current (unchanged) world flagged `replay: true` so the caller learns
+    // "already done", never "applied twice". Only ACCEPTED actions are recorded,
+    // so re-proposing a previously-rejected action is re-evaluated normally.
+    const key = actionKey(action);
+    if (applied.has(key)) {
+      return { ok: true, next: world, replay: true };
+    }
+
     // Refund actions get the cross-step cumulative check; everything else is a
     // straight compose over guardAction.
     if (action.to.type === "Refunded") {
@@ -154,16 +200,21 @@ export function createSession(initialWorld: World): Session {
           if (!verdict.ok) return verdict;
           world = verdict.next;
           ledger.set(action.commitment, { total: newTotal, count: priorCount + 1 });
+          applied.add(key);
           return verdict;
         }
         ledger.set(action.commitment, { total: newTotal, count: priorCount + 1 });
+        applied.add(key);
         return { ok: true, next: world };
       }
     }
 
     // Non-refund action: pure compose over guardAction.
     const verdict = guardAction(world, action);
-    if (verdict.ok) world = verdict.next;
+    if (verdict.ok) {
+      world = verdict.next;
+      applied.add(key);
+    }
     return verdict;
   }
 
