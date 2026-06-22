@@ -194,8 +194,8 @@ a shipped order, double-refund, accept a sale it never verified. Your options to
 are "don't let the agent touch money" or "hand-write a validation guard for every
 action." The **agent guardrail** is a third option: a drop-in check that says
 **safe** or **not-safe-with-an-actionable-reason** *before* the action runs — so you
-ship the agent feature without writing the guards. (Available in TypeScript and
-Python; Rust / Go ports are on the roadmap.)
+ship the agent feature without writing the guards. (Available in all four bindings
+— TypeScript, Python, Rust, and Go.)
 
 ```ts
 import { guardAction, newCommitment, applyCommitmentPath, partyId } from "@warp-lang/commerce-types";
@@ -253,7 +253,7 @@ over-refund is a valid `Fulfilled → Refunded` transition that fails I-1 on amo
 that target is returned with a `bounded` note ("refund at most the committed
 amount"), so the agent corrects the amount rather than picking a different state.
 The field is additive: consumers that read only `violations` are unaffected.
-Available in TypeScript and Python; Rust / Go ports are on the roadmap. Runnable:
+Available in all four bindings (TypeScript, Python, Rust, Go). Runnable:
 [`examples/planning-oracle.mjs`](packages/commerce-types/examples/planning-oracle.mjs).
 
 ### Sessions — catching violations that only emerge across steps
@@ -306,7 +306,7 @@ and audit still run unchanged.
   integrity) already expresses it. Properties the data model cannot express are
   left as limits rather than emitting false violations.
 
-Available in TypeScript and Python; Rust / Go ports are on the roadmap. Runnable:
+Available in all four bindings (TypeScript, Python, Rust, Go). Runnable:
 [`examples/agent-session.mjs`](packages/commerce-types/examples/agent-session.mjs).
 
 ### Interop — Warp as the neutral model between platforms
@@ -356,7 +356,7 @@ internally consistent?"* — value conserved, the transition legal, no over-refu
 the session. Warp sits **beneath** those protocols as the integrity check on the action
 itself; it does not authorize agents, move money, or replace them.
 
-Available in TypeScript and Python; Rust / Go interop is on the roadmap. Runnable:
+Available in all four bindings (TypeScript, Python, Rust, Go). Runnable:
 [`examples/cross-platform.mjs`](packages/commerce-types/examples/cross-platform.mjs).
 
 ---

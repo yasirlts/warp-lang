@@ -103,9 +103,13 @@ Runnable twins of the TypeScript examples live in
 [`examples/`](examples/): `agent_guardrail.py`, `planning_oracle.py`,
 `agent_session.py`, `cross_platform.py`.
 
-> **Binding coverage:** the agent toolkit is available in **TypeScript and Python**.
-> Rust and Go carry the model (primitives, invariants, transitions, cross-checked)
-> but not yet the toolkit — those ports are on the roadmap.
+> **Binding coverage:** the agent toolkit is available in **all four bindings** —
+> TypeScript, Python, Rust, and Go — behaviour-equivalent on the shared scenarios.
+> The Rust and Go runtimes are conformance-focused (deserialize + audit), so their
+> toolkits document two honest binding limits: the audit returns invariant *ids*
+> (so guard messages are standard per-invariant text, not per-violation prose), and
+> those bindings ship no platform inbound mappers (`unify` is platform-agnostic, so
+> callers map platform objects themselves). The VERDICTS match across all four.
 
 ## The model
 

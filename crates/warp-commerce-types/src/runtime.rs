@@ -132,13 +132,21 @@ fn sum_money(values: &[&Value]) -> SumResult {
     }
 }
 
+/// The single committed Money of a commitment (sum of `subject.requested`), as
+/// `(amount, currency)`. Composes `sum_money` so the toolkit reuses the auditor's
+/// money summation rather than re-deriving it.
+pub(crate) fn committed_money(c: &Commitment) -> Option<(f64, String)> {
+    let requested: Vec<&Value> = c.subject.requested.iter().collect();
+    sum_money(&requested).total
+}
+
 // ===========================================================================
 // Commitment-state helpers — discriminant string and history reads.
 // ===========================================================================
 
 /// The discriminant string of a CommitmentState (`&str`), matching run.mjs's
 /// reliance on `state.type`.
-fn commitment_state_type(s: &CommitmentState) -> &'static str {
+pub(crate) fn commitment_state_type(s: &CommitmentState) -> &'static str {
     match s {
         CommitmentState::Draft => "Draft",
         CommitmentState::Proposed => "Proposed",

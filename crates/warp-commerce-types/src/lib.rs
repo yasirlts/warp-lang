@@ -22,4 +22,11 @@ pub mod generated {
 
 pub mod runtime;
 
+/// The agent toolkit — guardrail, planning oracle, session coherence, and
+/// interop — a COMPOSITION over [`runtime`] (transition validity + the scene
+/// audit) and the generated transition table. It mirrors the TypeScript /
+/// Python toolkits behaviourally; it does not re-derive any invariant or
+/// transition logic.
+pub mod toolkit;
+
 pub use generated::types::SCHEMA_VERSION;

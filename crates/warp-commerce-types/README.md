@@ -19,6 +19,15 @@ cross-check.
   `money_equals`, `is_valid_transition` (incl. the fulfillment
   `Failed -> Planned` recoverable-only special case), the six-invariant
   `audit_scene`, and `breakdown_is_valid` (`money_breakdown_sum`).
+- `src/toolkit.rs` — the **agent toolkit**: the planning oracle
+  (`valid_transitions`), guardrail (`guard_action` / `guard_object`), session
+  coherence (`create_session`), and interop (`unify` + `to_*_action` emitters). A
+  composition over `runtime.rs` + the generated table, behaviour-equivalent to the
+  TypeScript / Python / Go toolkits (same verdicts on the same scenarios; the four
+  `examples/*.rs` run them). Two honest binding limits, documented in the module:
+  `audit_scene` returns invariant *ids*, so guard messages are standard
+  per-invariant text; and the conformance-focused runtime ships no platform inbound
+  mappers, so `unify` is platform-agnostic (callers map platform objects via serde).
 - `src/bin/crosscheck-rust.rs` — the `crosscheck-rust` binary: emits per-fixture
   verdicts in the shared JSON shape for the three-way cross-check.
 
