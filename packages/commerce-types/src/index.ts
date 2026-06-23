@@ -78,6 +78,14 @@ export * from "./multi-agent.js";
 // it does not fork invariant/transition logic, and it does NOT execute rollbacks on
 // external systems — the plan is a sequence of validated descriptors. TS first; ports roadmap.
 export * from "./saga.js";
+// `createReturnsSession` — the returns / RMA lifecycle as a SESSION-LAYER profile, no
+// schema change. A return is a child commitment against the parent order (parties
+// exchanged, per the schema's reversal note); partial returns and over-return safety are
+// the existing per-tree refund cap (checkI6TreeConsistency + the I-1 cumulative probe);
+// the RMA stages (requested→authorized→…→refunded) are an in-memory overlay that GATES
+// the money move, NOT new commitment states. Composes createSession; no forked logic.
+// TypeScript first; ports roadmap.
+export * from "./returns.js";
 // `unify` / `toStripeAction` / `toShopifyAction` / `toWooCommerceAction` — the
 // interop CIR: merge caller-corresponded platform objects into one validated Warp
 // commitment (inbound), and translate a validated Warp action into a platform-shaped
