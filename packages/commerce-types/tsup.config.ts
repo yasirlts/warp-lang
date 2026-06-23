@@ -6,6 +6,8 @@ export default defineConfig({
     "src/platforms/shopify.ts",
     "src/platforms/woocommerce.ts",
     "src/platforms/stripe.ts",
+    "src/platforms/paypal.ts",
+    "src/platforms/amazon.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,

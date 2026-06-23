@@ -34,7 +34,7 @@ import type { Commitment } from "./primitives.js";
 import { toStripeAmount } from "./platforms/stripe.js";
 
 /** The platforms this interop layer can unify from and emit to. */
-export type InteropPlatform = "shopify" | "stripe" | "woocommerce";
+export type InteropPlatform = "shopify" | "stripe" | "woocommerce" | "paypal" | "amazon";
 
 /**
  * One side of a unification: a platform object ALREADY mapped to a Warp
@@ -166,6 +166,26 @@ export type WooCommerceDescriptor =
   | { kind: "woocommerce.cancel"; order_id: string };
 
 /**
+ * A PayPal-shaped descriptor of the call the application should make. PayPal's
+ * Orders v2 refund acts on a CAPTURE and carries `{ value, currency_code }`;
+ * a cancel maps to voiding the authorization on the ORDER. The `order_id` here
+ * is the Warp commitment id (mapped from the PayPal order id).
+ */
+export type PayPalDescriptor =
+  | { kind: "paypal.refund"; order_id: string; amount: { value: string; currency_code: string } }
+  | { kind: "paypal.void"; order_id: string };
+
+/**
+ * An Amazon-shaped descriptor of the call the application should make. Amazon's
+ * refund is issued against the order via a financial event carrying an
+ * `AmazonMoney`-shaped amount; a cancel maps to the order-cancel action. The
+ * `amazon_order_id` here is the Warp commitment id (mapped from AmazonOrderId).
+ */
+export type AmazonDescriptor =
+  | { kind: "amazon.refund"; amazon_order_id: string; amount: { Amount: string; CurrencyCode: string } }
+  | { kind: "amazon.cancel"; amazon_order_id: string };
+
+/**
  * The outcome of emitting a platform payload. On success, `descriptor` is the
  * structured call the app should make (it is NOT sent here). On failure, the
  * action has no faithful representation on that platform and `reason` says so —
@@ -232,4 +252,36 @@ export function toWooCommerceAction(action: ProposedAction): EmitResult<WooComme
     return { ok: true, platform: "woocommerce", descriptor: { kind: "woocommerce.cancel", order_id: action.commitment } };
   }
   return notRepresentable("woocommerce", action);
+}
+
+/**
+ * Emit a PayPal-shaped descriptor for a VALIDATED action. Coverage: Refunded →
+ * refund (on the capture, with `{ value, currency_code }`), Cancelled → void;
+ * any other action type is not representable here. No network call is made.
+ */
+export function toPayPalAction(action: ProposedAction): EmitResult<PayPalDescriptor> {
+  if (action.to.type === "Refunded") {
+    const m = action.to.amount;
+    return { ok: true, platform: "paypal", descriptor: { kind: "paypal.refund", order_id: action.commitment, amount: { value: String(m.amount), currency_code: m.currency } } };
+  }
+  if (action.to.type === "Cancelled") {
+    return { ok: true, platform: "paypal", descriptor: { kind: "paypal.void", order_id: action.commitment } };
+  }
+  return notRepresentable("paypal", action);
+}
+
+/**
+ * Emit an Amazon-shaped descriptor for a VALIDATED action. Coverage: Refunded →
+ * refund (with an `AmazonMoney`-shaped amount), Cancelled → cancel; any other
+ * action type is not representable here. No network call is made.
+ */
+export function toAmazonAction(action: ProposedAction): EmitResult<AmazonDescriptor> {
+  if (action.to.type === "Refunded") {
+    const m = action.to.amount;
+    return { ok: true, platform: "amazon", descriptor: { kind: "amazon.refund", amazon_order_id: action.commitment, amount: { Amount: String(m.amount), CurrencyCode: m.currency } } };
+  }
+  if (action.to.type === "Cancelled") {
+    return { ok: true, platform: "amazon", descriptor: { kind: "amazon.cancel", amazon_order_id: action.commitment } };
+  }
+  return notRepresentable("amazon", action);
 }
