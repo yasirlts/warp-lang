@@ -407,6 +407,38 @@ this layer adds ergonomics and attribution, it does **not** fork any check.
 
 Runnable: [`examples/multi-agent.mjs`](packages/commerce-types/examples/multi-agent.mjs).
 
+#### Multi-object — cumulative conservation across a commitment tree
+
+Commerce objects relate: a parent order decomposes into child line-item commitments
+(`children` on `Commitment`), and the static `checkI6TreeConsistency` already verifies
+the children's committed values **reconcile** to the parent. But refunds spread across
+**different children** — each child valid, each refund within that child's committed,
+I-6 still reconciling — could cumulatively exceed the parent. The session now caps the
+**sum of refunds across the whole tree** against the parent's committed amount.
+
+```ts
+// parent "order-1" (200 MAD) with children line-A (100) + line-B (100)
+session.propose(refund("line-A", 80, "a")); // ok — tree refunded 80
+session.propose(refund("line-B", 80, "b")); // ok — tree refunded 160
+const v = session.propose(refund("order-1", 80, "p")); // each ≤ committed, but tree → 240
+// v.ok === false: "Cumulative refunds across the commitment tree rooted at order-1 …
+//   would reach 240 MAD … but the parent committed only 200 MAD" — 40 MAD remains refundable
+```
+
+The per-commitment cap (a child refund ≤ that child's committed) **still holds**; this
+adds the tree-level cap on top. It **composes** the existing pieces — `checkI6TreeConsistency`
+for the structure and the same I-1 cumulative probe lifted to the parent — and does not
+fork either. F4 replay and F3 conflict carry over at the tree level.
+
+> **Scope:** the unit is a **parent + its children tree** (resolved through the
+> existing `parent` / `children` links). Cumulative value conservation holds across
+> that tree. Relationships that are **not** parent/child trees (e.g. arbitrary
+> cross-order links the model does not express) are **out of scope** — a known limit,
+> not faked coverage. Single commitments are unaffected. TypeScript first; other
+> bindings on the roadmap.
+
+Runnable: [`examples/multi-object.mjs`](packages/commerce-types/examples/multi-object.mjs).
+
 ### Interop — Warp as the neutral model between platforms
 
 The inbound adapters (`platforms/shopify`, `platforms/stripe`, `platforms/woocommerce`)
