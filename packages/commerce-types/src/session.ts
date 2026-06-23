@@ -62,7 +62,7 @@
  */
 
 import { checkVersion, guardAction, type GuardResult, type ProposedAction, type World } from "./guard.js";
-import { checkI1ValueConservation } from "./invariants.js";
+import { checkI1ValueConservation, checkI6TreeConsistency } from "./invariants.js";
 import { add, moneyEquals } from "./money.js";
 import type { Money } from "./money.js";
 import type { Commitment } from "./primitives.js";
@@ -136,9 +136,39 @@ function actionKey(action: ProposedAction): string {
   return `fp:${parts.join("|")}`;
 }
 
+/**
+ * The root of `commitment`'s tree in `world` — walk `parent` pointers up while the
+ * parent is present in the world. A commitment with no parent (or whose parent is
+ * not in the world) is its own root. The append-only `parent` / `children` fields
+ * already exist on the model, so this is a pure structural read — no schema change.
+ */
+function treeRootOf(world: World, commitment: Commitment): Commitment {
+  const byId = new Map(world.commitments.map((c) => [c.id as string, c]));
+  let current = commitment;
+  const seen = new Set<string>();
+  while (current.parent !== undefined) {
+    const parent = byId.get(current.parent as string);
+    if (parent === undefined || seen.has(current.id as string)) break;
+    seen.add(current.id as string);
+    current = parent;
+  }
+  return current;
+}
+
+/** A commitment is "in a tree" if it has a parent (is a child) or has children. */
+function isInTree(commitment: Commitment, root: Commitment): boolean {
+  return (root.id as string) !== (commitment.id as string) || commitment.children.length > 0;
+}
+
 export function createSession(initialWorld: World): Session {
   let world = initialWorld;
   const ledger = new Map<string, RefundTally>();
+  // Per-TREE cumulative refund ledger, keyed by the tree ROOT id. The per-commitment
+  // `ledger` above caps each commitment against its own committed amount; this caps
+  // the SUM of refunds across a parent + its children against the parent's committed
+  // amount (full multi-object coherence). Standalone commitments are never tree
+  // members, so this leaves single-commitment behaviour byte-for-byte unchanged.
+  const treeLedger = new Map<string, RefundTally>();
   // Idempotency / replay-safety: keys of actions ALREADY APPLIED in this session.
   // Scope is per-session and in-memory — durable, cross-session idempotency would
   // need a persistent store and is not provided here (see the module docs).
@@ -211,10 +241,67 @@ export function createSession(initialWorld: World): Session {
           };
         }
 
+        // Multi-object coherence: if this commitment is part of a tree (a parent
+        // with children, or a child), cap the SUM of refunds across the whole tree
+        // against the PARENT's committed amount — so refunds spread over different
+        // children (each individually valid, each child reconciling via I-6) cannot
+        // cumulatively exceed the parent. Composes the existing checkI6TreeConsistency
+        // (structure) + the same I-1 cumulative probe (lifted to the parent).
+        const root = treeRootOf(world, order);
+        const treeMember = isInTree(order, root);
+        if (treeMember) {
+          const children = world.commitments.filter((c) => c.parent === root.id);
+          const i6 = checkI6TreeConsistency(root, children);
+          if (i6.length > 0) {
+            return { ok: false, violations: i6.map((v) => ({ rule: v.invariant, message: v.description, fix: v.fix })) };
+          }
+          const treeCommitted = committedTotal(root);
+          if (treeCommitted !== null && proposed.currency === treeCommitted.currency) {
+            const treePrior = treeLedger.get(root.id as string);
+            const treePriorAmt = treePrior ? treePrior.total.amount : 0;
+            const treeCount = treePrior ? treePrior.count : 0;
+            const treeCumulative = treePriorAmt + proposed.amount;
+            if (isCumulativeOverRefund(root, treeCumulative, treeCommitted.currency)) {
+              const remaining = Math.max(0, treeCommitted.amount - treePriorAmt);
+              return {
+                ok: false,
+                violations: [
+                  {
+                    rule: "I-1",
+                    message:
+                      `Cumulative refunds across the commitment tree rooted at ${root.id} would reach ` +
+                      `${treeCumulative} ${treeCommitted.currency} across ${treeCount + 1} refund(s) on the ` +
+                      `parent and its children, but the parent committed only ${treeCommitted.amount} ` +
+                      `${treeCommitted.currency} — value is not conserved across the tree.`,
+                    fix:
+                      `Refund at most the remaining ${remaining} ${treeCommitted.currency} across the tree ` +
+                      `(parent committed ${treeCommitted.amount} − already refunded across the tree ${treePriorAmt}).`,
+                  },
+                ],
+                alternatives: [
+                  {
+                    to: "Refunded",
+                    label: "refund the commitment",
+                    bounded: `cumulative refunds across the tree must stay within the parent's committed ${treeCommitted.amount} ${treeCommitted.currency}; ${remaining} ${treeCommitted.currency} remains refundable`,
+                  },
+                ],
+              };
+            }
+          }
+        }
+
         // Accepted refund. Record it in the ledger. Keep the order in Fulfilled
         // for a PARTIAL refund (the schema has no partial-refund state); transition
         // it to Refunded only once the refunds reach the committed total.
         const newTotal = prior ? add(prior.total, proposed) : proposed;
+        const recordTree = () => {
+          if (!treeMember) return;
+          const tp = treeLedger.get(root.id as string);
+          treeLedger.set(root.id as string, {
+            total: tp ? add(tp.total, proposed) : proposed,
+            count: (tp ? tp.count : 0) + 1,
+          });
+        };
         const fullyRefunded = moneyEquals(cumulative, committed.amount, committed.currency);
         if (fullyRefunded) {
           // A real Fulfilled → Refunded transition for the final, full refund.
@@ -222,10 +309,12 @@ export function createSession(initialWorld: World): Session {
           if (!verdict.ok) return verdict;
           world = verdict.next;
           ledger.set(action.commitment, { total: newTotal, count: priorCount + 1 });
+          recordTree();
           applied.add(key);
           return verdict;
         }
         ledger.set(action.commitment, { total: newTotal, count: priorCount + 1 });
+        recordTree();
         applied.add(key);
         return { ok: true, next: world };
       }
