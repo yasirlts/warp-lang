@@ -32,7 +32,7 @@ Here is exactly how the DSL compiler treats each invariant at compile time:
 | Invariant | Compile-time behavior |
 |-----------|------------------------|
 | **I-1 Value Conservation** | **Blocking** — a node mixing currencies without an explicit conversion fails compilation; declaring a conversion (the sanctioned path) compiles |
-| **I-2 State Monotonicity** | **Blocking (stage-level)** — a workflow that regresses across the Intent → Commitment → Fulfillment lifecycle fails compilation; finer per-commitment-state edges are enforced by the type/audit layer |
+| **I-2 State Monotonicity** | **Blocking (stage-level + per-state when states are declared)** — a workflow that regresses across the Intent → Commitment → Fulfillment lifecycle fails compilation. In addition, when two nodes each declare an explicit commitment `state` (e.g. `state: "Fulfilled"` then `state: "Accepted"`), the compiler defers to the audit layer's `validate_commitment_transition` and blocks the declared pair if it is not a valid transition — catching backward edges the stage check cannot see (both are at the Commitment stage). Per-state edges that are **not** declared in the DSL remain enforced only at the type/audit layer |
 | **I-3 Capacity Verification** | **Blocking** — a violation fails compilation |
 | **I-4 Temporal Integrity** | **Blocking** — a violation fails compilation |
 | **I-5 Identity Permanence** | **Blocking** — a violation fails compilation |

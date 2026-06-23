@@ -39,6 +39,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use super::ast::{ConfigEntry, ConfigValue, WarpProject};
+use crate::types::model::{validate_commitment_transition, CommitmentID, CommitmentState, PartyID};
 
 // ===========================================================================
 // NodeSpec — what the type checker knows about each shipped node.
@@ -254,15 +255,37 @@ pub enum TypeError {
     /// a node already declared above it: the workflow regresses to an earlier
     /// stage. The lifecycle only moves forward (a reversal is a new forward
     /// commitment, not a backward edge). Enforced at the stage granularity the
-    /// DSL node vocabulary exposes (via [`model_level`]); finer per-commitment-
-    /// state edges (Draft→…→Refunded, the dispute/refund reversals) are enforced
-    /// by `types::model::validate_commitment_transition` at the type/runtime/
-    /// audit layer across every binding.
+    /// DSL node vocabulary exposes (via [`model_level`]). The finer
+    /// per-commitment-state edges (Draft→…→Refunded, the dispute/refund
+    /// reversals) are blocked statically *only when a node declares an explicit
+    /// `state`* — see [`TypeError::CommitmentStateRegression`]. Commitment
+    /// states that are not declared in the DSL remain enforced solely by
+    /// `types::model::validate_commitment_transition` at the type/runtime/audit
+    /// layer across every binding.
     StateMonotonicityViolation {
         prior_node: String,
         regressed_node: String,
         from_stage: String,
         to_stage: String,
+        line: usize,
+    },
+    /// CHECK I-2 (State Monotonicity) — **blocking, per-state**. Two
+    /// commitment-stage nodes each declare an explicit commitment lifecycle
+    /// `state` (e.g. `state: "Fulfilled"` then `state: "Accepted"`), and the
+    /// declared order implies a transition that is **not** in the model's
+    /// valid-transition table. This catches regressions the coarse stage check
+    /// cannot see — both nodes are at the Commitment stage, so `model_level`
+    /// reads them as level-equal, yet `Fulfilled → Accepted` is a backward edge.
+    /// The verdict is delegated to
+    /// `types::model::validate_commitment_transition` (the audit layer's table);
+    /// this variant does not re-encode that table. Fires only for states that
+    /// are explicitly declared in the DSL — undeclared transitions stay
+    /// audit-only.
+    CommitmentStateRegression {
+        prior_node: String,
+        regressed_node: String,
+        from_state: String,
+        to_state: String,
         line: usize,
     },
     /// CHECK I-3 (Capacity Verification): a workflow reaches
@@ -380,6 +403,21 @@ impl fmt::Display for TypeError {
                  commitment, not a backward step.",
                 line, regressed_node, to_stage, prior_node, from_stage
             ),
+            TypeError::CommitmentStateRegression {
+                prior_node,
+                regressed_node,
+                from_state,
+                to_state,
+                line,
+            } => write!(
+                f,
+                "Line {}: State monotonicity violation (per-state). '{}' declares commitment \
+                 state '{}' after '{}' declared '{}', but '{}' -> '{}' is not a valid commitment \
+                 transition. Per Invariant 2 (State Monotonicity), a commitment cannot regress to \
+                 an earlier state — express a reversal (refund, dispute, cancellation) as a \
+                 forward transition the model allows, not a backward step.",
+                line, regressed_node, to_state, prior_node, from_state, from_state, to_state
+            ),
             TypeError::MissingCapacityVerification {
                 accepted_producing_node,
                 line,
@@ -469,13 +507,25 @@ pub fn check_types(project: WarpProject) -> Result<TypedProject, Vec<TypeError>>
     // CHECK I-6 (Commitment Tree Consistency): OrderPlaced nodes with their
     // first Currency literal, if any (None when the value is a reference).
     let mut order_placed_nodes: Vec<OrderPlacedRecord> = Vec::new();
+    // CHECK I-2 (State Monotonicity), per-state layer: nodes that declare an
+    // explicit commitment lifecycle `state`, in declaration order. Each entry
+    // is (instance_name, line, declared CommitmentState). The post-loop check
+    // walks consecutive pairs and defers the verdict to the audit layer's
+    // `validate_commitment_transition`.
+    let mut commitment_state_nodes: Vec<(String, usize, CommitmentState)> = Vec::new();
 
-    // CHECK I-2 (State Monotonicity) runs post-loop over `leveled_nodes`: the
-    // workflow's lifecycle stages (Intent → Commitment → Fulfillment) must not
-    // regress. This is the stage granularity the DSL node vocabulary exposes;
-    // finer per-commitment-state edges (Draft→…→Refunded, dispute/refund
-    // reversals) stay enforced by `types::model::validate_commitment_transition`
-    // at the type/runtime/audit layer across every binding.
+    // CHECK I-2 (State Monotonicity) runs post-loop in two layers. The
+    // STAGE layer walks `leveled_nodes`: the workflow's lifecycle stages
+    // (Intent → Commitment → Fulfillment) must not regress — the granularity
+    // the DSL node vocabulary exposes by default. The PER-STATE layer walks
+    // `commitment_state_nodes`: when nodes declare explicit commitment states,
+    // each consecutive pair is checked against the audit layer's
+    // `validate_commitment_transition`, catching finer regressions
+    // (Fulfilled→Accepted, Cancelled→Accepted, …) the stage layer cannot see.
+    // Per-state edges that are NOT declared in the DSL stay enforced solely by
+    // `validate_commitment_transition` at the type/runtime/audit layer across
+    // every binding — the compiler refines *when* that table runs, never its
+    // content.
 
     // Lines are reconstructed from a synthetic walk: the parser
     // discards the per-NodeDecl line because it captures only enough
@@ -602,6 +652,15 @@ pub fn check_types(project: WarpProject) -> Result<TypedProject, Vec<TypeError>>
             ));
         }
 
+        // CHECK I-2 (per-state) collection: a node may declare an explicit
+        // commitment lifecycle state via a `state: "<Name>"` config entry. When
+        // it names a known CommitmentState, record it for the post-loop
+        // consecutive-transition check. Unknown / absent state names contribute
+        // nothing here (they stay enforced at the audit layer only).
+        if let Some(state) = declared_commitment_state(&node.config) {
+            commitment_state_nodes.push((node.instance_name.clone(), line, state));
+        }
+
         declared_instances.insert(node.instance_name.clone());
 
         typed_nodes.push(TypedNodeDecl {
@@ -653,6 +712,30 @@ pub fn check_types(project: WarpProject) -> Result<TypedProject, Vec<TypeError>>
                 max_level = *level;
                 max_node = Some(name);
             }
+        }
+    }
+
+    // CHECK I-2 (State Monotonicity) — PER-STATE layer. The stage check above
+    // only sees Intent/Commitment/Fulfillment granularity, so two nodes that
+    // both sit at the Commitment stage but declare regressing commitment states
+    // (e.g. `Fulfilled` then `Accepted`) slip past it. Here we walk the nodes
+    // that declared an explicit `state` in declaration order and ask the audit
+    // layer's `validate_commitment_transition` whether each consecutive pair is
+    // a valid forward transition. An invalid pair is a backward (or otherwise
+    // disallowed) edge and is blocked. The verdict is the audit table's, not a
+    // second copy of it — this only refines *when* that table runs (statically,
+    // at compile time, for declared states) without changing its content.
+    for pair in commitment_state_nodes.windows(2) {
+        let (prior_name, _, from_state) = &pair[0];
+        let (regressed_name, regressed_line, to_state) = &pair[1];
+        if validate_commitment_transition(from_state, to_state).is_err() {
+            errors.push(TypeError::CommitmentStateRegression {
+                prior_node: prior_name.clone(),
+                regressed_node: regressed_name.clone(),
+                from_state: commitment_state_label(from_state).to_string(),
+                to_state: commitment_state_label(to_state).to_string(),
+                line: *regressed_line,
+            });
         }
     }
 
@@ -861,6 +944,90 @@ fn stage_name(level: u8) -> &'static str {
         2 => "Commitment",
         3 => "Fulfillment",
         _ => "unknown",
+    }
+}
+
+/// The commitment lifecycle state a node declares via a top-level
+/// `state: "<Name>"` config entry, if it names a known [`CommitmentState`].
+/// Returns `None` when no such entry exists or the name is not recognized —
+/// in both cases the per-state I-2 check simply skips the node (the audit
+/// layer still governs the full transition table at runtime).
+fn declared_commitment_state(config: &[ConfigEntry]) -> Option<CommitmentState> {
+    config.iter().find_map(|e| {
+        if e.key.eq_ignore_ascii_case("state") {
+            if let ConfigValue::StringLit(name) = &e.value {
+                return commitment_state_from_name(name);
+            }
+        }
+        None
+    })
+}
+
+/// Map a declared state *name* to a representative [`CommitmentState`] value so
+/// it can be fed to the audit layer's [`validate_commitment_transition`]. The
+/// transition table matches on the variant alone (its `{ .. }` patterns ignore
+/// payloads), so the placeholder payloads here never affect the verdict — they
+/// exist only because the enum's data-bearing variants require *some* value to
+/// construct. This is deliberately a name→variant adapter, not a transition
+/// table; the validity rules live entirely in `validate_commitment_transition`.
+fn commitment_state_from_name(name: &str) -> Option<CommitmentState> {
+    // Placeholders for data-bearing variants. Constructed from non-empty
+    // strings so the ID/Party constructors accept them; the values are never
+    // inspected by the transition table.
+    let party = PartyID::new("placeholder").ok()?;
+    match name.trim() {
+        "Draft" => Some(CommitmentState::Draft),
+        "Proposed" => Some(CommitmentState::Proposed),
+        "Tendered" => Some(CommitmentState::Tendered {
+            offer_amount: "0".to_string(),
+            offer_currency: "MAD".to_string(),
+            closes_at: String::new(),
+            superseded_by: None::<CommitmentID>,
+        }),
+        "Accepted" => Some(CommitmentState::Accepted),
+        "Modified" => Some(CommitmentState::Modified {
+            modified_by: party,
+            reason: String::new(),
+        }),
+        "PartiallyFulfilled" => Some(CommitmentState::PartiallyFulfilled {
+            fulfilled_item_ids: Vec::new(),
+            remaining_item_ids: Vec::new(),
+        }),
+        "Active" => Some(CommitmentState::Active),
+        "Fulfilled" => Some(CommitmentState::Fulfilled),
+        "Cancelled" => Some(CommitmentState::Cancelled {
+            by: party,
+            reason: String::new(),
+            at: String::new(),
+        }),
+        "Disputed" => Some(CommitmentState::Disputed {
+            by: party,
+            reason: String::new(),
+            opened_at: String::new(),
+        }),
+        "Refunded" => Some(CommitmentState::Refunded {
+            amount_str: "0".to_string(),
+            currency: "MAD".to_string(),
+            at: String::new(),
+        }),
+        _ => None,
+    }
+}
+
+/// The display name of a [`CommitmentState`] for per-state I-2 diagnostics.
+fn commitment_state_label(state: &CommitmentState) -> &'static str {
+    match state {
+        CommitmentState::Draft => "Draft",
+        CommitmentState::Proposed => "Proposed",
+        CommitmentState::Tendered { .. } => "Tendered",
+        CommitmentState::Accepted => "Accepted",
+        CommitmentState::Modified { .. } => "Modified",
+        CommitmentState::PartiallyFulfilled { .. } => "PartiallyFulfilled",
+        CommitmentState::Active => "Active",
+        CommitmentState::Fulfilled => "Fulfilled",
+        CommitmentState::Cancelled { .. } => "Cancelled",
+        CommitmentState::Disputed { .. } => "Disputed",
+        CommitmentState::Refunded { .. } => "Refunded",
     }
 }
 
@@ -1384,6 +1551,194 @@ mod tests {
             }
         "#;
         assert!(check_types(parse_str(src)).is_ok());
+    }
+
+    #[test]
+    fn check_i2_per_state_blocks_fulfilled_to_accepted() {
+        // PER-STATE refinement: two nodes both at the Fulfillment *stage* (so the
+        // coarse stage check sees no regression), but they declare commitment
+        // states Fulfilled then Accepted. `Fulfilled -> Accepted` is not in the
+        // audit-layer transition table, so the per-state check blocks it even
+        // though the stage check passes.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                WhatsAppSend done   { to: "+212661234567" template: "t" state: "Fulfilled" }
+                WhatsAppSend reopen { to: "+212661234567" template: "t" state: "Accepted" }
+            }
+        "#;
+        let errors = check_types(parse_str(src)).expect_err("per-state regression must fail");
+        // The coarse stage check must NOT fire here (both nodes are Fulfillment).
+        assert!(
+            !errors
+                .iter()
+                .any(|e| matches!(e, TypeError::StateMonotonicityViolation { .. })),
+            "stage check should be silent on same-stage nodes; got {errors:?}"
+        );
+        let reg = errors
+            .iter()
+            .find(|e| matches!(e, TypeError::CommitmentStateRegression { .. }))
+            .expect("a CommitmentStateRegression");
+        let msg = reg.to_string();
+        assert!(msg.contains("Invariant 2"), "got {msg}");
+        assert!(msg.contains("per-state"), "got {msg}");
+        match reg {
+            TypeError::CommitmentStateRegression {
+                from_state,
+                to_state,
+                ..
+            } => {
+                assert_eq!(from_state, "Fulfilled");
+                assert_eq!(to_state, "Accepted");
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn check_i2_per_state_blocks_accepted_to_draft() {
+        // Accepted -> Draft is a backward edge the stage check cannot see (both
+        // declarations could be at one stage); the audit table rejects it.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                WhatsAppSend a { to: "+212661234567" template: "t" state: "Accepted" }
+                WhatsAppSend b { to: "+212661234567" template: "t" state: "Draft" }
+            }
+        "#;
+        let errors = check_types(parse_str(src)).expect_err("Accepted -> Draft must fail");
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, TypeError::CommitmentStateRegression { .. })),
+            "got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn check_i2_per_state_allows_valid_forward_transition() {
+        // Proposed -> Accepted IS in the valid table, so a workflow declaring it
+        // compiles. Rigor, not rigidity: the sanctioned forward edge is allowed.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                WhatsAppSend a { to: "+212661234567" template: "t" state: "Proposed" }
+                WhatsAppSend b { to: "+212661234567" template: "t" state: "Accepted" }
+            }
+        "#;
+        let errors = check_types(parse_str(src)).err().unwrap_or_default();
+        assert!(
+            !errors
+                .iter()
+                .any(|e| matches!(e, TypeError::CommitmentStateRegression { .. })),
+            "valid forward transition must not be blocked; got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn check_i2_per_state_allows_fulfilled_to_refunded() {
+        // Fulfilled -> Refunded is a sanctioned reversal expressed as a forward
+        // edge in the model's table — the per-state check must allow it.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                WhatsAppSend a { to: "+212661234567" template: "t" state: "Fulfilled" }
+                WhatsAppSend b { to: "+212661234567" template: "t" state: "Refunded" }
+            }
+        "#;
+        let errors = check_types(parse_str(src)).err().unwrap_or_default();
+        assert!(
+            !errors
+                .iter()
+                .any(|e| matches!(e, TypeError::CommitmentStateRegression { .. })),
+            "Fulfilled -> Refunded must compile; got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn check_i2_per_state_skips_undeclared_states() {
+        // Honest scope: when nodes declare no explicit `state`, the per-state
+        // check contributes nothing — those transitions stay audit-only. A plain
+        // monotone workflow has no per-state error.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                CartAbandoned trigger { min_value: Currency(200, MAD) after: Duration(30, minutes) }
+                ACPGetCustomerProfile profile { customer_id: trigger.customer_id }
+                OrderPlaced ord { min_value: Currency(200, MAD) }
+                WhatsAppSend msg { to: "+212661234567" template: "t" }
+            }
+        "#;
+        let errors = check_types(parse_str(src)).err().unwrap_or_default();
+        assert!(
+            !errors
+                .iter()
+                .any(|e| matches!(e, TypeError::CommitmentStateRegression { .. })),
+            "no declared states means no per-state error; got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn check_i2_per_state_unknown_state_name_is_ignored() {
+        // A `state` value that is not a known CommitmentState name is ignored by
+        // the per-state check (it cannot reason about it) — no false positive.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                WhatsAppSend a { to: "+212661234567" template: "t" state: "NotAState" }
+                WhatsAppSend b { to: "+212661234567" template: "t" state: "Accepted" }
+            }
+        "#;
+        let errors = check_types(parse_str(src)).err().unwrap_or_default();
+        assert!(
+            !errors
+                .iter()
+                .any(|e| matches!(e, TypeError::CommitmentStateRegression { .. })),
+            "unknown state name must not produce a per-state error; got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn check_i2_per_state_verdict_matches_audit_layer() {
+        // Composition guarantee: the per-state check's verdict for a declared
+        // pair is exactly the audit layer's `validate_commitment_transition`
+        // verdict — it does not re-encode the table. Spot-check both directions.
+        let blocked_src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                WhatsAppSend a { to: "+212661234567" template: "t" state: "Cancelled" }
+                WhatsAppSend b { to: "+212661234567" template: "t" state: "Accepted" }
+            }
+        "#;
+        let compiler_blocks = check_types(parse_str(blocked_src))
+            .err()
+            .unwrap_or_default()
+            .iter()
+            .any(|e| matches!(e, TypeError::CommitmentStateRegression { .. }));
+        let audit_rejects = validate_commitment_transition(
+            &CommitmentState::Cancelled {
+                by: PartyID::new("p").unwrap(),
+                reason: String::new(),
+                at: String::new(),
+            },
+            &CommitmentState::Accepted,
+        )
+        .is_err();
+        assert_eq!(
+            compiler_blocks, audit_rejects,
+            "compiler verdict must match audit layer for Cancelled -> Accepted"
+        );
+        assert!(
+            compiler_blocks,
+            "Cancelled -> Accepted is a terminal regression"
+        );
     }
 
     #[test]
