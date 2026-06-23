@@ -47,6 +47,26 @@
         "types": "./dist/platforms/stripe.d.cts",
         "default": "./dist/platforms/stripe.cjs"
       }
+    },
+    "./platforms/paypal": {
+      "import": {
+        "types": "./dist/platforms/paypal.d.ts",
+        "default": "./dist/platforms/paypal.js"
+      },
+      "require": {
+        "types": "./dist/platforms/paypal.d.cts",
+        "default": "./dist/platforms/paypal.cjs"
+      }
+    },
+    "./platforms/amazon": {
+      "import": {
+        "types": "./dist/platforms/amazon.d.ts",
+        "default": "./dist/platforms/amazon.js"
+      },
+      "require": {
+        "types": "./dist/platforms/amazon.d.cts",
+        "default": "./dist/platforms/amazon.cjs"
+      }
     }
   },
   "files": [
