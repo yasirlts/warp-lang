@@ -108,6 +108,13 @@ export * from "./terms.js";
 export * from "./auction.js";
 export * from "./metering.js";
 export * from "./resolution.js";
+// `signFulfillment` / `verifyFulfillment` — a detached Ed25519 signature over a
+// canonical serialization of a Fulfillment, carried as a toolkit-layer envelope
+// (`{ fulfillment, signature, signer }`), NOT a schema field — the same pattern by
+// which `idempotencyKey` rides on a proposed action. Proves authenticity + tamper-
+// evidence for a given signer key; does not bind the key to a real identity (PKI,
+// out of scope) and is not a zero-knowledge proof.
+export * from "./attestation.js";
 
 // ── DEPRECATED ALIASES ──────────────────────────────────────────────────────
 // One canonical name per function; these older duplicate names still work so no
