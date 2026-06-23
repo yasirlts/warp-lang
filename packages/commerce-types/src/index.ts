@@ -71,6 +71,13 @@ export * from "./session.js";
 // action tipped the world into violation. Composes createSession; no forked checks.
 // Attribution is the tipping action, NOT collusion detection. TS first; ports roadmap.
 export * from "./multi-agent.js";
+// `planCompensation` / `validateCompensation` / `compensate` — model the unwinding of a
+// multi-step flow as an explicit sequence of compensating actions (each a legal reversing
+// transition) and validate the compensation for coherence (net value conserved, no
+// over-refund) by running it through a session. Composes validTransitions + createSession;
+// it does not fork invariant/transition logic, and it does NOT execute rollbacks on
+// external systems — the plan is a sequence of validated descriptors. TS first; ports roadmap.
+export * from "./saga.js";
 // `unify` / `toStripeAction` / `toShopifyAction` / `toWooCommerceAction` — the
 // interop CIR: merge caller-corresponded platform objects into one validated Warp
 // commitment (inbound), and translate a validated Warp action into a platform-shaped
