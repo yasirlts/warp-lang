@@ -65,6 +65,12 @@ export * from "./guard.js";
 // that single-action guardAction cannot see. Composes guardAction + the canonical
 // I-1 check; it does not fork invariant logic. TypeScript first; ports roadmap.
 export * from "./session.js";
+// `createMultiAgentSession` — make multi-agent use first-class: several named agents
+// act on one SHARED world; the (already actor-agnostic) cumulative/invariant checks
+// hold over their combined actions, and a rejection is ATTRIBUTED to the actor whose
+// action tipped the world into violation. Composes createSession; no forked checks.
+// Attribution is the tipping action, NOT collusion detection. TS first; ports roadmap.
+export * from "./multi-agent.js";
 // `unify` / `toStripeAction` / `toShopifyAction` / `toWooCommerceAction` — the
 // interop CIR: merge caller-corresponded platform objects into one validated Warp
 // commitment (inbound), and translate a validated Warp action into a platform-shaped

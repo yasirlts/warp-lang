@@ -374,6 +374,39 @@ where useful.
 
 Runnable: [`examples/concurrency.mjs`](packages/commerce-types/examples/concurrency.mjs).
 
+#### Multi-agent — invariants over a shared world, with per-actor attribution
+
+When **several named agents** act on one shared world — a buyer-agent, a finance-agent,
+a support-agent — each action can be individually valid while their **combined**
+sequence violates an invariant. Because the session is **actor-agnostic** (it
+accumulates the world regardless of who made each action, and the invariants sum by
+amount, not by who), such a violation is already caught — `createMultiAgentSession`
+makes it **first-class** and **attributes** it.
+
+```ts
+const session = createMultiAgentSession({ commitments: [order /* 200 MAD */], fulfillments: [], parties: [] });
+session.propose({ commitment, to: refunded(120), actor: "finance-agent", idempotencyKey: "f" }); // ok
+const v = session.propose({ commitment, to: refunded(100), actor: "support-agent", idempotencyKey: "s" });
+// v.ok === false, v.actor === "support-agent"
+// v.attribution: "support-agent's action, applied after the accumulated actions of finance-agent, tipped the shared world into violation of I-1."
+session.actorsSummary(); // { "finance-agent": 1 }  — who did what
+```
+
+The result names the **actor whose action tipped the shared world into violation** (the
+proposing actor of the step that failed the check), alongside the usual
+violation / bounded-remaining guidance; a per-actor log records who did what. The
+cumulative, conflict, and replay checks all carry over to multiple actors unchanged —
+this layer adds ergonomics and attribution, it does **not** fork any check.
+
+> **Scope:** this is shared-world invariant enforcement **with attribution** — a
+> violation emerging from combined valid actions is caught and attributed to the
+> tipping action's actor. It is **not** collusion, conspiracy, or multi-party intent
+> detection: Warp does not infer that actors coordinated, only that a violation
+> emerged over the world they share and which single action triggered it. TypeScript
+> first; other bindings on the roadmap.
+
+Runnable: [`examples/multi-agent.mjs`](packages/commerce-types/examples/multi-agent.mjs).
+
 ### Interop — Warp as the neutral model between platforms
 
 The inbound adapters (`platforms/shopify`, `platforms/stripe`, `platforms/woocommerce`)
