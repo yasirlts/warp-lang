@@ -5,6 +5,50 @@ package `@warp-lang/commerce-types` and tracks the same canonical
 [Warp Commerce Model schema](https://github.com/yasirlts/warp-lang/tree/main/schema),
 frozen at v1.0.0.
 
+## 1.3.0
+
+### Added
+
+This release brings the Python package up to the shared **agent session layer**
+and mirrors the cross-checked session features. Everything below is proven
+equivalent to the TypeScript binding on the shared model by the conformance
+cross-check; no schema change (frozen v1.0.0).
+
+- **Agent guardrail — `guard_action()` / `guard_object()`.** Validate a proposed
+  commerce action before it executes, returning the verdict with each violation's
+  invariant, message, and fix. (npm shipped the guardrail in 1.2.0; the Python
+  1.2.0 release explicitly did not include it — it lands here.)
+- **Agent session toolkit — `create_session()`** with **idempotency** (replay
+  dedup via an idempotency key or content fingerprint — a retried call does not
+  double-refund) and **optimistic concurrency** (a stale `expected_version` is
+  reported as a conflict, not silently applied).
+- **Interop — `unify()` + outbound descriptors** with Shopify and Stripe inbound
+  mappers; a value mismatch across corresponded sources is caught as I-1.
+- **Multi-agent** — invariants over a shared world with per-actor attribution
+  (`create_multi_agent_session`).
+- **Multi-object coherence** — per-tree cumulative conservation across a parent
+  order and its line-item children.
+- **Saga / compensation** — `plan_compensation` / `validate_compensation` /
+  `compensate`: validate a compensating sequence for coherence; Warp validates,
+  it does not execute rollbacks.
+
+### Not in the Python package
+
+To keep scope honest, several 1.3.0 features of the npm package are
+TypeScript-only and are **not** part of `warp-commerce-types`: the fulfillment
+attestation, multi-component settlement validation, the returns/RMA profile, and
+the PayPal/Amazon interop adapters (Python interop carries Shopify and Stripe).
+The compiler diagnostics (per-state monotonicity, domain-specific error
+messages) belong to the Rust crate, not this package.
+
+### Notes
+
+- Additive and backward-compatible: every existing checker name and signature is
+  unchanged.
+- Attribution wording in the multi-agent layer is phrased per-binding; the
+  verdicts (which invariant fired, the tipping actor, conflict-vs-violation)
+  match the other bindings, proven by the cross-check.
+
 ## 1.2.0
 
 ### Added
