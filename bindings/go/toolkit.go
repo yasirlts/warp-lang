@@ -390,6 +390,13 @@ type tally struct {
 type Session struct {
 	world  World
 	ledger map[string]*tally
+	// treeLedger is the per-TREE cumulative refund ledger, keyed by the tree ROOT id
+	// (F6 multi-object coherence). The per-commitment ledger above caps each commitment
+	// against its OWN committed amount; this ADDITIVE ledger caps the SUM of refunds
+	// across a parent + its children against the PARENT's committed amount. Standalone
+	// commitments are never tree members, so this leaves single-commitment behaviour
+	// unchanged.
+	treeLedger map[string]*tally
 	// applied holds keys of actions ALREADY APPLIED. Per-session, in-memory —
 	// durable cross-session idempotency is not provided (see the docs).
 	applied map[string]bool
@@ -397,7 +404,78 @@ type Session struct {
 
 // CreateSession returns a Session holding the given world.
 func CreateSession(world World) *Session {
-	return &Session{world: world, ledger: map[string]*tally{}, applied: map[string]bool{}}
+	return &Session{world: world, ledger: map[string]*tally{}, treeLedger: map[string]*tally{}, applied: map[string]bool{}}
+}
+
+// treeRootID returns the id of commitment's tree root in world — walk parent pointers up
+// while the parent is present in the world. A commitment with no parent (or whose parent
+// is not in the world) is its own root. The append-only parent / children fields already
+// exist on the model (F6), so this is a pure STRUCTURAL read — no schema change.
+func treeRootID(world *World, commitment *gen.Commitment) string {
+	byID := map[string]*gen.Commitment{}
+	for i := range world.Commitments {
+		byID[string(world.Commitments[i].Id)] = &world.Commitments[i]
+	}
+	current := commitment
+	seen := map[string]bool{}
+	for current.Parent != nil {
+		if seen[string(current.Id)] {
+			break
+		}
+		seen[string(current.Id)] = true
+		parent, ok := byID[string(*current.Parent)]
+		if !ok {
+			break
+		}
+		current = parent
+	}
+	return string(current.Id)
+}
+
+// isInTree reports whether commitment is part of a tree — it has a parent (is a child)
+// or has children.
+func isInTree(commitment *gen.Commitment, rootID string) bool {
+	return rootID != string(commitment.Id) || len(commitment.Children) > 0
+}
+
+// treeIsConsistent is the I-6 (Commitment Tree Consistency) STRUCTURAL check for one
+// root + its children, composed from the existing AuditScene.
+//
+// BINDING SHAPE GAP (documented honestly): the TypeScript and Python bindings expose a
+// standalone checkI6TreeConsistency(parent, children) / check_i6_tree_consistency that
+// their session calls directly. The Go runtime has NO such standalone function — I-6 is
+// computed INLINE inside AuditScene (see runtime.go). So rather than re-derive the
+// tree-sum rule (which CONTRACTS forbids), this composes the SAME canonical auditor by
+// running JUST the root + its children subset through AuditScene and looking for the
+// "I-6" id it raises. The VERDICT (whether the tree reconciles) is identical to the
+// other bindings; only the call shape differs. (This mirrors the Rust port.)
+func treeIsConsistent(world *World, rootID string) bool {
+	var root *gen.Commitment
+	for i := range world.Commitments {
+		if string(world.Commitments[i].Id) == rootID {
+			root = &world.Commitments[i]
+			break
+		}
+	}
+	if root == nil {
+		return true
+	}
+	subset := []gen.Commitment{*root}
+	for i := range world.Commitments {
+		c := &world.Commitments[i]
+		if c.Parent != nil && string(*c.Parent) == rootID {
+			subset = append(subset, *c)
+		}
+	}
+	if len(subset) == 1 {
+		return true
+	}
+	for _, id := range AuditScene(subset, nil, nil) {
+		if id == "I-6" {
+			return false
+		}
+	}
+	return true
 }
 
 // World returns the current accumulated world.
@@ -472,6 +550,63 @@ func (s *Session) Propose(action ProposedAction) GuardResult {
 				}
 			}
 
+			// Multi-object coherence (F6): if this commitment is part of a tree (a parent
+			// with children, or a child), cap the SUM of refunds across the whole tree
+			// against the PARENT's (root's) committed amount — so refunds spread over
+			// different children (each individually valid, each child reconciling via
+			// I-6) cannot cumulatively exceed the parent. ADDITIVE to the per-commitment
+			// cap above. Composes the existing tree structural check (I-6, via
+			// AuditScene) + the same I-1 cumulative probe lifted to the root.
+			rootID := treeRootID(&s.world, order)
+			treeMember := isInTree(order, rootID)
+			if treeMember {
+				// Structure first: if the tree does not reconcile (I-6), surface that as
+				// the violation before the cumulative cap.
+				if !treeIsConsistent(&s.world, rootID) {
+					return GuardResult{OK: false, Violations: []GuardViolation{violationFor("I-6")}}
+				}
+				root := findCommitment(&s.world, rootID)
+				if root != nil {
+					treeCommitted, treeCur, tok := committedMoney(root)
+					if tok && string(action.To.Amount.Currency) == treeCur {
+						treePriorAmt, treeCount := 0.0, 0
+						if t, has := s.treeLedger[rootID]; has {
+							treePriorAmt, treeCount = t.amount, t.count
+						}
+						treeCumulative := treePriorAmt + action.To.Amount.Amount
+						if isCumulativeOverRefund(root, treeCumulative, treeCur) {
+							remaining := math.Max(0, treeCommitted-treePriorAmt)
+							bounded := fmt.Sprintf("cumulative refunds across the tree must stay within the parent's committed %s %s; %s %s remains refundable",
+								fmtAmount(treeCommitted), treeCur, fmtAmount(remaining), treeCur)
+							return GuardResult{
+								OK: false,
+								Violations: []GuardViolation{{
+									Rule: "I-1",
+									Message: fmt.Sprintf("Cumulative refunds across the commitment tree rooted at %s would reach %s %s across %d refund(s) on the parent and its children, but the parent committed only %s %s — value is not conserved across the tree.",
+										rootID, fmtAmount(treeCumulative), treeCur, treeCount+1, fmtAmount(treeCommitted), treeCur),
+									Fix: fmt.Sprintf("Refund at most the remaining %s %s across the tree (parent committed %s − already refunded across the tree %s).",
+										fmtAmount(remaining), treeCur, fmtAmount(treeCommitted), fmtAmount(treePriorAmt)),
+								}},
+								Alternatives: []TransitionAlternative{{To: "Refunded", Label: moveLabel("Refunded"), Bounded: strptr(bounded)}},
+							}
+						}
+					}
+				}
+			}
+
+			// recordTree records the accepted refund in the per-tree ledger (only when
+			// this commitment is a tree member — additive, keyed by the root id).
+			recordTree := func() {
+				if !treeMember {
+					return
+				}
+				tp, tc := 0.0, 0
+				if t, has := s.treeLedger[rootID]; has {
+					tp, tc = t.amount, t.count
+				}
+				s.treeLedger[rootID] = &tally{amount: tp + action.To.Amount.Amount, currency: cur, count: tc + 1}
+			}
+
 			// Accepted refund. Keep the order Fulfilled for a PARTIAL refund;
 			// transition to Refunded only once refunds reach committed.
 			if MoneyEquals(cumulative, committed, cur) {
@@ -479,11 +614,13 @@ func (s *Session) Propose(action ProposedAction) GuardResult {
 				if verdict.OK {
 					s.world = *verdict.Next
 					s.ledger[action.Commitment] = &tally{amount: cumulative, currency: cur, count: priorCount + 1}
+					recordTree()
 					s.applied[key] = true
 				}
 				return verdict
 			}
 			s.ledger[action.Commitment] = &tally{amount: cumulative, currency: cur, count: priorCount + 1}
+			recordTree()
 			s.applied[key] = true
 			w := s.world
 			return GuardResult{OK: true, Next: &w}
