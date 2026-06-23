@@ -476,10 +476,76 @@ struct Tally {
     count: u32,
 }
 
+/// The root of `commitment`'s tree in `world` — walk `parent` pointers up while the
+/// parent is present in the world. A commitment with no parent (or whose parent is
+/// not in the world) is its own root. The append-only `parent` / `children` fields
+/// already exist on the model (F6), so this is a pure STRUCTURAL read — no schema
+/// change. Returns the root's id (clone).
+fn tree_root_id(world: &World, commitment: &Commitment) -> String {
+    let by_id: HashMap<&str, &Commitment> = world
+        .commitments
+        .iter()
+        .map(|c| (c.id.as_str(), c))
+        .collect();
+    let mut current = commitment;
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    while let Some(parent_id) = &current.parent {
+        if seen.contains(current.id.as_str()) {
+            break;
+        }
+        seen.insert(current.id.as_str());
+        match by_id.get(parent_id.as_str()) {
+            Some(parent) => current = parent,
+            None => break,
+        }
+    }
+    current.id.clone()
+}
+
+/// A commitment is "in a tree" if it has a parent (is a child) or has children.
+fn is_in_tree(commitment: &Commitment, root_id: &str) -> bool {
+    root_id != commitment.id.as_str() || !commitment.children.is_empty()
+}
+
+/// The I-6 (Commitment Tree Consistency) STRUCTURAL check for one root + its
+/// children, composed from the existing `audit_scene`.
+///
+/// BINDING SHAPE GAP (documented honestly): TypeScript and Python expose a
+/// standalone `checkI6TreeConsistency(parent, children)` / `check_i6_tree_consistency`
+/// that the session calls directly. The Rust runtime has NO such standalone function —
+/// I-6 is computed INLINE inside `audit_scene` (see `runtime::audit_scene`). So rather
+/// than re-derive the tree-sum rule (which CONTRACTS forbids), this composes the SAME
+/// canonical auditor by running JUST the root + its children subset through
+/// `audit_scene` and looking for the `"I-6"` id it raises. The VERDICT (whether the
+/// tree reconciles) is identical to the other bindings; only the call shape differs.
+fn tree_is_consistent(world: &World, root_id: &str) -> bool {
+    let Some(root) = world.commitments.iter().find(|c| c.id == root_id) else {
+        return true;
+    };
+    let children: Vec<Commitment> = world
+        .commitments
+        .iter()
+        .filter(|c| c.parent.as_deref() == Some(root_id))
+        .cloned()
+        .collect();
+    if children.is_empty() {
+        return true;
+    }
+    let mut subset = vec![root.clone()];
+    subset.extend(children);
+    !audit_scene(&subset, &[], &[]).iter().any(|id| id == "I-6")
+}
+
 /// A stateful sequence validator over an accumulating world.
 pub struct Session {
     world: World,
     ledger: HashMap<String, Tally>,
+    /// Per-TREE cumulative refund ledger, keyed by the tree ROOT id (F6). The
+    /// per-commitment `ledger` above caps each commitment against its OWN committed
+    /// amount; this ADDITIVE ledger caps the SUM of refunds across a parent + its
+    /// children against the PARENT's committed amount. Standalone commitments are
+    /// never tree members, so this leaves single-commitment behaviour unchanged.
+    tree_ledger: HashMap<String, Tally>,
     /// Idempotency: keys of actions ALREADY APPLIED. Per-session, in-memory —
     /// durable cross-session idempotency is not provided (see the module docs).
     applied: std::collections::HashSet<String>,
@@ -594,6 +660,88 @@ impl Session {
                         );
                     }
 
+                    // Multi-object coherence (F6): if this commitment is part of a
+                    // tree (a parent with children, or a child), cap the SUM of refunds
+                    // across the whole tree against the PARENT's (root's) committed
+                    // amount — so refunds spread over different children (each
+                    // individually valid, each child reconciling via I-6) cannot
+                    // cumulatively exceed the parent. ADDITIVE to the per-commitment cap
+                    // above. Composes the existing tree structural check (I-6, via
+                    // `audit_scene`) + the same I-1 cumulative probe lifted to the root.
+                    let root_id = tree_root_id(&self.world, &order);
+                    let tree_member = is_in_tree(&order, &root_id);
+                    if tree_member {
+                        // Structure first: if the tree does not reconcile (I-6), surface
+                        // that as the violation before the cumulative cap.
+                        if !tree_is_consistent(&self.world, &root_id) {
+                            return GuardResult::rejected(vec![violation_for("I-6")], vec![]);
+                        }
+                        if let Some(root) = self
+                            .world
+                            .commitments
+                            .iter()
+                            .find(|c| c.id == root_id)
+                            .cloned()
+                        {
+                            if let Some((tree_committed, tree_cur)) = committed_money(&root) {
+                                if refund.currency == tree_cur {
+                                    let (tree_prior, tree_count) = self
+                                        .tree_ledger
+                                        .get(&root_id)
+                                        .map(|t| (t.amount, t.count))
+                                        .unwrap_or((0.0, 0));
+                                    let tree_cumulative = tree_prior + refund.amount;
+                                    if is_cumulative_over_refund(&root, tree_cumulative, &tree_cur)
+                                    {
+                                        let remaining = (tree_committed - tree_prior).max(0.0);
+                                        return GuardResult::rejected(
+                                            vec![GuardViolation {
+                                                rule: "I-1".to_string(),
+                                                message: format!(
+                                                    "Cumulative refunds across the commitment tree rooted at {} would reach {} {} across {} refund(s) on the parent and its children, but the parent committed only {} {} — value is not conserved across the tree.",
+                                                    root_id, fmt_amount(tree_cumulative), tree_cur, tree_count + 1, fmt_amount(tree_committed), tree_cur
+                                                ),
+                                                fix: format!(
+                                                    "Refund at most the remaining {} {} across the tree (parent committed {} − already refunded across the tree {}).",
+                                                    fmt_amount(remaining), tree_cur, fmt_amount(tree_committed), fmt_amount(tree_prior)
+                                                ),
+                                            }],
+                                            vec![TransitionAlternative {
+                                                to: "Refunded".to_string(),
+                                                label: move_label("Refunded"),
+                                                bounded: Some(format!(
+                                                    "cumulative refunds across the tree must stay within the parent's committed {} {}; {} {} remains refundable",
+                                                    fmt_amount(tree_committed), tree_cur, fmt_amount(remaining), tree_cur
+                                                )),
+                                            }],
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Record the accepted refund in the per-tree ledger (only when this
+                    // commitment is a tree member — additive, keyed by the root id).
+                    let record_tree = |s: &mut Session| {
+                        if !tree_member {
+                            return;
+                        }
+                        let (tp, tc) = s
+                            .tree_ledger
+                            .get(&root_id)
+                            .map(|t| (t.amount, t.count))
+                            .unwrap_or((0.0, 0));
+                        s.tree_ledger.insert(
+                            root_id.clone(),
+                            Tally {
+                                amount: tp + refund.amount,
+                                currency: cur.clone(),
+                                count: tc + 1,
+                            },
+                        );
+                    };
+
                     // Accepted refund. Keep the order Fulfilled for a PARTIAL refund;
                     // transition to Refunded only once refunds reach committed.
                     let fully = money_equals(cumulative, committed, &cur);
@@ -605,10 +753,11 @@ impl Session {
                                 action.commitment.clone(),
                                 Tally {
                                     amount: cumulative,
-                                    currency: cur,
+                                    currency: cur.clone(),
                                     count: prior_count + 1,
                                 },
                             );
+                            record_tree(self);
                             self.applied.insert(key);
                         }
                         return verdict;
@@ -617,10 +766,11 @@ impl Session {
                         action.commitment.clone(),
                         Tally {
                             amount: cumulative,
-                            currency: cur,
+                            currency: cur.clone(),
                             count: prior_count + 1,
                         },
                     );
+                    record_tree(self);
                     self.applied.insert(key);
                     return GuardResult::accepted(self.world.clone());
                 }
@@ -641,6 +791,7 @@ pub fn create_session(world: World) -> Session {
     Session {
         world,
         ledger: HashMap::new(),
+        tree_ledger: HashMap::new(),
         applied: std::collections::HashSet::new(),
     }
 }
@@ -1161,6 +1312,145 @@ mod tests {
                 CommitmentState::Active,
                 "s"
             ))
+            .is_ok());
+    }
+
+    // --- F6 multi-object coherence (per-tree cumulative cap) ------------------
+
+    /// A Fulfilled commitment with id/amount and optional parent / children links.
+    fn commit_linked(id: &str, amount: f64, parent: Option<&str>, children: &[&str]) -> Commitment {
+        serde_json::from_value(json!({
+            "id": id,
+            "parties": { "initiator": "buyer", "counterparty": "seller", "intermediaries": [] },
+            "subject": { "offered": [], "requested": [
+                { "id": "v", "form": { "kind": "Money", "money": { "amount": amount, "currency": "MAD" } }, "quantity": 1, "state": { "type": "Available" } }
+            ] },
+            "state": { "type": "Fulfilled" },
+            "history": [],
+            "parent": parent,
+            "children": children,
+            "created_at": "2026-01-02T08:00:00.000Z"
+        }))
+        .expect("valid commitment")
+    }
+
+    /// A parent (200) with two 100-children that reconcile via I-6.
+    fn tree(parent_id: &str) -> Vec<Commitment> {
+        let a = format!("{parent_id}-A");
+        let b = format!("{parent_id}-B");
+        vec![
+            commit_linked(parent_id, 200.0, None, &[&a, &b]),
+            commit_linked(&a, 100.0, Some(parent_id), &[]),
+            commit_linked(&b, 100.0, Some(parent_id), &[]),
+        ]
+    }
+
+    fn refund_keyed_for(commitment: &str, amount: f64, key: &str) -> ProposedAction {
+        let mut a = ProposedAction::new(commitment, refund_state(amount), "agent");
+        a.idempotency_key = Some(key.to_string());
+        a
+    }
+
+    #[test]
+    fn tree_catches_cumulative_over_refund_spread_across_children() {
+        let mut s = create_session(World {
+            commitments: tree("order-1"),
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        // Each child refund is ≤ its own committed (100) — individually valid.
+        assert!(s.propose(&refund_keyed_for("order-1-A", 80.0, "a")).is_ok());
+        assert!(s.propose(&refund_keyed_for("order-1-B", 80.0, "b")).is_ok());
+        // Parent refund of 80 ≤ 200 on its own, but the TREE would reach 240 > 200.
+        let over = s.propose(&refund_keyed_for("order-1", 80.0, "p"));
+        let (violations, alternatives) = rejected(&over);
+        assert_eq!(violations[0].rule, "I-1");
+        assert!(violations[0].message.contains("tree"));
+        assert!(violations[0].message.contains("240"));
+        assert!(violations[0].message.contains("200"));
+        let alt = alternatives.iter().find(|a| a.to == "Refunded").unwrap();
+        assert!(alt.bounded.as_ref().unwrap().contains("40")); // remaining across tree
+    }
+
+    #[test]
+    fn tree_caps_sum_even_when_each_child_is_individually_valid() {
+        let mut s = create_session(World {
+            commitments: tree("order-1"),
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        assert!(s
+            .propose(&refund_keyed_for("order-1-A", 100.0, "a"))
+            .is_ok());
+        assert!(s
+            .propose(&refund_keyed_for("order-1-B", 100.0, "b"))
+            .is_ok());
+        // The tree is now fully refunded; any further refund in it is capped.
+        let more = s.propose(&refund_keyed_for("order-1", 1.0, "p"));
+        assert!(!more.is_ok());
+    }
+
+    #[test]
+    fn child_over_refund_still_caught_per_commitment() {
+        let mut s = create_session(World {
+            commitments: tree("order-1"),
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        // child-A committed 100; refunding 150 against it exceeds the CHILD itself.
+        let over = s.propose(&refund_keyed_for("order-1-A", 150.0, "a"));
+        let (violations, _) = rejected(&over);
+        assert_eq!(violations[0].rule, "I-1");
+    }
+
+    #[test]
+    fn standalone_commitment_unchanged_message_is_per_commitment_form() {
+        let standalone = fulfilled_order("solo", 200.0);
+        let mut s = create_session(World {
+            commitments: vec![standalone],
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        assert!(s.propose(&refund_keyed_for("solo", 120.0, "a")).is_ok());
+        let over = s.propose(&refund_keyed_for("solo", 100.0, "b")); // 220 > 200
+        let (violations, _) = rejected(&over);
+        assert_eq!(violations[0].rule, "I-1");
+        // The standalone message is the per-commitment form, not the tree form.
+        assert!(!violations[0].message.contains("tree"));
+    }
+
+    #[test]
+    fn valid_tree_of_refunds_within_the_parent_completes() {
+        let mut s = create_session(World {
+            commitments: tree("order-1"),
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        assert!(s
+            .propose(&refund_keyed_for("order-1-A", 100.0, "a"))
+            .is_ok());
+        assert!(s
+            .propose(&refund_keyed_for("order-1-B", 100.0, "b"))
+            .is_ok());
+    }
+
+    #[test]
+    fn tree_replay_does_not_double_count_the_tree_ledger() {
+        let mut s = create_session(World {
+            commitments: tree("order-1"),
+            fulfillments: vec![],
+            parties: vec![],
+        });
+        assert!(s.propose(&refund_keyed_for("order-1-A", 80.0, "k")).is_ok());
+        let replay = s.propose(&refund_keyed_for("order-1-A", 80.0, "k")); // same key
+        assert!(replay.is_replay());
+        // Tree not double-counted: child-B committed only 100, so 120 fails per-child…
+        assert!(!s
+            .propose(&refund_keyed_for("order-1-B", 120.0, "b"))
+            .is_ok());
+        // …but 100 fits (tree 80 + 100 = 180 ≤ 200).
+        assert!(s
+            .propose(&refund_keyed_for("order-1-B", 100.0, "b2"))
             .is_ok());
     }
 
