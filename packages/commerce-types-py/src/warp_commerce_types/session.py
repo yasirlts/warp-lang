@@ -20,6 +20,16 @@ session tracks partial refunds in its own ledger (a binding-layer accumulation, 
 a schema change) and keeps the order in ``Fulfilled`` until it is fully refunded,
 at which point it transitions to ``Refunded``.
 
+MULTI-OBJECT COHERENCE (F6): the per-commitment ledger above caps each commitment
+against its OWN committed amount. A second, per-TREE ledger (keyed by the tree ROOT
+id) caps the SUM of refunds across a parent and its children against the PARENT's
+committed amount — so refunds spread over different children (each individually
+valid, each child reconciling to the parent via I-6) cannot cumulatively exceed the
+parent. This is ADDITIVE to the per-commitment cap and composes the existing
+:func:`check_i6_tree_consistency` (structure) + the same I-1 cumulative probe lifted
+to the parent. Standalone commitments are never tree members, so single-commitment
+behaviour is unchanged.
+
 Scope: TypeScript and Python. Rust / Go ports are roadmap.
 """
 from __future__ import annotations
@@ -36,7 +46,7 @@ from .guard import (
     check_version,
     guard_action,
 )
-from .invariants import check_i1_value_conservation
+from .invariants import check_i1_value_conservation, check_i6_tree_consistency
 from .money import add, money_equals
 from .transitions import _type_of, is_valid_commitment_transition
 
@@ -92,12 +102,41 @@ def _is_cumulative_over_refund(order: Commitment, total: float, currency: str) -
     )
 
 
+def _tree_root_of(world: World, commitment: Commitment) -> Commitment:
+    """The root of ``commitment``'s tree in ``world`` — walk ``parent`` pointers up
+    while the parent is present in the world. A commitment with no parent (or whose
+    parent is not in the world) is its own root. The append-only ``parent`` /
+    ``children`` fields already exist on the model, so this is a pure structural
+    read — no schema change."""
+    by_id = {str(c.id): c for c in world.commitments}
+    current = commitment
+    seen: set = set()
+    while current.parent is not None:
+        parent = by_id.get(str(current.parent))
+        if parent is None or str(current.id) in seen:
+            break
+        seen.add(str(current.id))
+        current = parent
+    return current
+
+
+def _is_in_tree(commitment: Commitment, root: Commitment) -> bool:
+    """A commitment is "in a tree" if it has a parent (is a child) or has children."""
+    return str(root.id) != str(commitment.id) or len(commitment.children) > 0
+
+
 class Session:
     """A stateful sequence validator over an accumulating world."""
 
     def __init__(self, initial_world: World) -> None:
         self._world = initial_world
         self._ledger: Dict[str, Dict[str, Any]] = {}  # commitment_id -> {total: Money, count: int}
+        # Per-TREE cumulative refund ledger, keyed by the tree ROOT id (F6). The
+        # per-commitment ``_ledger`` above caps each commitment against its own
+        # committed amount; this caps the SUM of refunds across a parent + its children
+        # against the parent's committed amount. Standalone commitments are never tree
+        # members, so single-commitment behaviour is byte-for-byte unchanged.
+        self._tree_ledger: Dict[str, Dict[str, Any]] = {}  # root_id -> {total: Money, count: int}
         # Idempotency: keys of actions ALREADY APPLIED in this session. Per-session,
         # in-memory — durable cross-session idempotency is not provided (see docs).
         self._applied: set = set()
@@ -180,10 +219,71 @@ class Session:
                         ],
                     )
 
+                # Multi-object coherence (F6): if this commitment is part of a tree (a
+                # parent with children, or a child), cap the SUM of refunds across the
+                # whole tree against the PARENT's committed amount — so refunds spread
+                # over different children (each individually valid, each child
+                # reconciling via I-6) cannot cumulatively exceed the parent. Composes
+                # the existing check_i6_tree_consistency (structure) + the same I-1
+                # cumulative probe (lifted to the parent).
+                root = _tree_root_of(self._world, order)
+                tree_member = _is_in_tree(order, root)
+                if tree_member:
+                    children = [c for c in self._world.commitments if c.parent is not None and str(c.parent) == str(root.id)]
+                    i6 = check_i6_tree_consistency(root, children)
+                    if i6:
+                        return GuardResult(
+                            ok=False,
+                            violations=[GuardViolation(rule=v.invariant, message=v.description, fix=v.fix) for v in i6],
+                        )
+                    tree_committed = _committed_total(root)
+                    if tree_committed is not None and proposed_currency == tree_committed.currency:
+                        tree_prior = self._tree_ledger.get(str(root.id))
+                        tree_prior_amt = tree_prior["total"].amount if tree_prior else 0.0
+                        tree_count = tree_prior["count"] if tree_prior else 0
+                        tree_cumulative = tree_prior_amt + proposed_amount
+                        if _is_cumulative_over_refund(root, tree_cumulative, tree_committed.currency):
+                            remaining = max(0.0, tree_committed.amount - tree_prior_amt)
+                            return GuardResult(
+                                ok=False,
+                                violations=[
+                                    GuardViolation(
+                                        rule="I-1",
+                                        message="Cumulative refunds across the commitment tree rooted at %s would "
+                                        "reach %s %s across %d refund(s) on the parent and its children, but the "
+                                        "parent committed only %s %s — value is not conserved across the tree."
+                                        % (root.id, _fmt(tree_cumulative), tree_committed.currency, tree_count + 1,
+                                           _fmt(tree_committed.amount), tree_committed.currency),
+                                        fix="Refund at most the remaining %s %s across the tree (parent committed %s "
+                                        "− already refunded across the tree %s)."
+                                        % (_fmt(remaining), tree_committed.currency, _fmt(tree_committed.amount), _fmt(tree_prior_amt)),
+                                    )
+                                ],
+                                alternatives=[
+                                    TransitionAlternative(
+                                        to="Refunded",
+                                        label="refund the commitment",
+                                        bounded="cumulative refunds across the tree must stay within the parent's "
+                                        "committed %s %s; %s %s remains refundable"
+                                        % (_fmt(tree_committed.amount), tree_committed.currency, _fmt(remaining), tree_committed.currency),
+                                    )
+                                ],
+                            )
+
                 # Accepted refund. Record it. Keep the order in Fulfilled for a PARTIAL
                 # refund; transition to Refunded only once the refunds reach committed.
                 proposed_money = Money(amount=proposed_amount, currency=proposed_currency)
                 new_total = add(prior["total"], proposed_money) if prior else proposed_money
+
+                def _record_tree() -> None:
+                    if not tree_member:
+                        return
+                    tp = self._tree_ledger.get(str(root.id))
+                    self._tree_ledger[str(root.id)] = {
+                        "total": add(tp["total"], proposed_money) if tp else proposed_money,
+                        "count": (tp["count"] if tp else 0) + 1,
+                    }
+
                 fully_refunded = money_equals(cumulative, committed.amount, committed.currency)
                 if fully_refunded:
                     verdict = guard_action(self._world, action)
@@ -191,9 +291,11 @@ class Session:
                         return verdict
                     self._world = verdict.next
                     self._ledger[action.commitment] = {"total": new_total, "count": prior_count + 1}
+                    _record_tree()
                     self._applied.add(key)
                     return verdict
                 self._ledger[action.commitment] = {"total": new_total, "count": prior_count + 1}
+                _record_tree()
                 self._applied.add(key)
                 return GuardResult(ok=True, next=self._world)
 

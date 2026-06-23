@@ -106,6 +106,22 @@ from .guard import (  # noqa: F401
     guard_object,
 )
 from .session import Session, create_session  # noqa: F401
+from .multi_agent import (  # noqa: F401
+    AgentActionRecord,
+    MultiAgentResult,
+    MultiAgentSession,
+    create_multi_agent_session,
+)
+from .saga import (  # noqa: F401
+    CompensationPlan,
+    CompensationResult,
+    CompensationStep,
+    ForwardStep,
+    compensate,
+    compensate_session,
+    plan_compensation,
+    validate_compensation,
+)
 from .interop import (  # noqa: F401
     EmitResult,
     UnifyResult,
