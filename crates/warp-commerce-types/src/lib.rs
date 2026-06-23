@@ -29,4 +29,18 @@ pub mod runtime;
 /// transition logic.
 pub mod toolkit;
 
+/// Multi-agent verification (F5) — several NAMED agents acting on one SHARED world,
+/// with a who-did-what log and per-actor attribution. A thin wrapper over
+/// [`toolkit::Session`] that adds attribution; it does not fork or re-derive any check.
+/// Mirrors the TypeScript / Python multi-agent modules behaviourally (the attribution
+/// string wording is this binding's own — see the module docs).
+pub mod multi_agent;
+
+/// Saga / compensation (F7) — plan, validate, and run a coherent sequence of
+/// compensating actions that unwind a multi-step flow, composing the existing
+/// valid-transitions table + [`toolkit::Session`]. Default mapping: Fulfilled ->
+/// Refunded, committed-but-undelivered -> Cancelled; overrides are bounded by the
+/// transition table. Mirrors the TypeScript / Python saga modules behaviourally.
+pub mod saga;
+
 pub use generated::types::SCHEMA_VERSION;
