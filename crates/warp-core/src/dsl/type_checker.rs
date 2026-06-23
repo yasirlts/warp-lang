@@ -322,8 +322,267 @@ pub enum TypeError {
     },
 }
 
-impl fmt::Display for TypeError {
+// ===========================================================================
+// Diagnostic — the structured, domain-specific explanation of a TypeError.
+// ===========================================================================
+//
+// Every `TypeError` renders through one shared shape so a merchant always
+// reads the same four things in the same order (P-2: a confusing error is a
+// bug):
+//
+//   1. **summary**  — `Line N: <what went wrong>` (the terse fact).
+//   2. **why**      — plain-commerce-language reason the rule exists.
+//   3. **invariant**— which Warp Commerce Model invariant (I-1…I-6) it
+//                     protects, by number and name. `None` for the three
+//                     structural errors (unknown node, unresolved reference,
+//                     missing input) that predate the invariant layer.
+//   4. **fix**      — one concrete, actionable change that resolves THIS
+//                     violation. A fix hint is a real edit a merchant can
+//                     make, never a promise about what the compiler catches.
+//
+// The accessors below are also public so non-`Display` consumers (the AI
+// builder's correction loop, a future canvas inspector) can read the parts
+// individually instead of regex-ing the rendered string.
+
+/// The Warp Commerce Model invariant a [`TypeError`] protects, as a
+/// `(number, name)` pair for diagnostics. Returned by
+/// [`TypeError::invariant`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Invariant {
+    /// The invariant number, 1–6.
+    pub number: u8,
+    /// The invariant's short name (e.g. `"Value Conservation"`).
+    pub name: &'static str,
+}
+
+impl fmt::Display for Invariant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Invariant {} ({})", self.number, self.name)
+    }
+}
+
+impl TypeError {
+    /// The Warp Commerce Model invariant this error protects, or `None` for
+    /// the structural checks (unknown node / unresolved reference / missing
+    /// input) that are not tied to a numbered invariant. The currency-mixing
+    /// warning shares I-1 with its blocking sibling.
+    pub fn invariant(&self) -> Option<Invariant> {
+        let inv = |number, name| Some(Invariant { number, name });
+        match self {
+            TypeError::UnknownNodeType { .. }
+            | TypeError::UnresolvedReference { .. }
+            | TypeError::MissingRequiredInput { .. } => None,
+            TypeError::CurrencyMixing { .. } | TypeError::CurrencyMixingWarning { .. } => {
+                inv(1, "Value Conservation")
+            }
+            TypeError::StateMonotonicityViolation { .. }
+            | TypeError::CommitmentStateRegression { .. } => inv(2, "State Monotonicity"),
+            TypeError::MissingCapacityVerification { .. } => inv(3, "Capacity Verification"),
+            TypeError::TemporalOrderViolation { .. } => inv(4, "Temporal Integrity"),
+            TypeError::DuplicateInstanceName { .. } => inv(5, "Identity Permanence"),
+            TypeError::CommitmentTreeInconsistency { .. } => inv(6, "Commitment Tree Consistency"),
+        }
+    }
+
+    /// A plain-commerce-language explanation of WHY this violation is
+    /// blocked — the reasoning a merchant (not a compiler engineer) needs.
+    /// Never a promise about coverage; just the reason the rule exists.
+    pub fn explanation(&self) -> String {
+        match self {
+            TypeError::UnknownNodeType { node_type, .. } => format!(
+                "'{}' is not a node Warp ships, so the compiler has no type signature to \
+                 check its inputs and outputs against.",
+                node_type
+            ),
+            TypeError::UnresolvedReference { instance, .. } => format!(
+                "A reference can only read the output of a node declared earlier in the \
+                 workflow; '{}' is never declared above this node, so there is no value to \
+                 read.",
+                instance
+            ),
+            TypeError::MissingRequiredInput {
+                node_type,
+                missing_key,
+                ..
+            } => format!(
+                "{} cannot run without '{}' — it is a required input, so leaving it out \
+                 would fail at execution time on a live order.",
+                node_type, missing_key
+            ),
+            TypeError::CurrencyMixing {
+                currencies_found, ..
+            }
+            | TypeError::CurrencyMixingWarning {
+                currencies_found, ..
+            } => format!(
+                "Amounts in different currencies ({}) are not the same kind of value — adding \
+                 or comparing them without a stated exchange rate would silently lose or \
+                 invent money.",
+                currencies_found.join(" and ")
+            ),
+            TypeError::StateMonotonicityViolation {
+                from_stage,
+                to_stage,
+                ..
+            } => format!(
+                "The commerce lifecycle runs Intent → Commitment → Fulfillment in one \
+                 direction; moving from the {} stage back to the {} stage would un-happen \
+                 something that already happened.",
+                from_stage, to_stage
+            ),
+            TypeError::CommitmentStateRegression {
+                from_state,
+                to_state,
+                ..
+            } => format!(
+                "'{}' → '{}' is not a transition the commitment lifecycle allows; the order \
+                 cannot move from '{}' back to '{}' once it has reached '{}'.",
+                from_state, to_state, from_state, to_state, from_state
+            ),
+            TypeError::MissingCapacityVerification {
+                accepted_producing_node,
+                ..
+            } => format!(
+                "'{}' accepts a commitment (the order becomes binding), but nothing earlier \
+                 confirmed the customer's profile/capacity — so the workflow commits before \
+                 it knows it can.",
+                accepted_producing_node
+            ),
+            TypeError::TemporalOrderViolation {
+                earlier_node,
+                later_node,
+                ..
+            } => format!(
+                "'{}' carries out (fulfills) a commitment that '{}' has not formed yet — you \
+                 cannot ship, message, or deliver against a commitment that comes later in \
+                 the workflow.",
+                earlier_node, later_node
+            ),
+            TypeError::DuplicateInstanceName { name, .. } => format!(
+                "Warp uses an instance name as a stable, permanent identifier for one node; \
+                 reusing '{}' makes references and the audit trail ambiguous about which \
+                 node is meant.",
+                name
+            ),
+            TypeError::CommitmentTreeInconsistency {
+                parent_node,
+                parent_value,
+                child_node,
+                child_value,
+                ..
+            } => format!(
+                "Child commitment '{}' ({}) is larger than its parent '{}' ({}); a sub-commitment \
+                 cannot promise more value than the commitment it is part of.",
+                child_node, child_value, parent_node, parent_value
+            ),
+        }
+    }
+
+    /// One concrete, actionable change that resolves THIS violation. The hint
+    /// is a real edit, not a guarantee — following it removes this specific
+    /// error.
+    pub fn fix_hint(&self) -> String {
+        match self {
+            TypeError::UnknownNodeType { suggestion, .. } => match suggestion {
+                Some(s) => format!(
+                    "Did you mean '{}'? Rename the node, or pick a shipped node from the \
+                     catalog.",
+                    s
+                ),
+                None => "Check the node name against the catalog — the spelling or casing \
+                         may be off (node names are PascalCase, e.g. WhatsAppSend)."
+                    .to_string(),
+            },
+            TypeError::UnresolvedReference { instance, .. } => format!(
+                "Declare '{}' above this node, fix the name if it is a typo, or use the \
+                 keyword 'trigger' to read the workflow's triggering event.",
+                instance
+            ),
+            TypeError::MissingRequiredInput {
+                instance_name,
+                missing_key,
+                ..
+            } => format!(
+                "Add a '{}:' entry to the '{}' node's config.",
+                missing_key, instance_name
+            ),
+            TypeError::CurrencyMixing { .. } => "Convert the amounts to one currency first \
+                 using an explicit conversion (e.g. a `convert: { from: …, to: … }` entry), \
+                 then reference only the converted value."
+                .to_string(),
+            TypeError::CurrencyMixingWarning { .. } => "Confirm an explicit currency \
+                 conversion runs before this node, or convert the amounts to one currency \
+                 here so no implicit exchange is assumed."
+                .to_string(),
+            TypeError::StateMonotonicityViolation {
+                regressed_node,
+                prior_node,
+                ..
+            } => format!(
+                "Move '{}' before '{}', or model the step that looks backward as a new \
+                 forward commitment (e.g. a reversal/refund commitment) rather than a return \
+                 to an earlier stage.",
+                regressed_node, prior_node
+            ),
+            TypeError::CommitmentStateRegression {
+                from_state,
+                to_state,
+                ..
+            } => format!(
+                "Replace the '{}' → '{}' step with a forward transition the model allows from \
+                 '{}' (e.g. express a refund, dispute, or cancellation as its own forward \
+                 state), or reorder the nodes so commitment states only advance.",
+                from_state, to_state, from_state
+            ),
+            TypeError::MissingCapacityVerification {
+                accepted_producing_node,
+                ..
+            } => format!(
+                "Add an ACPGetCustomerProfile node before '{}' so the customer's capacity is \
+                 verified before the commitment is accepted.",
+                accepted_producing_node
+            ),
+            TypeError::TemporalOrderViolation {
+                earlier_node,
+                later_node,
+                ..
+            } => format!(
+                "Move '{}' (the commitment) above '{}' (the fulfillment) so the commitment \
+                 forms first.",
+                later_node, earlier_node
+            ),
+            TypeError::DuplicateInstanceName {
+                name,
+                first_declared_line,
+                ..
+            } => format!(
+                "Give this node a different name — '{}' is already taken at line {}.",
+                name, first_declared_line
+            ),
+            TypeError::CommitmentTreeInconsistency {
+                child_node,
+                child_value,
+                parent_value,
+                ..
+            } => format!(
+                "Lower child commitment '{}' to at most the parent value ({}), or raise the \
+                 parent so it is not exceeded ('{}' currently asks for {}).",
+                child_node, parent_value, child_node, child_value
+            ),
+        }
+    }
+}
+
+impl fmt::Display for TypeError {
+    /// Renders a [`TypeError`] as a domain-specific diagnostic: the terse
+    /// summary, then `Why:` (plain-language reason), the invariant it
+    /// protects when there is one, and a concrete `Fix:` hint. The
+    /// summary keeps the legacy phrasing (e.g. `Did you mean`, `Invariant 1`,
+    /// `per-state`) downstream tools already match on; the enrichment is
+    /// appended, never substituted.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Summary line — the terse fact, line-numbered, with legacy phrasing
+        // preserved so existing matchers keep working.
         match self {
             TypeError::UnknownNodeType {
                 node_type,
@@ -334,8 +593,8 @@ impl fmt::Display for TypeError {
                     f,
                     "Line {}: Unknown node type '{}'. Did you mean '{}'?",
                     line, node_type, s
-                ),
-                None => write!(f, "Line {}: Unknown node type '{}'.", line, node_type),
+                )?,
+                None => write!(f, "Line {}: Unknown node type '{}'.", line, node_type)?,
             },
             TypeError::UnresolvedReference {
                 reference,
@@ -344,9 +603,9 @@ impl fmt::Display for TypeError {
             } => write!(
                 f,
                 "Line {}: Reference '{}' points at instance '{}', which is not declared \
-                 above this node. Declare it earlier or use the keyword 'trigger'.",
+                 above this node.",
                 line, reference, instance
-            ),
+            )?,
             TypeError::MissingRequiredInput {
                 node_type,
                 instance_name,
@@ -356,7 +615,7 @@ impl fmt::Display for TypeError {
                 f,
                 "Line {}: {} '{}' is missing required input '{}'.",
                 line, node_type, instance_name, missing_key
-            ),
+            )?,
             TypeError::CurrencyMixing {
                 node_type,
                 instance_name,
@@ -365,14 +624,12 @@ impl fmt::Display for TypeError {
             } => write!(
                 f,
                 "Line {}: Node '{}' ({}) references multiple currencies: {}. Mixed-currency \
-                 values violate Value Conservation (Invariant 1) — they cannot be combined \
-                 without loss. Convert to a single currency first; an explicit currency \
-                 conversion is the sanctioned path.",
+                 values violate Value Conservation (Invariant 1).",
                 line,
                 instance_name,
                 node_type,
                 currencies_found.join(", ")
-            ),
+            )?,
             TypeError::CurrencyMixingWarning {
                 node_type,
                 instance_name,
@@ -381,13 +638,13 @@ impl fmt::Display for TypeError {
             } => write!(
                 f,
                 "Warning — Line {}: Node '{}' ({}) references multiple currencies: {}. \
-                 Verify that currency conversion is handled before this node. \
-                 Mixed-currency operations violate the Value Conservation invariant.",
+                 Mixed-currency operations violate the Value Conservation invariant \
+                 (Invariant 1).",
                 line,
                 instance_name,
                 node_type,
                 currencies_found.join(", ")
-            ),
+            )?,
             TypeError::StateMonotonicityViolation {
                 prior_node,
                 regressed_node,
@@ -397,12 +654,10 @@ impl fmt::Display for TypeError {
             } => write!(
                 f,
                 "Line {}: State monotonicity violation. '{}' is a {}-stage node declared after \
-                 '{}' ({} stage); the commerce lifecycle (Intent → Commitment → Fulfillment) \
-                 only moves forward. Per Invariant 2 (State Monotonicity), a workflow cannot \
-                 regress to an earlier lifecycle stage — express a reversal as a new forward \
-                 commitment, not a backward step.",
+                 '{}' ({} stage) — the commerce lifecycle regresses. Invariant 2 (State \
+                 Monotonicity).",
                 line, regressed_node, to_stage, prior_node, from_stage
-            ),
+            )?,
             TypeError::CommitmentStateRegression {
                 prior_node,
                 regressed_node,
@@ -413,11 +668,9 @@ impl fmt::Display for TypeError {
                 f,
                 "Line {}: State monotonicity violation (per-state). '{}' declares commitment \
                  state '{}' after '{}' declared '{}', but '{}' -> '{}' is not a valid commitment \
-                 transition. Per Invariant 2 (State Monotonicity), a commitment cannot regress to \
-                 an earlier state — express a reversal (refund, dispute, cancellation) as a \
-                 forward transition the model allows, not a backward step.",
+                 transition. Invariant 2 (State Monotonicity).",
                 line, regressed_node, to_state, prior_node, from_state, from_state, to_state
-            ),
+            )?,
             TypeError::MissingCapacityVerification {
                 accepted_producing_node,
                 line,
@@ -425,10 +678,9 @@ impl fmt::Display for TypeError {
             } => write!(
                 f,
                 "Line {}: Workflow reaches Commitment(Accepted) via '{}' without a prior \
-                 capacity verification step. Add ACPGetCustomerProfile before '{}' to verify \
-                 Party capacity per Invariant 3 of the Warp Commerce Model.",
-                line, accepted_producing_node, accepted_producing_node
-            ),
+                 capacity verification step. Invariant 3 (Capacity Verification).",
+                line, accepted_producing_node
+            )?,
             TypeError::TemporalOrderViolation {
                 earlier_node,
                 later_node,
@@ -436,22 +688,20 @@ impl fmt::Display for TypeError {
             } => write!(
                 f,
                 "Line {}: Temporal order violation. '{}' produces a Fulfillment state but \
-                 appears before '{}' which produces a Commitment state. In the Warp Commerce \
-                 Model, Commitments form before Fulfillments execute. Move '{}' before '{}' \
-                 in your workflow declaration.",
-                line, earlier_node, later_node, later_node, earlier_node
-            ),
+                 appears before '{}' which produces a Commitment state. Invariant 4 (Temporal \
+                 Integrity).",
+                line, earlier_node, later_node
+            )?,
             TypeError::DuplicateInstanceName {
                 name,
                 first_declared_line,
                 duplicate_line,
             } => write!(
                 f,
-                "Line {}: Duplicate instance name '{}'. Already declared at line {}. Each node \
-                 instance must have a unique name within a workflow. Warp uses instance names as \
-                 stable identifiers — duplicates violate Identity Permanence (Invariant 5).",
+                "Line {}: Duplicate instance name '{}'. Already declared at line {}. Invariant 5 \
+                 (Identity Permanence).",
                 duplicate_line, name, first_declared_line
-            ),
+            )?,
             TypeError::CommitmentTreeInconsistency {
                 parent_node,
                 parent_value,
@@ -461,11 +711,17 @@ impl fmt::Display for TypeError {
             } => write!(
                 f,
                 "Line {}: Commitment tree inconsistency. Child commitment '{}' has value {} \
-                 which exceeds parent commitment '{}' value {}. Per Invariant 6, child \
-                 Commitment values must not exceed their parent.",
+                 which exceeds parent commitment '{}' value {}. Invariant 6 (Commitment Tree \
+                 Consistency).",
                 line, child_node, child_value, parent_node, parent_value
-            ),
+            )?,
         }
+
+        // Enrichment — why it is blocked and how to fix it. Appended in a
+        // fixed order so every diagnostic reads the same way.
+        write!(f, " Why: {}", self.explanation())?;
+        write!(f, " Fix: {}", self.fix_hint())?;
+        Ok(())
     }
 }
 
@@ -2018,6 +2274,305 @@ mod tests {
         }
         .to_string();
         assert!(mono.contains("Line 6") && mono.contains("Invariant 2"));
+    }
+
+    // ========================================================================
+    // F29 — domain-specific error messages with fix suggestions.
+    //
+    // Every enriched diagnostic must carry, accurately: the invariant it
+    // protects (where one applies), a plain-language `Why:`, and a `Fix:` hint
+    // that is a real edit resolving THAT specific violation.
+    // ========================================================================
+
+    #[test]
+    fn f29_every_blocking_diagnostic_has_why_and_fix() {
+        // A representative blocking error of each invariant must render with
+        // both an explanation and a fix hint, in the fixed order.
+        let samples = vec![
+            TypeError::CurrencyMixing {
+                node_type: "CartAbandoned".to_string(),
+                instance_name: "trigger".to_string(),
+                currencies_found: vec!["EUR".to_string(), "MAD".to_string()],
+                line: 5,
+            },
+            TypeError::StateMonotonicityViolation {
+                prior_node: "ord".to_string(),
+                regressed_node: "occ".to_string(),
+                from_stage: "Commitment".to_string(),
+                to_stage: "Intent".to_string(),
+                line: 6,
+            },
+            TypeError::CommitmentStateRegression {
+                prior_node: "done".to_string(),
+                regressed_node: "reopen".to_string(),
+                from_state: "Fulfilled".to_string(),
+                to_state: "Accepted".to_string(),
+                line: 7,
+            },
+            TypeError::MissingCapacityVerification {
+                node_type: "OrderPlaced".to_string(),
+                instance_name: "ord".to_string(),
+                accepted_producing_node: "ord".to_string(),
+                line: 8,
+            },
+            TypeError::TemporalOrderViolation {
+                earlier_node: "msg".to_string(),
+                later_node: "ord".to_string(),
+                line: 9,
+            },
+            TypeError::DuplicateInstanceName {
+                name: "dup".to_string(),
+                first_declared_line: 4,
+                duplicate_line: 10,
+            },
+            TypeError::CommitmentTreeInconsistency {
+                parent_node: "parent".to_string(),
+                parent_value: "500 MAD".to_string(),
+                child_node: "child".to_string(),
+                child_value: "800 MAD".to_string(),
+                line: 11,
+            },
+        ];
+        for e in samples {
+            let msg = e.to_string();
+            let inv = e
+                .invariant()
+                .expect("blocking error must name an invariant");
+            assert!(
+                msg.contains(&format!("Invariant {}", inv.number)),
+                "diagnostic must cite its invariant: {msg}"
+            );
+            assert!(msg.contains("Why: "), "diagnostic must explain why: {msg}");
+            assert!(
+                msg.contains("Fix: "),
+                "diagnostic must suggest a fix: {msg}"
+            );
+            assert!(
+                msg.find("Why: ") < msg.find("Fix: "),
+                "Why must precede Fix: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn f29_invariant_mapping_is_correct() {
+        // Each variant maps to the right numbered invariant; the three
+        // structural checks map to none.
+        assert_eq!(
+            TypeError::CurrencyMixing {
+                node_type: "n".into(),
+                instance_name: "i".into(),
+                currencies_found: vec!["MAD".into(), "EUR".into()],
+                line: 1,
+            }
+            .invariant()
+            .unwrap()
+            .number,
+            1
+        );
+        assert_eq!(
+            TypeError::StateMonotonicityViolation {
+                prior_node: "a".into(),
+                regressed_node: "b".into(),
+                from_stage: "Commitment".into(),
+                to_stage: "Intent".into(),
+                line: 1,
+            }
+            .invariant()
+            .unwrap()
+            .number,
+            2
+        );
+        assert_eq!(
+            TypeError::CommitmentStateRegression {
+                prior_node: "a".into(),
+                regressed_node: "b".into(),
+                from_state: "Fulfilled".into(),
+                to_state: "Accepted".into(),
+                line: 1,
+            }
+            .invariant()
+            .unwrap()
+            .number,
+            2
+        );
+        assert_eq!(
+            TypeError::MissingCapacityVerification {
+                node_type: "n".into(),
+                instance_name: "i".into(),
+                accepted_producing_node: "n".into(),
+                line: 1,
+            }
+            .invariant()
+            .unwrap()
+            .number,
+            3
+        );
+        assert_eq!(
+            TypeError::TemporalOrderViolation {
+                earlier_node: "a".into(),
+                later_node: "b".into(),
+                line: 1,
+            }
+            .invariant()
+            .unwrap()
+            .number,
+            4
+        );
+        assert_eq!(
+            TypeError::DuplicateInstanceName {
+                name: "d".into(),
+                first_declared_line: 1,
+                duplicate_line: 2,
+            }
+            .invariant()
+            .unwrap()
+            .number,
+            5
+        );
+        assert_eq!(
+            TypeError::CommitmentTreeInconsistency {
+                parent_node: "p".into(),
+                parent_value: "1 MAD".into(),
+                child_node: "c".into(),
+                child_value: "2 MAD".into(),
+                line: 1,
+            }
+            .invariant()
+            .unwrap()
+            .number,
+            6
+        );
+        // Structural errors are not tied to a numbered invariant.
+        assert!(TypeError::UnknownNodeType {
+            node_type: "X".into(),
+            line: 1,
+            suggestion: None,
+        }
+        .invariant()
+        .is_none());
+        assert!(TypeError::MissingRequiredInput {
+            node_type: "WhatsAppSend".into(),
+            instance_name: "s".into(),
+            missing_key: "to".into(),
+            line: 1,
+        }
+        .invariant()
+        .is_none());
+    }
+
+    #[test]
+    fn f29_unknown_node_fix_offers_the_suggestion() {
+        // The fix hint for a near-miss node name proposes the suggestion as a
+        // concrete rename.
+        let e = TypeError::UnknownNodeType {
+            node_type: "WhatsappSend".to_string(),
+            line: 3,
+            suggestion: Some("WhatsAppSend".to_string()),
+        };
+        let fix = e.fix_hint();
+        assert!(fix.contains("WhatsAppSend"), "got {fix}");
+        // And the rendered message threads it through.
+        assert!(e.to_string().contains("Fix: "));
+    }
+
+    #[test]
+    fn f29_missing_input_fix_names_the_key_and_instance() {
+        // The fix tells the merchant exactly which key to add to which node.
+        let e = TypeError::MissingRequiredInput {
+            node_type: "WhatsAppSend".to_string(),
+            instance_name: "send".to_string(),
+            missing_key: "to".to_string(),
+            line: 9,
+        };
+        let fix = e.fix_hint();
+        assert!(fix.contains("to") && fix.contains("send"), "got {fix}");
+    }
+
+    #[test]
+    fn f29_capacity_fix_names_the_concrete_node_to_add() {
+        // The accurate fix for a missing capacity check is to add an
+        // ACPGetCustomerProfile node before the accepting node — which is
+        // exactly what check_i3_passes_when_acp_profile_precedes_accepted does.
+        let e = TypeError::MissingCapacityVerification {
+            node_type: "OrderPlaced".to_string(),
+            instance_name: "ord".to_string(),
+            accepted_producing_node: "ord".to_string(),
+            line: 4,
+        };
+        let fix = e.fix_hint();
+        assert!(
+            fix.contains("ACPGetCustomerProfile") && fix.contains("ord"),
+            "got {fix}"
+        );
+    }
+
+    #[test]
+    fn f29_temporal_fix_says_move_commitment_before_fulfillment() {
+        // The fix names the commitment node to move ahead of the fulfillment
+        // node — the inverse of the i4 violation.
+        let e = TypeError::TemporalOrderViolation {
+            earlier_node: "msg".to_string(),
+            later_node: "ord".to_string(),
+            line: 7,
+        };
+        let fix = e.fix_hint();
+        assert!(
+            fix.contains("ord") && fix.contains("msg") && fix.contains("Move"),
+            "got {fix}"
+        );
+    }
+
+    #[test]
+    fn f29_currency_fix_points_at_explicit_conversion() {
+        // The accurate fix for mixed currencies is an explicit conversion —
+        // the sanctioned escape that check_i1_conversion_construct_compiles
+        // confirms compiles.
+        let e = TypeError::CurrencyMixing {
+            node_type: "CartAbandoned".to_string(),
+            instance_name: "trigger".to_string(),
+            currencies_found: vec!["EUR".to_string(), "MAD".to_string()],
+            line: 5,
+        };
+        let fix = e.fix_hint();
+        assert!(
+            fix.contains("convert") || fix.contains("conversion"),
+            "got {fix}"
+        );
+    }
+
+    #[test]
+    fn f29_end_to_end_message_through_check_types() {
+        // A real compile failure renders the enriched diagnostic end-to-end:
+        // mixed currencies cite Invariant 1, explain why, and suggest a
+        // conversion. No exclamation marks in the rendered prose.
+        let src = r#"
+            project "x" {
+                version = "1.0.0"
+                tenant  = "t"
+                CartAbandoned trigger {
+                    min_value: Currency(200, MAD)
+                    after:     Duration(30, minutes)
+                    cap:       Currency(50, EUR)
+                }
+            }
+        "#;
+        let errors = check_types(parse_str(src)).expect_err("mixed currencies must block");
+        let mixing = errors
+            .iter()
+            .find(|e| matches!(e, TypeError::CurrencyMixing { .. }))
+            .expect("a CurrencyMixing error");
+        let msg = mixing.to_string();
+        assert!(msg.contains("Invariant 1"), "got {msg}");
+        assert!(msg.contains("Why: ") && msg.contains("Fix: "), "got {msg}");
+        assert!(
+            msg.to_lowercase().contains("conver"),
+            "fix must mention conversion: {msg}"
+        );
+        assert!(
+            !msg.contains('!'),
+            "diagnostic prose must not use '!': {msg}"
+        );
     }
 
     #[test]
