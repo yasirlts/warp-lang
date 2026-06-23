@@ -4,6 +4,72 @@ All notable changes to the npm package. The package tracks the canonical
 [Warp Commerce Model schema](https://github.com/yasirlts/warp-lang/tree/main/schema),
 frozen at v1.0.0.
 
+## 1.3.0
+
+### Added
+
+- **Agent session toolkit — `createSession()`.** A per-session ledger that makes
+  an agent's proposals safe to retry and safe to interleave. It composes the
+  existing transition + invariant checkers and adds two production-safety
+  properties on top:
+  - **Idempotency (replay dedup).** An action carrying an `idempotencyKey` (or,
+    keyless, a content fingerprint) that has already been applied is recognized
+    as a replay and not applied twice — a retried over-the-wire call does not
+    double-refund.
+  - **Optimistic concurrency (`expectedVersion`).** An action whose
+    `expectedVersion` no longer matches the commitment's version is reported as a
+    conflict rather than silently overwriting a concurrent change.
+- **Interop — `unify()` + outbound descriptors.** Merge caller-corresponded
+  platform objects into one validated Warp commitment (inbound), and translate a
+  validated Warp action into a platform-shaped **descriptor** (outbound — a
+  description of the action, not its execution). Inbound adapters: Shopify,
+  Stripe, WooCommerce, and new this release **PayPal** and **Amazon**. A value
+  mismatch across corresponded sources is caught as an I-1 conservation
+  violation. Salesforce was evaluated and intentionally not included — its
+  Opportunity is a sales-pipeline forecast, not a value-conserving commitment, so
+  it has no faithful mapping.
+- **Multi-agent — invariants over a shared world.** Run multiple agents against
+  one world with per-actor attribution: when one agent's action tips the shared
+  world into an invariant violation, the rejection names the tipping actor and
+  the accumulated context.
+- **Multi-object coherence.** Per-tree cumulative conservation across related
+  commitments: refunds across a parent order and its line-item children stay
+  within the parent's committed total; an over-refund across the tree is caught
+  with the remaining-refundable amount.
+- **Saga / compensation — `planCompensation` / `validateCompensation`.** Model
+  the unwinding of a multi-step flow as an explicit sequence of compensating
+  actions (each a legal reversing transition) and validate the sequence for
+  coherence by running it through a session. A compensation that would over-refund
+  or illegally regress is rejected with bounded guidance. Warp validates the
+  compensation; it does not execute or orchestrate rollbacks on external systems.
+- **Verifiable fulfillment attestations.** Sign a fulfillment with Ed25519
+  (WebCrypto) over a canonical serialization and verify it as a non-schema
+  envelope `{ fulfillment, signature, signer }`. Proves the fulfillment was
+  signed by the holder of a given key and is untampered since signing; it does
+  not bind the key to a real-world party (PKI, out of scope) and is not a
+  zero-knowledge proof.
+- **Multi-component settlement validation.** Validate that a settlement
+  decomposed into typed components (principal / tax / fees / shipping) reconciles
+  against the committed total in one currency, and track partial settlements
+  cumulatively. Reconciliation only — it does not compute tax rates or
+  jurisdictions; component amounts are caller-supplied.
+- **Returns / RMA lifecycle profile.** Model a return as a child commitment
+  against the parent order, with the RMA stages (requested → … → refunded)
+  tracked as a session-layer overlay over the existing committed states. Partial
+  returns and over-return safety reuse the per-tree refund cap.
+
+### Notes
+
+- All additive over 1.2.0 — the agent guardrail and the amount-conservation
+  clause remain; every name exported by 1.2.0 is still exported with no signature
+  change.
+- **No schema change.** Every feature is expressed from existing fields of the
+  frozen v1.0.0 Commerce Model; the conformance suite (54/54) and the
+  TS/Python/Rust/Go cross-check stay green and unchanged.
+- The attestation, settlement, returns/RMA features and the PayPal/Amazon
+  adapters are part of this TypeScript package; the Python package
+  (`warp-commerce-types`) scopes to the shared session layer — see its changelog.
+
 ## 1.2.0
 
 ### Added

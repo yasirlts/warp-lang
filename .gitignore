@@ -6,3 +6,12 @@ dist/
 # Rust build output (the compiler workspace). Cargo.lock IS committed.
 /target/
 **/target/
+
+# Python virtualenvs
+.venv/
+venv/
+
+# Secrets — never commit. Release tokens come from CI repo secrets / the
+# session environment, never from a tracked file.
+.env
+.env.*
