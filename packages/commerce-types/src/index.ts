@@ -77,6 +77,13 @@ export * from "./multi-agent.js";
 // descriptor (outbound). Composes the inbound adapters + guardObject; it does not
 // auto-reconcile correspondences and does not execute anything. TS first; ports roadmap.
 export * from "./interop.js";
+// `validateSettlement` / `createSettlementTracker` — validate that a multi-component
+// settlement (principal / tax / fees / shipping) RECONCILES against a commitment's
+// committed total in one currency, and track partial settlements cumulatively.
+// Composes MoneyBreakdown + validateMoneyBreakdown (the money_breakdown_sum / I-1
+// rule) + the session refund-ledger idiom; it does NOT compute tax (component
+// amounts are caller-supplied; Warp checks they add up). TS first; ports roadmap.
+export * from "./settlement.js";
 
 // ── ADVANCED type vocabulary ────────────────────────────────────────────────
 // State machines, the v0.3 commerce vocabulary, and the market-making /
