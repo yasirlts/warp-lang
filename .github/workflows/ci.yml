@@ -86,6 +86,39 @@ jobs:
       - name: Codegen drift gate
         run: npm run codegen
 
+  # --- MCP server (@warp-lang/commerce-mcp) --------------------------------
+  # Thin wrapper that exposes the published commerce-types guardrail as Model
+  # Context Protocol tools. Installs from its lockfile (pulling the published
+  # @warp-lang/commerce-types + the MCP SDK), typechecks, builds the stdio
+  # server, and runs the tool tests through an in-memory MCP client. Additive:
+  # it depends on but does not modify commerce-types.
+  commerce-mcp:
+    name: mcp server
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/commerce-mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/commerce-mcp/package-lock.json
+
+      - name: Install (clean, from lockfile)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding
