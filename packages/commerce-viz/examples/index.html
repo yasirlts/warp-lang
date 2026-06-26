@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Warp Commerce Model — state graphs</title>
+  <style>
+    body { font: 15px ui-sans-serif, system-ui, sans-serif; color: #1b1f24; margin: 2rem; }
+    h1 { font-size: 1.4rem; }
+    h2 { font-size: 1.1rem; text-transform: capitalize; margin-top: 2rem; }
+    h2 small { font-weight: 400; color: #5b6470; font-size: 0.8rem; }
+    p.note { color: #5b6470; max-width: 60ch; }
+    section { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>Warp Commerce Model — state graphs</h1>
+  <p class="note">A read-only render of the real transition table (schema/behavior/transitions.json). Nodes are states, arrows are legal transitions. Red-bordered nodes are terminal (no outgoing transition in the table).</p>
+  <section>
+    <h2>commitment <small>11 states, 26 transitions</small></h2>
+    <?xml version="1.0" encoding="UTF-8"?>
+    <svg xmlns="http://www.w3.org/2000/svg" width="934" height="488" viewBox="0 0 934 488" data-primitive="commitment" data-state-count="11" data-edge-count="26">
+      <desc>Read-only state graph for the commitment primitive, derived from schema/behavior/transitions.json. 11 states, 26 legal transitions.</desc>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6470"/>
+        </marker>
+      </defs>
+      <style>
+        .edge { fill: none; stroke: #5b6470; stroke-width: 1.5; }
+        .node rect { fill: #eef2f7; stroke: #2f6fed; stroke-width: 1.5; }
+        .node.terminal rect { fill: #f7eeee; stroke: #c0392b; }
+        .node text { font: 13px ui-sans-serif, system-ui, sans-serif; fill: #1b1f24; text-anchor: middle; dominant-baseline: central; }
+      </style>
+      <g class="edges">
+        <path class="edge" d="M 182 52 C 227 52, 227 52, 272 52" marker-end="url(#arrow)">
+          <title>Draft → Proposed</title>
+        </path>
+        <path class="edge" d="M 182 52 C 227 52, 227 116, 272 116" marker-end="url(#arrow)">
+          <title>Draft → Tendered</title>
+        </path>
+        <path class="edge" d="M 182 52 C 1427 52, 1427 52, 2672 52" marker-end="url(#arrow)">
+          <title>Draft → Cancelled</title>
+        </path>
+        <path class="edge" d="M 422 52 C 1427 52, 1427 52, 2432 52" marker-end="url(#arrow)">
+          <title>Proposed → Accepted</title>
+        </path>
+        <path class="edge" d="M 422 52 C 1547 52, 1547 52, 2672 52" marker-end="url(#arrow)">
+          <title>Proposed → Cancelled</title>
+        </path>
+        <path class="edge" d="M 422 52 C 1547 52, 1547 116, 2672 116" marker-end="url(#arrow)">
+          <title>Proposed → Modified</title>
+        </path>
+        <path class="edge" d="M 422 116 C 1427 116, 1427 52, 2432 52" marker-end="url(#arrow)">
+          <title>Tendered → Accepted</title>
+        </path>
+        <path class="edge" d="M 422 116 C 1547 116, 1547 52, 2672 52" marker-end="url(#arrow)">
+          <title>Tendered → Cancelled</title>
+        </path>
+        <path class="edge" d="M 2582 52 C 2627 52, 2627 116, 2672 116" marker-end="url(#arrow)">
+          <title>Accepted → Modified</title>
+        </path>
+        <path class="edge" d="M 2582 52 C 2627 52, 2627 180, 2672 180" marker-end="url(#arrow)">
+          <title>Accepted → PartiallyFulfilled</title>
+        </path>
+        <path class="edge" d="M 2582 52 C 2627 52, 2627 244, 2672 244" marker-end="url(#arrow)">
+          <title>Accepted → Active</title>
+        </path>
+        <path class="edge" d="M 2582 52 C 2627 52, 2627 52, 2672 52" marker-end="url(#arrow)">
+          <title>Accepted → Cancelled</title>
+        </path>
+        <path class="edge" d="M 2582 52 C 2627 52, 2627 308, 2672 308" marker-end="url(#arrow)">
+          <title>Accepted → Disputed</title>
+        </path>
+        <path class="edge" d="M 2822 116 C 2627 116, 2627 52, 2432 52" marker-end="url(#arrow)">
+          <title>Modified → Accepted</title>
+        </path>
+        <path class="edge" d="M 2822 116 C 2747 116, 2747 52, 2672 52" marker-end="url(#arrow)">
+          <title>Modified → Cancelled</title>
+        </path>
+        <path class="edge" d="M 2822 180 C 2747 180, 2747 372, 2672 372" marker-end="url(#arrow)">
+          <title>PartiallyFulfilled → Fulfilled</title>
+        </path>
+        <path class="edge" d="M 2822 180 C 2747 180, 2747 116, 2672 116" marker-end="url(#arrow)">
+          <title>PartiallyFulfilled → Modified</title>
+        </path>
+        <path class="edge" d="M 2822 180 C 2747 180, 2747 52, 2672 52" marker-end="url(#arrow)">
+          <title>PartiallyFulfilled → Cancelled</title>
+        </path>
+        <path class="edge" d="M 2822 244 C 2747 244, 2747 116, 2672 116" marker-end="url(#arrow)">
+          <title>Active → Modified</title>
+        </path>
+        <path class="edge" d="M 2822 244 C 2747 244, 2747 52, 2672 52" marker-end="url(#arrow)">
+          <title>Active → Cancelled</title>
+        </path>
+        <path class="edge" d="M 2822 244 C 2747 244, 2747 308, 2672 308" marker-end="url(#arrow)">
+          <title>Active → Disputed</title>
+        </path>
+        <path class="edge" d="M 2822 372 C 2747 372, 2747 308, 2672 308" marker-end="url(#arrow)">
+          <title>Fulfilled → Disputed</title>
+        </path>
+        <path class="edge" d="M 2822 372 C 2747 372, 2747 436, 2672 436" marker-end="url(#arrow)">
+          <title>Fulfilled → Refunded</title>
+        </path>
+        <path class="edge" d="M 2822 308 C 2747 308, 2747 372, 2672 372" marker-end="url(#arrow)">
+          <title>Disputed → Fulfilled</title>
+        </path>
+        <path class="edge" d="M 2822 308 C 2747 308, 2747 436, 2672 436" marker-end="url(#arrow)">
+          <title>Disputed → Refunded</title>
+        </path>
+        <path class="edge" d="M 2822 308 C 2747 308, 2747 52, 2672 52" marker-end="url(#arrow)">
+          <title>Disputed → Cancelled</title>
+        </path>
+      </g>
+      <g class="nodes">
+        <g class="node" data-state="Draft">
+          <rect x="32" y="32" width="150" height="40" rx="6"/>
+          <text x="107" y="52">Draft</text>
+        </g>
+        <g class="node" data-state="Proposed">
+          <rect x="272" y="32" width="150" height="40" rx="6"/>
+          <text x="347" y="52">Proposed</text>
+        </g>
+        <g class="node" data-state="Tendered">
+          <rect x="272" y="96" width="150" height="40" rx="6"/>
+          <text x="347" y="116">Tendered</text>
+        </g>
+        <g class="node" data-state="Accepted">
+          <rect x="2432" y="32" width="150" height="40" rx="6"/>
+          <text x="2507" y="52">Accepted</text>
+        </g>
+        <g class="node terminal" data-state="Cancelled">
+          <rect x="2672" y="32" width="150" height="40" rx="6"/>
+          <text x="2747" y="52">Cancelled</text>
+        </g>
+        <g class="node" data-state="Modified">
+          <rect x="2672" y="96" width="150" height="40" rx="6"/>
+          <text x="2747" y="116">Modified</text>
+        </g>
+        <g class="node" data-state="PartiallyFulfilled">
+          <rect x="2672" y="160" width="150" height="40" rx="6"/>
+          <text x="2747" y="180">PartiallyFulfilled</text>
+        </g>
+        <g class="node" data-state="Active">
+          <rect x="2672" y="224" width="150" height="40" rx="6"/>
+          <text x="2747" y="244">Active</text>
+        </g>
+        <g class="node" data-state="Disputed">
+          <rect x="2672" y="288" width="150" height="40" rx="6"/>
+          <text x="2747" y="308">Disputed</text>
+        </g>
+        <g class="node" data-state="Fulfilled">
+          <rect x="2672" y="352" width="150" height="40" rx="6"/>
+          <text x="2747" y="372">Fulfilled</text>
+        </g>
+        <g class="node terminal" data-state="Refunded">
+          <rect x="2672" y="416" width="150" height="40" rx="6"/>
+          <text x="2747" y="436">Refunded</text>
+        </g>
+      </g>
+    </svg>
+    
+  </section>
+  <section>
+    <h2>intent <small>4 states, 3 transitions</small></h2>
+    <?xml version="1.0" encoding="UTF-8"?>
+    <svg xmlns="http://www.w3.org/2000/svg" width="454" height="232" viewBox="0 0 454 232" data-primitive="intent" data-state-count="4" data-edge-count="3">
+      <desc>Read-only state graph for the intent primitive, derived from schema/behavior/transitions.json. 4 states, 3 legal transitions.</desc>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6470"/>
+        </marker>
+      </defs>
+      <style>
+        .edge { fill: none; stroke: #5b6470; stroke-width: 1.5; }
+        .node rect { fill: #eef2f7; stroke: #2f6fed; stroke-width: 1.5; }
+        .node.terminal rect { fill: #f7eeee; stroke: #c0392b; }
+        .node text { font: 13px ui-sans-serif, system-ui, sans-serif; fill: #1b1f24; text-anchor: middle; dominant-baseline: central; }
+      </style>
+      <g class="edges">
+        <path class="edge" d="M 182 52 C 227 52, 227 52, 272 52" marker-end="url(#arrow)">
+          <title>Active → Abandoned</title>
+        </path>
+        <path class="edge" d="M 182 52 C 227 52, 227 116, 272 116" marker-end="url(#arrow)">
+          <title>Active → Converted</title>
+        </path>
+        <path class="edge" d="M 182 52 C 227 52, 227 180, 272 180" marker-end="url(#arrow)">
+          <title>Active → Expired</title>
+        </path>
+      </g>
+      <g class="nodes">
+        <g class="node" data-state="Active">
+          <rect x="32" y="32" width="150" height="40" rx="6"/>
+          <text x="107" y="52">Active</text>
+        </g>
+        <g class="node terminal" data-state="Abandoned">
+          <rect x="272" y="32" width="150" height="40" rx="6"/>
+          <text x="347" y="52">Abandoned</text>
+        </g>
+        <g class="node terminal" data-state="Converted">
+          <rect x="272" y="96" width="150" height="40" rx="6"/>
+          <text x="347" y="116">Converted</text>
+        </g>
+        <g class="node terminal" data-state="Expired">
+          <rect x="272" y="160" width="150" height="40" rx="6"/>
+          <text x="347" y="180">Expired</text>
+        </g>
+      </g>
+    </svg>
+    
+  </section>
+  <section>
+    <h2>fulfillment <small>5 states, 6 transitions</small></h2>
+    <?xml version="1.0" encoding="UTF-8"?>
+    <svg xmlns="http://www.w3.org/2000/svg" width="934" height="168" viewBox="0 0 934 168" data-primitive="fulfillment" data-state-count="5" data-edge-count="6">
+      <desc>Read-only state graph for the fulfillment primitive, derived from schema/behavior/transitions.json. 5 states, 6 legal transitions.</desc>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6470"/>
+        </marker>
+      </defs>
+      <style>
+        .edge { fill: none; stroke: #5b6470; stroke-width: 1.5; }
+        .node rect { fill: #eef2f7; stroke: #2f6fed; stroke-width: 1.5; }
+        .node.terminal rect { fill: #f7eeee; stroke: #c0392b; }
+        .node text { font: 13px ui-sans-serif, system-ui, sans-serif; fill: #1b1f24; text-anchor: middle; dominant-baseline: central; }
+      </style>
+      <g class="edges">
+        <path class="edge" d="M 182 52 C 227 52, 227 52, 272 52" marker-end="url(#arrow)">
+          <title>Planned → InProgress</title>
+        </path>
+        <path class="edge" d="M 182 52 C 347 52, 347 52, 512 52" marker-end="url(#arrow)">
+          <title>Planned → Failed</title>
+        </path>
+        <path class="edge" d="M 422 52 C 467 52, 467 116, 512 116" marker-end="url(#arrow)">
+          <title>InProgress → Completed</title>
+        </path>
+        <path class="edge" d="M 422 52 C 467 52, 467 52, 512 52" marker-end="url(#arrow)">
+          <title>InProgress → Failed</title>
+        </path>
+        <path class="edge" d="M 422 52 C 587 52, 587 52, 752 52" marker-end="url(#arrow)">
+          <title>InProgress → Reversed</title>
+        </path>
+        <path class="edge" d="M 662 116 C 707 116, 707 52, 752 52" marker-end="url(#arrow)">
+          <title>Completed → Reversed</title>
+        </path>
+      </g>
+      <g class="nodes">
+        <g class="node" data-state="Planned">
+          <rect x="32" y="32" width="150" height="40" rx="6"/>
+          <text x="107" y="52">Planned</text>
+        </g>
+        <g class="node" data-state="InProgress">
+          <rect x="272" y="32" width="150" height="40" rx="6"/>
+          <text x="347" y="52">InProgress</text>
+        </g>
+        <g class="node terminal" data-state="Failed">
+          <rect x="512" y="32" width="150" height="40" rx="6"/>
+          <text x="587" y="52">Failed</text>
+        </g>
+        <g class="node" data-state="Completed">
+          <rect x="512" y="96" width="150" height="40" rx="6"/>
+          <text x="587" y="116">Completed</text>
+        </g>
+        <g class="node terminal" data-state="Reversed">
+          <rect x="752" y="32" width="150" height="40" rx="6"/>
+          <text x="827" y="52">Reversed</text>
+        </g>
+      </g>
+    </svg>
+    
+  </section>
+</body>
+</html>

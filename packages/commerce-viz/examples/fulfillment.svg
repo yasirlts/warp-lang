@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="934" height="168" viewBox="0 0 934 168" data-primitive="fulfillment" data-state-count="5" data-edge-count="6">
+  <desc>Read-only state graph for the fulfillment primitive, derived from schema/behavior/transitions.json. 5 states, 6 legal transitions.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6470"/>
+    </marker>
+  </defs>
+  <style>
+    .edge { fill: none; stroke: #5b6470; stroke-width: 1.5; }
+    .node rect { fill: #eef2f7; stroke: #2f6fed; stroke-width: 1.5; }
+    .node.terminal rect { fill: #f7eeee; stroke: #c0392b; }
+    .node text { font: 13px ui-sans-serif, system-ui, sans-serif; fill: #1b1f24; text-anchor: middle; dominant-baseline: central; }
+  </style>
+  <g class="edges">
+    <path class="edge" d="M 182 52 C 227 52, 227 52, 272 52" marker-end="url(#arrow)">
+      <title>Planned → InProgress</title>
+    </path>
+    <path class="edge" d="M 182 52 C 347 52, 347 52, 512 52" marker-end="url(#arrow)">
+      <title>Planned → Failed</title>
+    </path>
+    <path class="edge" d="M 422 52 C 467 52, 467 116, 512 116" marker-end="url(#arrow)">
+      <title>InProgress → Completed</title>
+    </path>
+    <path class="edge" d="M 422 52 C 467 52, 467 52, 512 52" marker-end="url(#arrow)">
+      <title>InProgress → Failed</title>
+    </path>
+    <path class="edge" d="M 422 52 C 587 52, 587 52, 752 52" marker-end="url(#arrow)">
+      <title>InProgress → Reversed</title>
+    </path>
+    <path class="edge" d="M 662 116 C 707 116, 707 52, 752 52" marker-end="url(#arrow)">
+      <title>Completed → Reversed</title>
+    </path>
+  </g>
+  <g class="nodes">
+    <g class="node" data-state="Planned">
+      <rect x="32" y="32" width="150" height="40" rx="6"/>
+      <text x="107" y="52">Planned</text>
+    </g>
+    <g class="node" data-state="InProgress">
+      <rect x="272" y="32" width="150" height="40" rx="6"/>
+      <text x="347" y="52">InProgress</text>
+    </g>
+    <g class="node terminal" data-state="Failed">
+      <rect x="512" y="32" width="150" height="40" rx="6"/>
+      <text x="587" y="52">Failed</text>
+    </g>
+    <g class="node" data-state="Completed">
+      <rect x="512" y="96" width="150" height="40" rx="6"/>
+      <text x="587" y="116">Completed</text>
+    </g>
+    <g class="node terminal" data-state="Reversed">
+      <rect x="752" y="32" width="150" height="40" rx="6"/>
+      <text x="827" y="52">Reversed</text>
+    </g>
+  </g>
+</svg>
