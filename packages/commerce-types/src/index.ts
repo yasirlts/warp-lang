@@ -92,6 +92,13 @@ export * from "./returns.js";
 // descriptor (outbound). Composes the inbound adapters + guardObject; it does not
 // auto-reconcile correspondences and does not execute anything. TS first; ports roadmap.
 export * from "./interop.js";
+// `reconcile` — write-time cross-source coherence verdict. Given N corresponded
+// sources, returns a STRUCTURED per-source verdict (each source's amount vs the
+// unified amount), surfacing any drift as I-1 with attribution (which platform,
+// what signed delta). Composes unify (which itself composes the I-1 conservation
+// check) pairwise for the per-source decision; it does not re-derive I-1, does not
+// auto-reconcile correspondences, and executes nothing. TS first; ports roadmap.
+export * from "./reconcile.js";
 // `toEffect` / `toEffects` — host-agnostic effect DESCRIPTORS (Boundary-A:
 // effects-as-data). Translate a VALIDATED Warp action into a neutral
 // `{ kind, target, payload }` descriptor of what a host would do, leaving HOW
