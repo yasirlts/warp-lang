@@ -145,6 +145,17 @@ export * from "./profiles.js";
 // invariant/transition logic, and it VALIDATES a sequence — it does not execute,
 // price, or settle anything. TypeScript first; ports roadmap.
 export * from "./negotiation.js";
+// `createWindowedSession` — cap aggregate refund behavior over a CONFIGURABLE
+// window (the last N refund events, or a time span), generalizing the session's
+// session-lifetime cumulative ledger to a MOVING window. Catches a burst of
+// refunds that stays under both the point-in-time check and the lifetime total;
+// events outside the window age out and free headroom. Composes createSession
+// (every existing check still runs first) + the canonical I-1 over-refund probe
+// with the window cap as the reference amount; it does not fork invariant or
+// transition logic. The window and its cap are caller config, NOT schema. Scope
+// is per-session and in-memory — not a distributed/persistent aggregate store.
+// TypeScript first; ports roadmap.
+export * from "./window.js";
 
 // ── ADVANCED type vocabulary ────────────────────────────────────────────────
 // State machines, the v0.3 commerce vocabulary, and the market-making /
