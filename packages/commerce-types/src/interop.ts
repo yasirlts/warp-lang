@@ -33,8 +33,14 @@ import type { Money } from "./money.js";
 import type { Commitment } from "./primitives.js";
 import { toStripeAmount } from "./platforms/stripe.js";
 
-/** The platforms this interop layer can unify from and emit to. */
-export type InteropPlatform = "shopify" | "stripe" | "woocommerce" | "paypal" | "amazon";
+/**
+ * The targets this interop layer can unify from and emit to. The named
+ * platforms are real systems the per-platform emitters map onto; `"host"` is
+ * the host-agnostic target used by the generic effect-descriptor helper
+ * ({@link ./effects.toEffect}), signalling a descriptor not bound to any one
+ * platform.
+ */
+export type InteropPlatform = "shopify" | "stripe" | "woocommerce" | "paypal" | "amazon" | "host";
 
 /**
  * One side of a unification: a platform object ALREADY mapped to a Warp
