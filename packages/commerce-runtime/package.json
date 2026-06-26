@@ -1,0 +1,39 @@
+{
+  "name": "@warp-lang/commerce-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A reference, self-host durable-execution runtime for the Warp commerce model — feed it proposed commerce actions, it runs each through createSession + guardAction, persists an append-only audit log (in-memory or file-backed), and can replay the log to reproduce the same final state. It runs the model and logs verdicts; it is not a hosted SaaS and not a payment executor — side-effects are descriptors (Boundary-A), no network calls.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "example": "node examples/runtime.mjs"
+  },
+  "dependencies": {
+    "@warp-lang/commerce-types": "^1.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
