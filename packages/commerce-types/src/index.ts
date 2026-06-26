@@ -156,6 +156,15 @@ export * from "./negotiation.js";
 // is per-session and in-memory — not a distributed/persistent aggregate store.
 // TypeScript first; ports roadmap.
 export * from "./window.js";
+// `defineMigration` / `migrate` — declarative DATA migrations: transform stored
+// world data from one model shape to another and RE-VALIDATE the result with the
+// existing audit. A migration is a pure data-transform (rename/default/restructure)
+// whose output is checked by guardObject (→ auditCommerce, the six invariants); a
+// migration that produces an invariant violation is rejected. Composes guardObject;
+// it does not fork invariant/transition logic and does NOT touch schema/ — there is
+// one published schema version today, so the bundled example demonstrates the
+// mechanism on an illustrative old-shaped record. TypeScript first; ports roadmap.
+export * from "./migrations.js";
 
 // ── ADVANCED type vocabulary ────────────────────────────────────────────────
 // State machines, the v0.3 commerce vocabulary, and the market-making /
