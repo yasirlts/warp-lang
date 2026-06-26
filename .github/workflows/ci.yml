@@ -157,6 +157,98 @@ jobs:
         working-directory: packages/agent-demo
         run: node dist/index.js
 
+  # --- Auxiliary packages (compose the published commerce-types) -----------
+  # Each is a standalone package that wraps/uses the published
+  # @warp-lang/commerce-types (or, for viz, reads the in-repo transition table).
+  # Same shape as the mcp/agent-demo jobs: clean install, typecheck, test, build.
+  commerce-metrics:
+    name: metrics lib
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/commerce-metrics
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/commerce-metrics/package-lock.json
+      - name: Install (clean, from lockfile)
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  commerce-registry:
+    name: adapter registry
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/commerce-registry
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/commerce-registry/package-lock.json
+      - name: Install (clean, from lockfile)
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  commerce-runtime:
+    name: reference runtime
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/commerce-runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/commerce-runtime/package-lock.json
+      - name: Install (clean, from lockfile)
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  commerce-viz:
+    name: viz renderer
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/commerce-viz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/commerce-viz/package-lock.json
+      - name: Install (clean, from lockfile)
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding
