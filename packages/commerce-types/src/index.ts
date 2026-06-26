@@ -105,6 +105,14 @@ export * from "./effects.js";
 // rule) + the session refund-ledger idiom; it does NOT compute tax (component
 // amounts are caller-supplied; Warp checks they add up). TS first; ports roadmap.
 export * from "./settlement.js";
+// `checkSettlementPolicy` / `SAMPLE_VAT_PACK` — regulatory policy packs as DATA over
+// validateSettlement. A pack lists, per jurisdiction, the tax_rate values its Tax
+// components may declare; checkSettlementPolicy first delegates to validateSettlement
+// (the money_breakdown_sum / I-1 reconciliation) unchanged, then checks each caller-
+// supplied Tax component against the pack's permitted rates and that its amount equals
+// rate × base. It does NOT compute tax: rates are pack data, base/amount/rate are caller
+// inputs, Warp checks they reconcile. Not a tax engine. TS first; ports roadmap.
+export * from "./policy-packs.js";
 // `guardWithProfile` / `PROFILES` — named DATA profiles (digital / physical /
 // subscription) that constrain which commitment states and value-form kinds apply
 // to a kind of commerce, as a caller-side filter. guardWithProfile checks the
