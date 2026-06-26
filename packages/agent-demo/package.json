@@ -1,0 +1,34 @@
+{
+  "name": "@warp-lang/agent-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reference demo: a real LLM agent, mid-task, naturally reaches for a structurally-invalid commerce action (an over-refund) and is stopped by Warp — via the real commerce-mcp server — then self-corrects. Runs against any model API (bring your own key) or in a keyless, deterministic REPLAY of a recorded run for CI.",
+  "type": "module",
+  "files": [
+    "dist",
+    "fixtures",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "demo": "node dist/index.js",
+    "demo:real": "node dist/index.js --real",
+    "demo:record": "node dist/index.js --real --record",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@warp-lang/commerce-mcp": "file:../commerce-mcp",
+    "@warp-lang/commerce-types": "^1.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

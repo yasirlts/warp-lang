@@ -119,6 +119,44 @@ jobs:
       - name: Build
         run: npm run build
 
+  # --- Reference agent demo (@warp-lang/agent-demo) ------------------------
+  # A real LLM agent naturally reaching for an over-refund, stopped by Warp via
+  # the real MCP server, then self-correcting. CI runs the KEYLESS canned mode:
+  # it replays the recorded agent turns while Warp's verdicts are computed live
+  # by the real commerce-mcp server. Builds that server first (the demo spawns
+  # it over stdio), then builds the demo, runs the disaster-averted test, and
+  # runs the demo verbatim. Additive: depends on but does not modify
+  # commerce-types or commerce-mcp.
+  agent-demo:
+    name: agent demo (canned)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Build commerce-mcp server (the demo spawns it)
+        working-directory: packages/commerce-mcp
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install + build demo
+        working-directory: packages/agent-demo
+        run: |
+          npm ci
+          npm run build
+
+      - name: Test (canned replay + live Warp verdicts)
+        working-directory: packages/agent-demo
+        run: npm test
+
+      - name: Run the keyless canned demo
+        working-directory: packages/agent-demo
+        run: node dist/index.js
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding
