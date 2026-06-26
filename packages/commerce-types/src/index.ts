@@ -86,6 +86,14 @@ export * from "./saga.js";
 // the money move, NOT new commitment states. Composes createSession; no forked logic.
 // TypeScript first; ports roadmap.
 export * from "./returns.js";
+// `createSplitFulfillment` — bound the CUMULATIVE fractional allocation of a parent
+// commitment across its line-item children over a SEQUENCE of allocation steps (the
+// forward direction the refund session does not cover). Composes the canonical I-1
+// conservation oracle (checkI1ValueConservation, lifted to the running allocation
+// total) + the unmodified structural F6 check (checkI6TreeConsistency) on completion;
+// it does not fork invariant/transition logic, and does not create commitments or
+// drive transitions. Session-layer, in-memory. TypeScript first; ports roadmap.
+export * from "./split-fulfillment.js";
 // `unify` / `toStripeAction` / `toShopifyAction` / `toWooCommerceAction` — the
 // interop CIR: merge caller-corresponded platform objects into one validated Warp
 // commitment (inbound), and translate a validated Warp action into a platform-shaped
