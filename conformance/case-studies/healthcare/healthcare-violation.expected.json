@@ -1,0 +1,7 @@
+{
+  "fixture": "case-healthcare-violation",
+  "expect": "reject",
+  "rule": "I-4",
+  "rule_name": "Temporal Integrity",
+  "because": "A Completed dispense fulfillment whose authorization Commitment is only Proposed (never reached Accepted). Temporal Integrity (I-4): authorization must be granted (the commitment accepted) before the dispense executes."
+}

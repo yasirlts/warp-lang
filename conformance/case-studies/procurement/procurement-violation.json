@@ -1,0 +1,169 @@
+{
+  "fixture": "case-procurement-violation",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "reject",
+  "domain": "procurement",
+  "title": "Procurement three-way-match failure: invoice 9500 exceeds receipt 8000 MAD",
+  "doc": "An invoice settlement (Refunded 9500 MAD) disbursed against a receipt-matched PO of 8000 MAD, same currency. In a PO/receipt/invoice three-way match, the invoice cannot exceed the goods actually received. The disbursement exceeds the captured value, so Value Conservation (I-1) rejects it.",
+  "rule": "I-1",
+  "rule_name": "Value Conservation",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:buyer-org",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:supplier",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:po-1",
+        "parties": {
+          "initiator": "party:buyer-org",
+          "counterparty": "party:supplier",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:po-goods",
+              "form": {
+                "kind": "PhysicalGood",
+                "sku": "SKU-WIDGET",
+                "condition": "New"
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:po-amount",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 8000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Refunded",
+          "amount": {
+            "amount": 9500,
+            "currency": "MAD"
+          },
+          "at": "2026-03-10T13:00:00.000Z"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:buyer-org"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:supplier"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "receipt"
+              ],
+              "remaining_item_ids": [
+                "invoice"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:supplier"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "receipt"
+              ],
+              "remaining_item_ids": [
+                "invoice"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:supplier"
+          },
+          {
+            "from": {
+              "type": "Fulfilled"
+            },
+            "to": {
+              "type": "Refunded",
+              "amount": {
+                "amount": 9500,
+                "currency": "MAD"
+              },
+              "at": "2026-03-10T13:00:00.000Z"
+            },
+            "at": "2026-03-10T13:00:00.000Z",
+            "actor": "party:buyer-org"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z"
+      }
+    ],
+    "fulfillments": []
+  }
+}

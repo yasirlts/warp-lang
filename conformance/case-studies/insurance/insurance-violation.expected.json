@@ -1,0 +1,7 @@
+{
+  "fixture": "case-insurance-violation",
+  "expect": "reject",
+  "rule": "I-1",
+  "rule_name": "Value Conservation",
+  "because": "A claim settlement (Refunded 15000 MAD) paid against a 10000 MAD coverage limit, same currency. A payout cannot exceed the captured/committed value — paying out more than the coverage creates value from nothing. Value Conservation (I-1) rejects it."
+}

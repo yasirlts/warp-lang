@@ -5,12 +5,18 @@ Formal Sufficiency Test — now executable against the _canonical_ schema.**
 
 The spec claims the five primitives were "tested adversarially across 22
 commerce domains." This directory turns that claim into evidence: one worked
-case study per domain — 22 domains, 22 executable fixtures — each backed by an **executable canonical `scene`
+case study per domain — backed by an **executable canonical `scene`
 fixture** that validates + audits clean against the canonical Warp Commerce
 Model schema v1.0.0 (`schema/structure/*.schema.json`) via the canonical runner.
 
+It also includes a focused **generality** demonstration (F18-20): three
+domains — **insurance**, **healthcare**, and **procurement** — each shown twice,
+as an accept scene (the domain expressed in the five primitives) *and* a
+violation scene where a domain-specific error is caught by one of the six
+invariants. See [Generality beyond commerce](#generality-beyond-commerce-f18-20).
+
 ```bash
-node conformance/runner/run.mjs            # 51/51 (29 core + 22 case studies)
+node conformance/runner/run.mjs            # all fixtures vs canonical schema
 node conformance/case-studies/validate-aux.mjs   # 5/5 auxiliary records vs canonical
 ```
 
@@ -38,10 +44,11 @@ canonical one** — see the banner at the top of each file and the Findings belo
 
 | | |
 |---|---|
-| Domains documented + lifecycle-walked | **22** |
-| Executably validated against canonical v1.0.0 | **22 / 22** |
+| Commerce domains documented + lifecycle-walked | **22** (+ insurance = 23 accept scenes) |
+| Executably validated against canonical v1.0.0 | all accept scenes pass |
 | Blocked / pending-v1.1 (cannot express against canonical) | **0** |
 | Unmodelable by the five primitives | **0** |
+| Non-commerce generality domains (accept + violation) | **3** (insurance, healthcare, procurement) |
 | Auxiliary records validated vs canonical | **5 / 5** |
 
 The honest split is **22 conformant / 0 pending / 0 unmodelable** — because the
@@ -78,6 +85,7 @@ All fixtures are `kind: scene`, `expect: accept`, under
 | loyalty | ✅ | `LoyaltyEarnTerm`; custom-currency points (`PTS`); split cash/points |
 | group-buying | ✅ | `ThresholdActivation`; simultaneous activation |
 | carbon-credits | ✅ | `AccessModel::CarbonCredit`; `ValueState::Retired`; `RegistryVerification`; `RegistryRetirement`; `RetirementCertificate` |
+| insurance | ✅ | coverage as a Commitment; claim as a settlement payout (`Refunded`) within the coverage limit (I-1) |
 
 "(aux)" = the signature record is an auxiliary record, validated by
 `validate-aux.mjs` against the canonical schema (the scene runner has no `kind`
@@ -111,10 +119,50 @@ all 22 are executably validated against the canonical schema v1.0.0; 0 await a
 v1.1 schema construct to be expressible; the only enumerated follow-ups are one
 optional ValueState refinement (B-2) and one runner-coverage enhancement (B-3).**
 
+## Generality beyond commerce (F18-20)
+
+The 22 domains above are all commerce. This section demonstrates that the five
+primitives (Party, Value, Intent, Commitment, Fulfillment) and the six
+invariants also describe **non-commerce economic domains** — without any schema
+change. Generality is shown on **three** domains, each mapped onto the existing
+primitives and each paired with a violation fixture where a domain-specific
+error is caught by an invariant. This is a demonstration on these three domains,
+not a proof of universality.
+
+| Domain | Mapped onto primitives | Accept scene | Violation scene | Invariant the violation triggers |
+|--------|------------------------|--------------|-----------------|----------------------------------|
+| **insurance** | coverage = Commitment (requested = the limit); a claim = a settlement payout (`Refunded`) against it | `insurance/insurance.json` — claim 7000 ≤ coverage 10000 MAD | `insurance/insurance-violation.json` — claim 15000 > coverage 10000 MAD | **I-1 Value Conservation** — a payout cannot exceed the captured/committed value |
+| **healthcare** | authorization = Commitment; the dispense = a Fulfillment that may only execute after the commitment is Accepted | `healthcare/healthcare.json` — adjudicated visit, dispense after auth | `healthcare/healthcare-violation.json` — dispense Completed while auth only Proposed | **I-4 Temporal Integrity** — the commitment (authorization) must form before the fulfillment (dispense) executes |
+| **procurement** | PO = Commitment (requested = receipt-matched amount); the invoice settlement = a payout against it (three-way match) | `government-procurement/government-procurement.json` — scored tender, award protest | `procurement/procurement-violation.json` — invoice 9500 > receipt 8000 MAD | **I-1 Value Conservation** — the disbursement (invoice) cannot exceed the captured value (goods received) |
+
+How the mapping works, stated precisely:
+
+- **insurance over-claim and procurement invoice>receipt** both reuse the I-1
+  amount-conservation clause already in the model (a `Refunded` settlement whose
+  amount exceeds the same-currency committed amount). An insurance payout above
+  the coverage limit, and an invoice above the receipt-matched PO, are both
+  "paying out more than was captured" — the same shape as a commerce over-refund.
+- **healthcare dispense-before-authorization** reuses I-4: a Completed
+  fulfillment against a commitment that never reached Accepted.
+
+Each violation fixture is wired into the manifest as `expect: reject` with the
+triggering `rule`, with a `.expected.json` sidecar, exactly like the core
+`conformance/invalid/*` fixtures. The runner asserts the declared rule actually
+fires, and the four-way TS↔Python↔Rust↔Go cross-check
+(`conformance/tooling/crosscheck.mjs`) asserts all four bindings agree on each
+verdict.
+
+**Bounded-generality note.** These three domains map onto the primitives with no
+schema change because each domain-specific error reduces to an *existing*
+invariant clause (I-1 amount conservation, I-4 temporal ordering). That is the
+scope of what is demonstrated here: three non-commerce economic domains, each
+with one invariant catching one domain-specific violation. It is not a claim that
+every conceivable economic domain is expressible without schema work.
+
 ## Regenerating
 
 ```bash
 node conformance/case-studies/_generate.mjs   # rewrites fixtures + manifest block
-node conformance/runner/run.mjs               # must stay 51/51
+node conformance/runner/run.mjs               # all fixtures must stay green
 node conformance/case-studies/validate-aux.mjs
 ```

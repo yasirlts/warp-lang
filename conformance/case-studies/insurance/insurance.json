@@ -1,0 +1,208 @@
+{
+  "fixture": "case-insurance",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "accept",
+  "domain": "insurance",
+  "title": "Insurance claim paid within coverage: payout 7000 <= coverage 10000 MAD",
+  "doc": "Coverage limit is a Commitment (requested 10000 MAD); the adjudicated claim is a settlement payout (Refunded 7000 MAD) against it. claim <= coverage, so Value Conservation (I-1) holds. The over-claim counterpart (insurance-violation) pays out MORE than the coverage and is rejected by I-1.",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:policyholder",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:insurer",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:claim-1",
+        "parties": {
+          "initiator": "party:policyholder",
+          "counterparty": "party:insurer",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:coverage-limit",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 10000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Refunded",
+          "amount": {
+            "amount": 7000,
+            "currency": "MAD"
+          },
+          "at": "2026-03-10T13:00:00.000Z"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:policyholder"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:insurer"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "assessed"
+              ],
+              "remaining_item_ids": [
+                "payout"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:insurer"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "assessed"
+              ],
+              "remaining_item_ids": [
+                "payout"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:insurer"
+          },
+          {
+            "from": {
+              "type": "Fulfilled"
+            },
+            "to": {
+              "type": "Refunded",
+              "amount": {
+                "amount": 7000,
+                "currency": "MAD"
+              },
+              "at": "2026-03-10T13:00:00.000Z"
+            },
+            "at": "2026-03-10T13:00:00.000Z",
+            "actor": "party:insurer"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z",
+        "terms": {
+          "conditions": [
+            {
+              "kind": "PrescriptionRequired",
+              "must_verify_before": "Fulfilled",
+              "verified_by": "party:insurer"
+            }
+          ]
+        }
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:claim-assess",
+        "commitment": "commitment:claim-1",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:insurer"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:policyholder"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T11:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "PaymentReceipt",
+            "reference": "assess",
+            "amount": {
+              "amount": 7000,
+              "currency": "MAD"
+            },
+            "timestamp": "2026-03-10T11:00:00.000Z",
+            "mechanism": "card"
+          }
+        ]
+      }
+    ]
+  }
+}

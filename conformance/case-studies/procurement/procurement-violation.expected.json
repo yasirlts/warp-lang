@@ -1,0 +1,7 @@
+{
+  "fixture": "case-procurement-violation",
+  "expect": "reject",
+  "rule": "I-1",
+  "rule_name": "Value Conservation",
+  "because": "An invoice settlement (Refunded 9500 MAD) disbursed against a receipt-matched PO of 8000 MAD, same currency. In a PO/receipt/invoice three-way match, the invoice cannot exceed the goods actually received. The disbursement exceeds the captured value, so Value Conservation (I-1) rejects it."
+}

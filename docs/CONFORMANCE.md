@@ -14,10 +14,13 @@ nothing here is specific to TypeScript or Python.
   version: **v1.0.0** ([`../schema/VERSION`](../schema/VERSION)).
 - **Fixtures + contract:** [`../conformance/`](../conformance/) — see
   [`conformance/README.md`](../conformance/README.md) for the full envelope spec.
-- **The suite today:** **51 fixtures**, all passing against the canonical schema;
-  the TypeScript, Python, Rust, and Go bindings agree on **45/45** fixtures
+- **The suite today:** **58 fixtures**, all passing against the canonical schema;
+  the TypeScript, Python, Rust, and Go bindings agree on **52/52** fixtures
   runnable in all four (the other 6 are structural state-catalogs, validated by
-  the schema runner and so n/a for every behavioral binding). Go is the newest
+  the schema runner and so n/a for every behavioral binding). The corpus includes
+  a [generality demonstration](case-studies/README.md#generality-beyond-commerce-f18-20)
+  on three non-commerce domains (insurance, healthcare, procurement), each with a
+  violation fixture caught by an invariant. Go is the newest
   reference binding ([`../bindings/go/`](../bindings/go/)); it joins TS
   ([`../packages/commerce-types/`](../packages/commerce-types/)), Python
   ([`../packages/commerce-types-py/`](../packages/commerce-types-py/)), and Rust
@@ -76,7 +79,7 @@ There are two ways to plug your binding in. Both use the same fixtures.
 dependency-free. Port it to your language: load `manifest.json`, and for each
 fixture apply the check for its `kind`, then compare your verdict to the
 fixture's `expect` (and, for an invalid fixture, confirm your rejection names the
-same `rule`). This covers all 51 fixtures, structural and behavioral, and is the
+same `rule`). This covers all 58 fixtures, structural and behavioral, and is the
 normative path.
 
 ### Path B — emit verdicts, score with the harness (quick start)
@@ -130,7 +133,7 @@ adapter, scores the output, and asserts a clean pass:
 
 ```bash
 node conformance/tooling/test-score-adapter.mjs
-# → test-score-adapter: PASS — worked example (TS binding) scores 45/45 via the harness, 0 disagreements.
+# → test-score-adapter: PASS — worked example (TS binding) scores 52/52 via the harness, 0 disagreements.
 ```
 
 That command is self-contained (no prior build step) and is what CI runs, so the
@@ -144,7 +147,7 @@ format above, and the scorer grades it:
 #   cd packages/commerce-types && npm ci && npm run build
 # — test-score-adapter.mjs does that for you):
 node conformance/tooling/crosscheck-ts.mjs | node conformance/tooling/score-adapter.mjs -
-# → ✓ Your binding agrees with the Warp Commerce Model on 45/45 runnable fixtures (schema v1.0.0). 6 not yet implemented.
+# → ✓ Your binding agrees with the Warp Commerce Model on 52/52 runnable fixtures (schema v1.0.0). 6 not yet implemented.
 ```
 
 Your own binding needs no build of ours: emit your verdicts and score them
@@ -167,7 +170,7 @@ rejects what the model rejects — including the named rule for each rejection.
   curated set; passing it is necessary for compatibility, not a proof of total
   correctness.
 - `runnable: false` fixtures are checks you have **not** implemented; a score of
-  `45/45` with `6` n/a means "agrees on everything it implements," not "implements
+  `52/52` with `6` n/a means "agrees on everything it implements," not "implements
   everything."
 
 Size the claim to exactly this: *"agrees with the Warp Commerce Model on N/N

@@ -576,6 +576,124 @@ D["carbon-credits"] = () => {
   };
 };
 
+// 23. insurance — coverage as a Commitment; a claim is a payout (settlement)
+// against that coverage. The accept scene pays a claim WITHIN the coverage
+// limit (claim <= coverage). Value Conservation (I-1) governs the relationship:
+// a payout cannot exceed the captured/committed value, modelled here as a
+// Refunded settlement amount <= the requested coverage amount (same currency).
+D["insurance"] = () => {
+  const holder = party("party:policyholder"), insurer = party("party:insurer", "Organization");
+  // Coverage limit committed = 10000 MAD; the adjudicated claim pays out 7000 MAD (<= limit).
+  const claim = 7000, coverage = 10000;
+  const policy = commitment("commitment:claim-1", parties(holder.id, insurer.id),
+    subj([], [moneyVal("value:coverage-limit", coverage)]),
+    [
+      { state: S.draft, at: t(8), actor: holder.id },
+      { state: S.proposed, at: t(9), actor: holder.id },
+      { state: S.accepted, at: t(10), actor: insurer.id },
+      { state: S.partially(["assessed"], ["payout"]), at: t(11), actor: insurer.id },
+      { state: S.fulfilled, at: t(12), actor: insurer.id },
+      { state: S.refunded(claim, "MAD", t(13)), at: t(13), actor: insurer.id },
+    ],
+    { terms: {
+      conditions: [{ kind: "PrescriptionRequired", must_verify_before: "Fulfilled", verified_by: insurer.id }],
+    } });
+  return {
+    title: "Insurance claim paid within coverage: payout 7000 <= coverage 10000 MAD",
+    doc: "Coverage limit is a Commitment (requested 10000 MAD); the adjudicated claim is a settlement payout (Refunded 7000 MAD) against it. claim <= coverage, so Value Conservation (I-1) holds. The over-claim counterpart (insurance-violation) pays out MORE than the coverage and is rejected by I-1.",
+    parties: [holder, insurer], commitments: [policy],
+    fulfillments: [payFul("fulfillment:claim-assess", policy.id, insurer.id, holder.id, "assess", claim, "MAD", { p: 10, s: 11, c: 11 })],
+  };
+};
+
+// ===========================================================================
+// Violation case studies — each maps a domain onto the primitives and shows a
+// domain-specific error being CAUGHT by one of the six invariants. Composed
+// from the same builders as the accept scenes; no new audit logic. Each emits a
+// scene fixture (expect:reject, with the triggering rule) + an .expected sidecar,
+// exactly like conformance/invalid/*. The runner asserts the declared rule
+// actually fires; the four-way crosscheck asserts all bindings agree.
+// ===========================================================================
+const VIOL = {};
+
+// INSURANCE — over-claim: a claim paid out ABOVE the coverage limit. Same shape
+// as the accept scene but the settlement payout (Refunded 15000) exceeds the
+// committed coverage (10000). Value Conservation (I-1): a payout cannot exceed
+// the captured/committed value. (History reaches Accepted with a capable
+// initiator so I-2/I-3/I-4 stay clean; the rejection is unambiguously I-1.)
+VIOL["insurance"] = () => {
+  const holder = party("party:policyholder"), insurer = party("party:insurer", "Organization");
+  const overclaim = 15000, coverage = 10000;
+  const policy = commitment("commitment:claim-over", parties(holder.id, insurer.id),
+    subj([], [moneyVal("value:coverage-limit", coverage)]),
+    [
+      { state: S.draft, at: t(8), actor: holder.id },
+      { state: S.proposed, at: t(9), actor: holder.id },
+      { state: S.accepted, at: t(10), actor: insurer.id },
+      { state: S.partially(["assessed"], ["payout"]), at: t(11), actor: insurer.id },
+      { state: S.fulfilled, at: t(12), actor: insurer.id },
+      { state: S.refunded(overclaim, "MAD", t(13)), at: t(13), actor: insurer.id },
+    ]);
+  return {
+    rule: "I-1", rule_name: "Value Conservation",
+    title: "Insurance over-claim: payout 15000 exceeds coverage 10000 MAD",
+    because: "A claim settlement (Refunded 15000 MAD) paid against a 10000 MAD coverage limit, same currency. A payout cannot exceed the captured/committed value — paying out more than the coverage creates value from nothing. Value Conservation (I-1) rejects it.",
+    parties: [holder, insurer], commitments: [policy], fulfillments: [],
+  };
+};
+
+// HEALTHCARE — dispense-before-authorization: a medication is dispensed (a
+// Completed fulfillment) but the prescription/insurer authorization commitment
+// never reached Accepted. Temporal Integrity (I-4): commitments form (here, the
+// authorization is granted) before fulfillments (the dispense) execute.
+VIOL["healthcare"] = () => {
+  const patient = party("party:patient"), pharmacy = party("party:pharmacy", "Organization");
+  const auth = commitment("commitment:rx-auth", parties(patient.id, pharmacy.id),
+    subj([serviceVal("value:dispense", "SVC-DISPENSE", { location: "Physical", performer: "party:pharmacy" })], [moneyVal("value:rx-fee", 300)]),
+    [
+      { state: S.draft, at: t(8), actor: patient.id },
+      { state: S.proposed, at: t(9), actor: patient.id },
+    ]);
+  // The dispense executes to Completed even though auth is only Proposed.
+  const dispense = fulfillment("fulfillment:rx-dispense", auth.id, [
+    { state: FS.planned, at: t(10), actor: pharmacy.id },
+    { state: FS.inprogress, at: t(11), actor: pharmacy.id },
+    { state: FS.completed, at: t(12), actor: pharmacy.id },
+  ], [{ kind: "MedicalRecord", reference: "MR-DISPENSE-1", issued_by: "pharmacy", patient: "patient", service_date: t(12) }]);
+  return {
+    rule: "I-4", rule_name: "Temporal Integrity",
+    title: "Healthcare dispense-before-authorization: medication dispensed before auth granted",
+    because: "A Completed dispense fulfillment whose authorization Commitment is only Proposed (never reached Accepted). Temporal Integrity (I-4): authorization must be granted (the commitment accepted) before the dispense executes.",
+    parties: [patient, pharmacy], commitments: [auth], fulfillments: [dispense],
+  };
+};
+
+// PROCUREMENT — three-way match failure: the invoice bills MORE than the goods
+// actually received (the receipt-verified PO amount). Modelled as a settlement
+// payout (Refunded = the invoiced amount) against the committed/receipt-matched
+// PO value. Value Conservation (I-1): the disbursement cannot exceed the
+// captured value (what was received). invoice > receipt fails I-1.
+VIOL["procurement"] = () => {
+  const buyer = party("party:buyer-org", "Organization"), supplier = party("party:supplier", "Organization");
+  const received = 8000, invoiced = 9500; // PO/receipt-matched = 8000; invoice bills 9500.
+  const po = commitment("commitment:po-1", parties(buyer.id, supplier.id),
+    subj([goodVal("value:po-goods", "SKU-WIDGET")], [moneyVal("value:po-amount", received)]),
+    [
+      { state: S.draft, at: t(8), actor: buyer.id },
+      { state: S.proposed, at: t(9), actor: buyer.id },
+      { state: S.accepted, at: t(10), actor: supplier.id },
+      { state: S.partially(["receipt"], ["invoice"]), at: t(11), actor: supplier.id },
+      { state: S.fulfilled, at: t(12), actor: supplier.id },
+      { state: S.refunded(invoiced, "MAD", t(13)), at: t(13), actor: buyer.id },
+    ]);
+  return {
+    rule: "I-1", rule_name: "Value Conservation",
+    title: "Procurement three-way-match failure: invoice 9500 exceeds receipt 8000 MAD",
+    because: "An invoice settlement (Refunded 9500 MAD) disbursed against a receipt-matched PO of 8000 MAD, same currency. In a PO/receipt/invoice three-way match, the invoice cannot exceed the goods actually received. The disbursement exceeds the captured value, so Value Conservation (I-1) rejects it.",
+    parties: [buyer, supplier], commitments: [po], fulfillments: [],
+  };
+};
+
 // ===========================================================================
 // Emit fixtures + rewrite the case-studies manifest block
 // ===========================================================================
@@ -583,8 +701,11 @@ const order = [
   "physical-ecommerce", "gifting", "pos", "services", "bnpl", "escrow", "fx", "saas",
   "streaming", "api-metering", "nft", "auction-family", "real-estate", "healthcare",
   "government-procurement", "wholesale", "marketplace", "trade-finance", "events",
-  "loyalty", "group-buying", "carbon-credits",
+  "loyalty", "group-buying", "carbon-credits", "insurance",
 ];
+
+// Domains that also ship a VIOLATION case study (accept scene + violation scene).
+const violOrder = ["insurance", "healthcare", "procurement"];
 
 const entries = [];
 for (const domain of order) {
@@ -599,6 +720,29 @@ for (const domain of order) {
   };
   writeFileSync(file, JSON.stringify(fixture, null, 2) + "\n");
   entries.push({ id, kind: "scene", path: `case-studies/${domain}/${domain}.json`, expect: "accept", domain });
+}
+
+// Emit violation case studies (scene fixture + .expected sidecar), one per
+// domain in violOrder. These live alongside the accept scene under the domain's
+// directory and are wired into the manifest as expect:reject with the rule.
+for (const domain of violOrder) {
+  const built = VIOL[domain]();
+  const id = `case-${domain}-violation`;
+  const dir = join(HERE, domain);
+  mkdirSync(dir, { recursive: true });
+  const fixture = {
+    fixture: id, schema: "1.0.0", kind: "scene", expect: "reject",
+    domain, title: built.title, doc: built.because, rule: built.rule, rule_name: built.rule_name,
+    payload: { parties: built.parties, commitments: built.commitments, fulfillments: built.fulfillments },
+  };
+  writeFileSync(join(dir, `${domain}-violation.json`), JSON.stringify(fixture, null, 2) + "\n");
+  const sidecar = { fixture: id, expect: "reject", rule: built.rule, rule_name: built.rule_name, because: built.because };
+  writeFileSync(join(dir, `${domain}-violation.expected.json`), JSON.stringify(sidecar, null, 2) + "\n");
+  entries.push({
+    id, kind: "scene", path: `case-studies/${domain}/${domain}-violation.json`,
+    expect: "reject", rule: built.rule, rule_name: built.rule_name, domain,
+    expected: `case-studies/${domain}/${domain}-violation.expected.json`,
+  });
 }
 
 // Rewrite manifest: strip existing case-studies/* entries, append fresh.
