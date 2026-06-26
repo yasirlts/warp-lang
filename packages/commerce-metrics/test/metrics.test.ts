@@ -37,6 +37,17 @@ const refundTo = (amount: number, currency = "MAD"): CommitmentState => ({
   at: "2026-02-01T00:00:00.000Z",
 });
 
+// guardAction stamps each applied transition's history[].at with wall-clock time,
+// so two independent calls differ only by that timestamp. Normalize it before
+// asserting verdict parity — the wrapper must change nothing else.
+function normalizeTimes<T>(verdict: T): T {
+  const v = structuredClone(verdict) as any;
+  for (const c of v?.next?.commitments ?? []) {
+    for (const h of c?.history ?? []) if (h && typeof h.at === "string") h.at = "<normalized>";
+  }
+  return v;
+}
+
 describe("withMetrics — verdict parity", () => {
   it("returns a verdict identical to raw guardAction for a valid action", () => {
     const { shipped, seller, world } = fulfilledOrder(200);
@@ -45,7 +56,7 @@ describe("withMetrics — verdict parity", () => {
     const raw = guardAction(world, action);
     const guarded = withMetrics()(structuredClone(world), structuredClone(action));
 
-    expect(guarded).toEqual(raw);
+    expect(normalizeTimes(guarded)).toEqual(normalizeTimes(raw));
     expect(guarded.ok).toBe(true);
   });
 
@@ -56,7 +67,7 @@ describe("withMetrics — verdict parity", () => {
     const raw = guardAction(world, action);
     const guarded = withMetrics()(structuredClone(world), structuredClone(action));
 
-    expect(guarded).toEqual(raw);
+    expect(normalizeTimes(guarded)).toEqual(normalizeTimes(raw));
     expect(guarded.ok).toBe(false);
   });
 });
