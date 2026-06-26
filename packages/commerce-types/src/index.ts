@@ -92,6 +92,12 @@ export * from "./returns.js";
 // descriptor (outbound). Composes the inbound adapters + guardObject; it does not
 // auto-reconcile correspondences and does not execute anything. TS first; ports roadmap.
 export * from "./interop.js";
+// `toEffect` / `toEffects` — host-agnostic effect DESCRIPTORS (Boundary-A:
+// effects-as-data). Translate a VALIDATED Warp action into a neutral
+// `{ kind, target, payload }` descriptor of what a host would do, leaving HOW
+// (platform, API, credentials) to the host. Composes the same coverage shape as
+// the platform emitters; describes the effect, does NOT execute it. TS first.
+export * from "./effects.js";
 // `validateSettlement` / `createSettlementTracker` — validate that a multi-component
 // settlement (principal / tax / fees / shipping) RECONCILES against a commitment's
 // committed total in one currency, and track partial settlements cumulatively.
