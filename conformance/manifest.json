@@ -383,6 +383,43 @@
       "path": "case-studies/carbon-credits/carbon-credits.json",
       "expect": "accept",
       "domain": "carbon-credits"
+    },
+    {
+      "id": "case-insurance",
+      "kind": "scene",
+      "path": "case-studies/insurance/insurance.json",
+      "expect": "accept",
+      "domain": "insurance"
+    },
+    {
+      "id": "case-insurance-violation",
+      "kind": "scene",
+      "path": "case-studies/insurance/insurance-violation.json",
+      "expect": "reject",
+      "rule": "I-1",
+      "rule_name": "Value Conservation",
+      "domain": "insurance",
+      "expected": "case-studies/insurance/insurance-violation.expected.json"
+    },
+    {
+      "id": "case-healthcare-violation",
+      "kind": "scene",
+      "path": "case-studies/healthcare/healthcare-violation.json",
+      "expect": "reject",
+      "rule": "I-4",
+      "rule_name": "Temporal Integrity",
+      "domain": "healthcare",
+      "expected": "case-studies/healthcare/healthcare-violation.expected.json"
+    },
+    {
+      "id": "case-procurement-violation",
+      "kind": "scene",
+      "path": "case-studies/procurement/procurement-violation.json",
+      "expect": "reject",
+      "rule": "I-1",
+      "rule_name": "Value Conservation",
+      "domain": "procurement",
+      "expected": "case-studies/procurement/procurement-violation.expected.json"
     }
   ]
 }

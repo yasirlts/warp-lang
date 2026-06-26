@@ -1,0 +1,152 @@
+{
+  "fixture": "case-healthcare-violation",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "reject",
+  "domain": "healthcare",
+  "title": "Healthcare dispense-before-authorization: medication dispensed before auth granted",
+  "doc": "A Completed dispense fulfillment whose authorization Commitment is only Proposed (never reached Accepted). Temporal Integrity (I-4): authorization must be granted (the commitment accepted) before the dispense executes.",
+  "rule": "I-4",
+  "rule_name": "Temporal Integrity",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:patient",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:pharmacy",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:rx-auth",
+        "parties": {
+          "initiator": "party:patient",
+          "counterparty": "party:pharmacy",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [
+            {
+              "id": "value:dispense",
+              "form": {
+                "kind": "Service",
+                "identifier": "SVC-DISPENSE",
+                "delivery_model": {
+                  "location": "Physical",
+                  "performer": "party:pharmacy"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ],
+          "requested": [
+            {
+              "id": "value:rx-fee",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 300,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Proposed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:patient"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z"
+      }
+    ],
+    "fulfillments": [
+      {
+        "id": "fulfillment:rx-dispense",
+        "commitment": "commitment:rx-auth",
+        "state": {
+          "type": "Completed"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Planned"
+            },
+            "to": {
+              "type": "InProgress"
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:pharmacy"
+          },
+          {
+            "from": {
+              "type": "InProgress"
+            },
+            "to": {
+              "type": "Completed"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:pharmacy"
+          }
+        ],
+        "planned_at": "2026-03-10T10:00:00.000Z",
+        "started_at": "2026-03-10T11:00:00.000Z",
+        "completed_at": "2026-03-10T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "MedicalRecord",
+            "reference": "MR-DISPENSE-1",
+            "issued_by": "pharmacy",
+            "patient": "patient",
+            "service_date": "2026-03-10T12:00:00.000Z"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "fixture": "case-insurance-violation",
+  "schema": "1.0.0",
+  "kind": "scene",
+  "expect": "reject",
+  "domain": "insurance",
+  "title": "Insurance over-claim: payout 15000 exceeds coverage 10000 MAD",
+  "doc": "A claim settlement (Refunded 15000 MAD) paid against a 10000 MAD coverage limit, same currency. A payout cannot exceed the captured/committed value — paying out more than the coverage creates value from nothing. Value Conservation (I-1) rejects it.",
+  "rule": "I-1",
+  "rule_name": "Value Conservation",
+  "payload": {
+    "parties": [
+      {
+        "id": "party:policyholder",
+        "party_type": "Individual",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "id": "party:insurer",
+        "party_type": "Organization",
+        "locale": {
+          "language": "fr-MA",
+          "currency": "MAD",
+          "jurisdiction": "MA"
+        },
+        "capacity": {
+          "can_buy": true,
+          "can_sell": true,
+          "can_fulfill": true,
+          "can_guarantee": true,
+          "verified_at": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "commitment:claim-over",
+        "parties": {
+          "initiator": "party:policyholder",
+          "counterparty": "party:insurer",
+          "intermediaries": []
+        },
+        "subject": {
+          "offered": [],
+          "requested": [
+            {
+              "id": "value:coverage-limit",
+              "form": {
+                "kind": "Money",
+                "money": {
+                  "amount": 10000,
+                  "currency": "MAD"
+                }
+              },
+              "quantity": 1,
+              "state": {
+                "type": "Available"
+              }
+            }
+          ]
+        },
+        "state": {
+          "type": "Refunded",
+          "amount": {
+            "amount": 15000,
+            "currency": "MAD"
+          },
+          "at": "2026-03-10T13:00:00.000Z"
+        },
+        "history": [
+          {
+            "from": {
+              "type": "Draft"
+            },
+            "to": {
+              "type": "Proposed"
+            },
+            "at": "2026-03-10T09:00:00.000Z",
+            "actor": "party:policyholder"
+          },
+          {
+            "from": {
+              "type": "Proposed"
+            },
+            "to": {
+              "type": "Accepted"
+            },
+            "at": "2026-03-10T10:00:00.000Z",
+            "actor": "party:insurer"
+          },
+          {
+            "from": {
+              "type": "Accepted"
+            },
+            "to": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "assessed"
+              ],
+              "remaining_item_ids": [
+                "payout"
+              ]
+            },
+            "at": "2026-03-10T11:00:00.000Z",
+            "actor": "party:insurer"
+          },
+          {
+            "from": {
+              "type": "PartiallyFulfilled",
+              "fulfilled_item_ids": [
+                "assessed"
+              ],
+              "remaining_item_ids": [
+                "payout"
+              ]
+            },
+            "to": {
+              "type": "Fulfilled"
+            },
+            "at": "2026-03-10T12:00:00.000Z",
+            "actor": "party:insurer"
+          },
+          {
+            "from": {
+              "type": "Fulfilled"
+            },
+            "to": {
+              "type": "Refunded",
+              "amount": {
+                "amount": 15000,
+                "currency": "MAD"
+              },
+              "at": "2026-03-10T13:00:00.000Z"
+            },
+            "at": "2026-03-10T13:00:00.000Z",
+            "actor": "party:insurer"
+          }
+        ],
+        "children": [],
+        "created_at": "2026-03-10T08:00:00.000Z"
+      }
+    ],
+    "fulfillments": []
+  }
+}
