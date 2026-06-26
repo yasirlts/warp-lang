@@ -1,0 +1,32 @@
+{
+  "name": "@warp-lang/commerce-viz",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only visualizer of the Warp Commerce Model: renders the real state-transition table (schema/behavior/transitions.json) as a state graph (SVG or self-contained HTML). It draws the model derived from the frozen schema; it is not a no-code platform and it does not execute, validate, or settle anything.",
+  "type": "module",
+  "bin": {
+    "warp-commerce-viz": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "examples",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "render": "tsx src/cli.ts",
+    "sample": "tsx src/cli.ts --out examples"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

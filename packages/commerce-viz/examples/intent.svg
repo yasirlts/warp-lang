@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="454" height="232" viewBox="0 0 454 232" data-primitive="intent" data-state-count="4" data-edge-count="3">
+  <desc>Read-only state graph for the intent primitive, derived from schema/behavior/transitions.json. 4 states, 3 legal transitions.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6470"/>
+    </marker>
+  </defs>
+  <style>
+    .edge { fill: none; stroke: #5b6470; stroke-width: 1.5; }
+    .node rect { fill: #eef2f7; stroke: #2f6fed; stroke-width: 1.5; }
+    .node.terminal rect { fill: #f7eeee; stroke: #c0392b; }
+    .node text { font: 13px ui-sans-serif, system-ui, sans-serif; fill: #1b1f24; text-anchor: middle; dominant-baseline: central; }
+  </style>
+  <g class="edges">
+    <path class="edge" d="M 182 52 C 227 52, 227 52, 272 52" marker-end="url(#arrow)">
+      <title>Active → Abandoned</title>
+    </path>
+    <path class="edge" d="M 182 52 C 227 52, 227 116, 272 116" marker-end="url(#arrow)">
+      <title>Active → Converted</title>
+    </path>
+    <path class="edge" d="M 182 52 C 227 52, 227 180, 272 180" marker-end="url(#arrow)">
+      <title>Active → Expired</title>
+    </path>
+  </g>
+  <g class="nodes">
+    <g class="node" data-state="Active">
+      <rect x="32" y="32" width="150" height="40" rx="6"/>
+      <text x="107" y="52">Active</text>
+    </g>
+    <g class="node terminal" data-state="Abandoned">
+      <rect x="272" y="32" width="150" height="40" rx="6"/>
+      <text x="347" y="52">Abandoned</text>
+    </g>
+    <g class="node terminal" data-state="Converted">
+      <rect x="272" y="96" width="150" height="40" rx="6"/>
+      <text x="347" y="116">Converted</text>
+    </g>
+    <g class="node terminal" data-state="Expired">
+      <rect x="272" y="160" width="150" height="40" rx="6"/>
+      <text x="347" y="180">Expired</text>
+    </g>
+  </g>
+</svg>
