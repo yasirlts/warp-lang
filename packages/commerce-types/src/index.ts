@@ -105,6 +105,14 @@ export * from "./effects.js";
 // rule) + the session refund-ledger idiom; it does NOT compute tax (component
 // amounts are caller-supplied; Warp checks they add up). TS first; ports roadmap.
 export * from "./settlement.js";
+// `guardWithProfile` / `PROFILES` — named DATA profiles (digital / physical /
+// subscription) that constrain which commitment states and value-form kinds apply
+// to a kind of commerce, as a caller-side filter. guardWithProfile checks the
+// profile's data constraint FIRST and then DELEGATES to the unmodified guardAction,
+// so the frozen transition table + six invariants still decide safety. A profile can
+// only narrow what is allowed; it is config, not a schema change or new invariant
+// logic. TypeScript first; ports roadmap.
+export * from "./profiles.js";
 
 // ── ADVANCED type vocabulary ────────────────────────────────────────────────
 // State machines, the v0.3 commerce vocabulary, and the market-making /
