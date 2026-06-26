@@ -30,6 +30,21 @@ import {
   worldsEqual,
 } from "../src/index.js";
 
+// guardAction stamps each applied transition's history[].at with wall-clock time,
+// which the runtime's injected clock does not control; a replay re-stamps it. The
+// meaningful determinism (final state, verdict ok/blocked) is asserted elsewhere;
+// here we normalize that timestamp so a verdict comparison is not clock-flaky.
+function normTimes<T>(value: T): T {
+  const cloned = structuredClone(value) as any;
+  const fix = (verdict: any) => {
+    for (const cm of verdict?.next?.commitments ?? [])
+      for (const h of cm?.history ?? []) if (h && typeof h.at === "string") h.at = "<t>";
+  };
+  if (Array.isArray(cloned)) cloned.forEach(fix);
+  else fix(cloned);
+  return cloned;
+}
+
 /** A Fulfilled order committed at `amount` MAD, in a world by itself. */
 function fulfilledOrder(amount: number): { world: World; id: string } {
   const buyer = partyId("buyer_1");
@@ -153,7 +168,7 @@ describe("CommerceRuntime — replay determinism", () => {
     expect(replay.verdicts[0]?.ok).toBe(false); // the over-refund stays blocked
     expect(replay.verdicts[1]?.ok).toBe(true); // the corrected refund stays accepted
     const liveVerdicts = live.store.entries().map((e) => e.verdict);
-    expect(replay.verdicts).toEqual(liveVerdicts);
+    expect(normTimes(replay.verdicts)).toEqual(normTimes(liveVerdicts));
   });
 
   it("replay is itself idempotent: replaying the replay's log reproduces the same state", () => {
