@@ -36,7 +36,7 @@ const fillDefaults = defineMigration({
   to: "1.1.0",
   transform: (world) => ({
     ...world,
-    commitments: world.commitments.map((c) => ({ children: [], history: [], ...c })),
+    commitments: world.commitments.map((c) => ({ ...c, children: c.children ?? [], history: c.history ?? [] })),
   }),
 });
 
@@ -101,7 +101,7 @@ describe("migrations — declarative data transform + re-audit (no schema edit)"
     const step1 = defineMigration({
       from: "1.0.0",
       to: "1.1.0",
-      transform: (w) => ({ ...w, commitments: w.commitments.map((c) => ({ children: [], history: [], ...c })) }),
+      transform: (w) => ({ ...w, commitments: w.commitments.map((c) => ({ ...c, children: c.children ?? [], history: c.history ?? [] })) }),
     });
     const step2 = defineMigration({ from: "1.1.0", to: "1.2.0", transform: (w) => w });
     const result = migrate(oldShapedWorld(), [step1, step2], { from: "1.0.0", to: "1.2.0" });
