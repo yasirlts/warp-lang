@@ -113,6 +113,15 @@ export * from "./settlement.js";
 // only narrow what is allowed; it is config, not a schema change or new invariant
 // logic. TypeScript first; ports roadmap.
 export * from "./profiles.js";
+// `negotiate` / `guardConcession` — guard a multi-step micro-negotiation (offer →
+// counter → accept) so an agent cannot be driven into an invalid concession: a
+// counter-offer that discounts below the merchant's floor (the concession budget,
+// checked through the canonical I-1 over-refund oracle) or an illegal state move
+// (rejected by the session/guard with its planning-oracle alternatives). Composes
+// createSession + guardAction + checkI1ValueConservation; it does not fork
+// invariant/transition logic, and it VALIDATES a sequence — it does not execute,
+// price, or settle anything. TypeScript first; ports roadmap.
+export * from "./negotiation.js";
 
 // ── ADVANCED type vocabulary ────────────────────────────────────────────────
 // State machines, the v0.3 commerce vocabulary, and the market-making /
