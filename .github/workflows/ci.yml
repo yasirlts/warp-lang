@@ -249,6 +249,28 @@ jobs:
       - name: Build
         run: npm run build
 
+  commerce-coverage:
+    name: coverage audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/commerce-coverage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/commerce-coverage/package-lock.json
+      - name: Install (clean, from lockfile)
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding
