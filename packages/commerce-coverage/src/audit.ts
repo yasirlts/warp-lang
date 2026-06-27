@@ -29,17 +29,12 @@ export interface Finding {
   reason: string;
   guardedBy?: string; // guard entry name, when COVERED
   indeterminate?: boolean; // UNGUARDED via an unresolved-reachability lean
-}
-
-export interface SuppressedHit {
-  file: string;
-  line: number;
-  sink: string;
+  allowlisted?: boolean; // an accepted, reasoned exception (still counted uncovered)
+  allowReason?: string; // why it was accepted (from the allow-list entry)
 }
 
 export interface AuditResult {
   findings: Finding[];
-  suppressed: SuppressedHit[];
   filesScanned: number;
 }
 
@@ -322,26 +317,26 @@ export function runAudit(loaded: LoadedConfig): AuditResult {
   const files = discoverFiles(absoluteRoots, config.extensions, config.exclude);
   const guardEntries = config.guardEntries;
 
-  let findings: Finding[] = [];
+  const findings: Finding[] = [];
   for (const abs of files) {
     const rel = relative(baseDir, abs);
     findings.push(...analyzeFile(abs, rel, config, guardEntries));
   }
 
-  // apply the (transparent) allowList: move matched sites to `suppressed`
+  // Flag accepted, reasoned exceptions. An allow-list entry matches by `file` or
+  // `file:line`. Matched sinks are NOT removed or hidden — they stay in the
+  // findings (still counted uncovered in the audit %), flagged with their reason
+  // so the enforcer can list them and pass them as deliberate exceptions.
   const allow = config.allowList ?? [];
-  const isSuppressed = (f: Finding) =>
-    allow.some((a) => a === f.file || a === `${f.file}:${f.line}`);
-  const suppressed: SuppressedHit[] = [];
-  findings = findings.filter((f) => {
-    if (isSuppressed(f)) {
-      suppressed.push({ file: f.file, line: f.line, sink: f.sink });
-      return false;
+  for (const f of findings) {
+    const hit = allow.find((a) => a.target === f.file || a.target === `${f.file}:${f.line}`);
+    if (hit) {
+      f.allowlisted = true;
+      f.allowReason = hit.reason;
     }
-    return true;
-  });
+  }
 
   // stable order
   findings.sort((a, b) => (a.file === b.file ? a.line - b.line : a.file < b.file ? -1 : 1));
-  return { findings, suppressed, filesScanned: files.length };
+  return { findings, filesScanned: files.length };
 }

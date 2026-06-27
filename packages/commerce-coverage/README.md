@@ -58,7 +58,9 @@ node dist/cli.js audit --config warp-coverage.config.json --json # machine-reada
 | `projectRoots` | Files/dirs to scan (relative to the config file, or absolute). |
 | `moneySinks` | **Your** money-state operations, matched by call-site `name` (optionally narrowed to an import `module`). Coverage is reported against this declaration. |
 | `guardEntries` | The Warp guard surface; defaults to the named `@warp-lang/commerce-types` entries (`guardAction`, `guardObject`, `guardWithProfile`, `guardConcession`, `createSession`, `createMultiAgentSession`, `toEffect`). Overridable. |
-| `allowList` | Optional `file` or `file:line` sites to exclude from detection. Excluded matches are reported transparently in a `SUPPRESSED` section with a count — removed from the measured set, never hidden. |
+| `allowList` | Accepted unguarded exceptions: `{ "target": "file" or "file:line", "reason": "…" }`. The `reason` is **required** — a reasonless entry is a config error. Allow-listed sinks do not fail enforcement and are listed (with their reasons) for audit; they are still counted as uncovered in the audit %. |
+| `failUnder` | Enforcement threshold (default `100`): the minimum % of enforceable sinks (analyzable minus allow-listed) that must be guarded for `enforce` to pass. |
+| `onUnanalyzable` | `"warn"` (default) or `"block"`: how `enforce` treats sinks it cannot analyze (see below). Never a silent pass. |
 | `extensions` / `exclude` | File extensions to scan / directory names to skip (sensible defaults). |
 
 ## How "covered" is decided (the path analysis, conservatively)
@@ -75,6 +77,35 @@ the result leans **uncovered**, never covered:
 | `UNGUARDED` | No guard on the path — or a guard exists but only conditionally / after the sink (counted as not covered, with the reason stated). |
 | `UNANALYZABLE` | The sink is reached indirectly (alias / callback / dynamic dispatch) and its guard path cannot be determined statically. **Listed separately; never counted as covered.** |
 
+## Enforce (the build gate)
+
+`audit` measures; `enforce` makes it a gate so new unguarded money-paths cannot ship:
+
+```bash
+node dist/cli.js enforce --config warp-coverage.config.json        # human
+node dist/cli.js enforce --config warp-coverage.config.json --json # machine-readable
+```
+
+- **Exit nonzero** when any enforceable sink — declared, analyzable, and not
+  allow-listed — is unguarded (below `failUnder`, default 100%). The failure names
+  each unguarded sink with its `file:line`. **Exit zero** when every enforceable
+  sink is guarded or explicitly allow-listed.
+- **Allow-listed exceptions are deliberate and visible.** Each requires a `reason`;
+  the enforcer lists them with their reasons. A reasonless allow-list entry is a
+  config error.
+- **Unanalyzable sinks are never silently passed.** `onUnanalyzable: "warn"`
+  (default) passes the build but prints them prominently as *"Warp cannot see these
+  — your responsibility"*; `"block"` fails the build on any unanalyzable sink. Pick
+  consciously: `warn` keeps the gate focused on what can be checked while keeping
+  the blind spots loud; `block` refuses to ship anything the tool can't see.
+
+Wire it into CI as a step (`warp-coverage enforce …`); a nonzero exit fails the build.
+
+**The precise claim:** this prevents new unguarded *declared, analyzable* money-paths
+from shipping. It is **not** a guarantee of total coverage — undeclared, dynamic, or
+unanalyzable writes remain your responsibility, and the enforcer restates this on
+every run.
+
 ## Scope & limits (read this)
 
 - Static, AST-based, TypeScript/JavaScript first.
@@ -84,7 +115,8 @@ the result leans **uncovered**, never covered:
   (so declare your sinks well, and treat the number as a floor, not a ceiling).
 - The percentage is over analyzable sinks only; the unanalyzable count sits beside
   it and is never folded in.
-- This is the **measurement** half of enforcement. It tells you where the gaps are;
-  it does not block them.
+- `audit` reports; `enforce` blocks (nonzero exit) on unguarded declared, analyzable
+  sinks. Enforcement is scoped to what the audit can see — it prevents new unguarded
+  declared paths from shipping; it does not prove total coverage.
 
 This package is `0.1.0` and unpublished.

@@ -250,7 +250,7 @@ jobs:
         run: npm run build
 
   commerce-coverage:
-    name: coverage audit
+    name: coverage audit + enforce
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -270,6 +270,17 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      # Dogfood the gate: enforce must PASS on a fully-guarded fixture...
+      - name: Enforce passes on the clean fixture (exit 0)
+        run: node dist/cli.js enforce --config enforce-fixtures/clean/warp.config.json
+      # ...and must FAIL on a fixture with an unguarded declared sink.
+      - name: Enforce fails on the gap fixture (must exit nonzero)
+        run: |
+          if node dist/cli.js enforce --config enforce-fixtures/gap/warp.config.json; then
+            echo "::error::enforce should have FAILED on the gap fixture but exited 0"
+            exit 1
+          fi
+          echo "enforce correctly failed (nonzero) on the unguarded gap fixture"
 
   # --- Python binding (warp-commerce-types) --------------------------------
   python:

@@ -6,15 +6,16 @@
  * numerator — folding them in (either as covered, or by dropping them to inflate
  * the rate) is the one thing this tool must never do.
  */
-import type { AuditResult, Finding, SuppressedHit } from "./audit.js";
+import type { AuditResult, Finding } from "./audit.js";
 
 export interface CoverageSummary {
   detected: number; // every declared-sink site found (analyzable + unanalyzable)
-  analyzable: number; // covered + unguarded
+  analyzable: number; // covered + unguarded (includes allow-listed)
   covered: number;
-  unguarded: number;
+  unguarded: number; // all UNGUARDED, including allow-listed exceptions
+  unguardedGaps: number; // UNGUARDED and NOT allow-listed (the enforcement failures)
+  allowlisted: number; // accepted, reasoned exceptions (still uncovered in the %)
   unanalyzable: number; // counted SEPARATELY, never in the percentage
-  suppressed: number; // removed via allowList (shown transparently)
   coveragePercent: number | null; // covered / analyzable; null when analyzable === 0
   filesScanned: number;
 }
@@ -23,9 +24,11 @@ export interface CoverageReport {
   header: string;
   summary: CoverageSummary;
   covered: Finding[];
+  /** UNGUARDED sinks that are NOT allow-listed — the real gaps. */
   unguarded: Finding[];
+  /** UNGUARDED sinks accepted via the allow-list, each with its reason. */
+  allowlisted: Finding[];
   unanalyzable: Finding[];
-  suppressed: SuppressedHit[];
   disclaimer: string;
 }
 
@@ -38,18 +41,21 @@ export const DISCLAIMER =
 
 export function buildReport(audit: AuditResult): CoverageReport {
   const covered = audit.findings.filter((f) => f.classification === "COVERED");
-  const unguarded = audit.findings.filter((f) => f.classification === "UNGUARDED");
+  const allUnguarded = audit.findings.filter((f) => f.classification === "UNGUARDED");
+  const allowlisted = allUnguarded.filter((f) => f.allowlisted);
+  const unguarded = allUnguarded.filter((f) => !f.allowlisted); // the real gaps
   const unanalyzable = audit.findings.filter((f) => f.classification === "UNANALYZABLE");
-  const analyzable = covered.length + unguarded.length;
+  const analyzable = covered.length + allUnguarded.length;
   const coveragePercent = analyzable === 0 ? null : Math.round((covered.length / analyzable) * 100);
 
   const summary: CoverageSummary = {
     detected: audit.findings.length,
     analyzable,
     covered: covered.length,
-    unguarded: unguarded.length,
+    unguarded: allUnguarded.length,
+    unguardedGaps: unguarded.length,
+    allowlisted: allowlisted.length,
     unanalyzable: unanalyzable.length,
-    suppressed: audit.suppressed.length,
     coveragePercent,
     filesScanned: audit.filesScanned,
   };
@@ -61,7 +67,7 @@ export function buildReport(audit: AuditResult): CoverageReport {
     `(listed below) and ${unanalyzable.length === 1 ? "is" : "are"} NOT counted as covered. ` +
     `This is a structural coverage signal over declared sinks, not a proof of correctness or completeness.`;
 
-  return { header, summary, covered, unguarded, unanalyzable, suppressed: audit.suppressed, disclaimer: DISCLAIMER };
+  return { header, summary, covered, unguarded, allowlisted, unanalyzable, disclaimer: DISCLAIMER };
 }
 
 function line(f: Finding): string {
@@ -78,15 +84,13 @@ export function formatHuman(r: CoverageReport): string {
   out.push("");
   out.push(
     `  files scanned: ${s.filesScanned}   detected sinks: ${s.detected}   ` +
-      `analyzable: ${s.analyzable}   covered: ${s.covered}   unguarded: ${s.unguarded}`,
+      `analyzable: ${s.analyzable}   covered: ${s.covered}   unguarded gaps: ${s.unguardedGaps}` +
+      (s.allowlisted ? `   allow-listed: ${s.allowlisted}` : ""),
   );
   out.push(
     `  coverage (covered / analyzable): ${s.coveragePercent === null ? "n/a" : s.coveragePercent + "%"}`,
   );
-  out.push(
-    `  UNANALYZABLE (NOT counted in coverage): ${s.unanalyzable}` +
-      (s.suppressed ? `    suppressed via allowList: ${s.suppressed}` : ""),
-  );
+  out.push(`  UNANALYZABLE (NOT counted in coverage): ${s.unanalyzable}`);
   out.push("");
 
   out.push(`UNGUARDED — declared sinks with no guard on their path (${r.unguarded.length}):`);
@@ -102,10 +106,16 @@ export function formatHuman(r: CoverageReport): string {
   out.push(`COVERED — a Warp guard runs on the path (structural signal only) (${r.covered.length}):`);
   out.push(r.covered.length ? r.covered.map(line).join("\n") : "  (none)");
 
-  if (r.suppressed.length) {
+  if (r.allowlisted.length) {
     out.push("");
-    out.push(`SUPPRESSED via allowList — excluded from the measured set, shown for transparency (${r.suppressed.length}):`);
-    out.push(r.suppressed.map((h) => `  - ${h.file}:${h.line}  [${h.sink}]`).join("\n"));
+    out.push(
+      `ALLOW-LISTED — intentionally-unguarded exceptions, accepted with a reason (still uncovered in the %) (${r.allowlisted.length}):`,
+    );
+    out.push(
+      r.allowlisted
+        .map((f) => `  - ${f.file}:${f.line}  [${f.sink}]  reason: ${f.allowReason ?? "(none)"}`)
+        .join("\n"),
+    );
   }
 
   out.push("");

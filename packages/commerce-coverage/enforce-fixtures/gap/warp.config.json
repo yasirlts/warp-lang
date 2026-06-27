@@ -1,0 +1,4 @@
+{
+  "projectRoots": ["src"],
+  "moneySinks": [{ "name": "postLedger" }, { "name": "chargeCard" }]
+}
