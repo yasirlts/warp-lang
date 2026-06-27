@@ -39,17 +39,39 @@ export interface CoverageConfig {
   /** Warp guard surface; defaults to the known commerce-types entries (overridable). */
   guardEntries?: GuardPattern[];
   /**
-   * Optional escape hatch: `file:line` sites (or bare file paths) the adopter has
-   * reviewed and intentionally excludes from detection. Suppressed matches are
-   * reported TRANSPARENTLY in their own section with a count — they are removed
-   * from the measured set, not hidden, so the headline number cannot be quietly
-   * gamed. Use sparingly.
+   * Accepted unguarded exceptions. Each entry names a sink site (`file` or
+   * `file:line`) the adopter has consciously decided to leave unguarded, and MUST
+   * carry a `reason`. Allow-listed sinks do not fail enforcement, but they remain
+   * visible: the audit still counts them as uncovered in the coverage %, and the
+   * enforcer lists them with their reasons so every exception is auditable. An
+   * entry without a reason is a config error (a silent, reasonless exception is
+   * exactly what this design forbids).
    */
-  allowList?: string[];
+  allowList?: AllowEntry[];
+  /**
+   * Enforcement threshold: the minimum % of ENFORCEABLE sinks (analyzable, minus
+   * allow-listed) that must be guarded for `enforce` to pass. Default 100 (every
+   * declared analyzable sink must be guarded or explicitly allow-listed).
+   */
+  failUnder?: number;
+  /**
+   * How `enforce` treats sinks it could not analyze. "warn" (default) passes the
+   * build but prints them loudly as the adopter's responsibility; "block" fails
+   * the build on any unanalyzable sink. They are NEVER silently passed as covered.
+   */
+  onUnanalyzable?: "warn" | "block";
   /** File extensions to scan. Default: ts, tsx, mts, cts, js, jsx, mjs, cjs. */
   extensions?: string[];
   /** Directory names to skip. Default: node_modules, dist, build, .git, coverage. */
   exclude?: string[];
+}
+
+/** An accepted, reasoned unguarded exception. */
+export interface AllowEntry {
+  /** The sink site to accept: a `file` path or a `file:line` (relative to baseDir). */
+  target: string;
+  /** Why this sink is intentionally unguarded — required; a reasonless entry is a config error. */
+  reason: string;
 }
 
 /**
@@ -70,6 +92,8 @@ export const DEFAULT_GUARD_ENTRIES: GuardPattern[] = [
 
 export const DEFAULT_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
 export const DEFAULT_EXCLUDE = ["node_modules", "dist", "build", ".git", "coverage"];
+export const DEFAULT_FAIL_UNDER = 100;
+export const DEFAULT_ON_UNANALYZABLE: "warn" | "block" = "warn";
 
 export interface LoadedConfig {
   /** The config with defaults applied. */
@@ -115,11 +139,48 @@ export function normalizeConfig(raw: unknown, baseDir: string): LoadedConfig {
           },
         );
 
+  let allowList: AllowEntry[] | undefined;
+  if (c.allowList !== undefined) {
+    if (!Array.isArray(c.allowList)) fail("`allowList` must be an array");
+    allowList = c.allowList.map((a, i) => {
+      if (typeof a !== "object" || a === null) fail(`allowList[${i}] must be an object { target, reason }`);
+      const ae = a as any;
+      if (typeof ae.target !== "string" || ae.target.trim() === "") {
+        fail(`allowList[${i}].target must be a non-empty string (file or file:line)`);
+      }
+      if (typeof ae.reason !== "string" || ae.reason.trim() === "") {
+        fail(
+          `allowList[${i}] (target "${ae.target}") must carry a non-empty \`reason\` — ` +
+            `an intentionally-unguarded sink must be deliberate and documented, never silent`,
+        );
+      }
+      return { target: ae.target, reason: ae.reason };
+    });
+  }
+
+  let failUnder = DEFAULT_FAIL_UNDER;
+  if (c.failUnder !== undefined) {
+    if (typeof c.failUnder !== "number" || c.failUnder < 0 || c.failUnder > 100) {
+      fail("`failUnder` must be a number between 0 and 100");
+    }
+    failUnder = c.failUnder;
+  }
+
+  let onUnanalyzable = DEFAULT_ON_UNANALYZABLE;
+  if (c.onUnanalyzable !== undefined) {
+    if (c.onUnanalyzable !== "warn" && c.onUnanalyzable !== "block") {
+      fail('`onUnanalyzable` must be "warn" or "block"');
+    }
+    onUnanalyzable = c.onUnanalyzable;
+  }
+
   const config = {
     projectRoots: c.projectRoots as string[],
     moneySinks,
     guardEntries,
-    allowList: Array.isArray(c.allowList) ? (c.allowList as string[]) : undefined,
+    allowList,
+    failUnder,
+    onUnanalyzable,
     extensions: Array.isArray(c.extensions) ? (c.extensions as string[]) : DEFAULT_EXTENSIONS,
     exclude: Array.isArray(c.exclude) ? (c.exclude as string[]) : DEFAULT_EXCLUDE,
   };

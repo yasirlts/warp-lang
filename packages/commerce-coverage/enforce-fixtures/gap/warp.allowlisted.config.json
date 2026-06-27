@@ -1,0 +1,10 @@
+{
+  "projectRoots": ["src"],
+  "moneySinks": [{ "name": "postLedger" }, { "name": "chargeCard" }],
+  "allowList": [
+    {
+      "target": "src/app.ts",
+      "reason": "legacy reconciliation path; guarded out-of-band by the nightly ledger job (tracked in JIRA-123)"
+    }
+  ]
+}
