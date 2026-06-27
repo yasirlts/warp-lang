@@ -1,0 +1,32 @@
+{
+  "name": "@warp-lang/commerce-coverage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Coverage audit: measure how much of an adopter's money-state code is guarded by Warp. Reports an honest coverage STATEMENT over the sinks the adopter declares — guarded N of M analyzable, the gap list, and a separately-counted unanalyzable list that never inflates the number. A structural coverage signal, not a proof of correctness or completeness.",
+  "type": "module",
+  "bin": {
+    "warp-coverage": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "audit:sample": "node dist/cli.js audit --config sample/warp-coverage.config.json"
+  },
+  "dependencies": {
+    "@warp-lang/commerce-types": "^1.3.0",
+    "typescript": "^5.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "projectRoots": ["src"],
+  "moneySinks": [
+    { "name": "postLedger", "description": "ledger post (money-state mutation)" },
+    { "name": "chargeCard", "description": "payment-SDK charge" }
+  ]
+}
