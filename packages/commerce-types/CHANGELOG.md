@@ -4,6 +4,47 @@ All notable changes to the npm package. The package tracks the canonical
 [Warp Commerce Model schema](https://github.com/yasirlts/warp-lang/tree/main/schema),
 frozen at v1.0.0.
 
+## 1.4.0
+
+### Added
+
+All additive over 1.3.0, expressed entirely from the frozen v1.0.0 model — no
+schema change; the conformance suite and the TS/Python/Rust/Go cross-check stay
+green.
+
+- **Outbound effect descriptors — `toEffect()` / `toEffects()`.** Turn a validated
+  action into a host-agnostic effect descriptor (`{ kind, target, payload }`) the
+  host executes. Descriptors only — no I/O. Warp describes the effect; the host
+  performs it.
+- **Write-time cross-source reconciliation — `reconcile()`.** Given N corresponded
+  platform sources, return a per-source coherence verdict, surfacing value drift as
+  an I-1 violation with attribution (which source, what delta). Composes `unify`.
+- **Cumulative windowing — `createWindowedSession()`.** A configurable window
+  (last-N events or time-bounded) over the session ledger, catching refund bursts a
+  point-in-time check misses. Per-session, in-memory.
+- **Fractional split-fulfillment.** Bounds cumulative fractional allocation of a
+  parent's committed value across children step-by-step (the forward-direction
+  complement to the existing tree reconciliation), bounded by I-1.
+- **Guarded micro-negotiations.** Validate an offer/counter/accept sequence so an
+  agent cannot be driven into an invalid concession (an over-discount caught via the
+  I-1 oracle, an illegal move via the session/guard). Composes session + guard.
+- **Data profiles — `guardWithProfile()`.** Named profiles (digital / physical /
+  subscription) that constrain which states and value-forms apply, layered over the
+  unmodified `guardAction`. Config, not new invariant logic.
+- **VAT reconciliation policy pack.** Validate a settlement's tax components against
+  caller-supplied rates over `validateSettlement`. Reconciliation only — it does not
+  compute tax or know tax law.
+- **Declarative data migrations.** `defineMigration` / `migrate` transform in-flight
+  world/commitment data across shapes and re-audit the result; a migration whose
+  output violates an invariant is rejected. A data layer; no schema edit.
+
+### Notes
+
+- Generality is now demonstrated on three non-commerce domains (insurance,
+  healthcare, procurement) as conformance case studies — the five primitives + six
+  invariants catch a domain-specific violation in each.
+- Every name exported by 1.3.0 is still exported, unchanged.
+
 ## 1.3.0
 
 ### Added

@@ -1,7 +1,6 @@
 {
   "name": "@warp-lang/commerce-mcp",
   "version": "0.1.0",
-  "private": true,
   "description": "Warp's commerce-integrity guardrail exposed as Model Context Protocol (MCP) tools — validate the structural coherence of a commerce action before it flows to payment authorization or checkout. A thin wrapper over the published @warp-lang/commerce-types; it validates and returns verdicts, it does not execute, authorize, settle, or hold credentials.",
   "type": "module",
   "bin": {
@@ -9,7 +8,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@warp-lang/commerce-types": "^1.3.0",
+    "@warp-lang/commerce-types": "^1.4.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -31,5 +31,11 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yasirlts/warp-lang",
+    "directory": "packages/commerce-mcp"
   }
 }

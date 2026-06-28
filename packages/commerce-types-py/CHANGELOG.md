@@ -5,6 +5,23 @@ package `@warp-lang/commerce-types` and tracks the same canonical
 [Warp Commerce Model schema](https://github.com/yasirlts/warp-lang/tree/main/schema),
 frozen at v1.0.0.
 
+## 1.4.0
+
+### Notes
+
+- **Version-parity release — no functional change.** This bump keeps the Python
+  package in lockstep with npm `@warp-lang/commerce-types@1.4.0` (the tag-triggered
+  release publishes both from one `vX.Y.Z` tag, and each package's declared version
+  must match the tag).
+- The npm 1.4.0 features — outbound effect descriptors, cross-source reconciliation,
+  cumulative windowing, fractional split-fulfillment, guarded micro-negotiations,
+  data profiles, the VAT reconciliation pack, and declarative data migrations — are
+  **TypeScript-only and are not part of this Python package**. The Python surface
+  (the five primitives, currency-safe money, the transition validators, the six
+  invariant checkers, the guardrail + session layer shipped in 1.2.0–1.3.0) is
+  unchanged and remains proven equivalent to the TS binding by the conformance
+  cross-check.
+
 ## 1.3.0
 
 ### Added

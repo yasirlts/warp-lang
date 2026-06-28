@@ -1,7 +1,6 @@
 {
   "name": "@warp-lang/commerce-metrics",
   "version": "0.1.0",
-  "private": true,
   "description": "Structured metrics for Warp's commerce-integrity guardrail — wrap the published guardAction and count the blocks it returns, by rule (I-1..I-6 and guard rules) and by scope. An observability layer only: it composes @warp-lang/commerce-types and tallies verdicts; it does not change, re-derive, or weaken any guard or invariant logic.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -16,7 +15,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -25,7 +25,7 @@
     "example": "node examples/metrics.mjs"
   },
   "dependencies": {
-    "@warp-lang/commerce-types": "^1.3.0"
+    "@warp-lang/commerce-types": "^1.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -35,5 +35,11 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yasirlts/warp-lang",
+    "directory": "packages/commerce-metrics"
   }
 }
