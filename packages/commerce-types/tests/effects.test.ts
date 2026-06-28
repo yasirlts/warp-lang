@@ -17,6 +17,10 @@ const cancel: ProposedAction = {
 };
 
 const accept: ProposedAction = { commitment: "order_123", to: { type: "Accepted" }, actor: "agent" };
+const fulfill: ProposedAction = { commitment: "order_123", to: { type: "Fulfilled" }, actor: "agent" };
+const dispute: ProposedAction = { commitment: "order_123", to: { type: "Disputed", by: partyId("agent"), reason: "damaged", opened_at: "2026-03-01T00:00:00.000Z" }, actor: "agent" };
+// `Active` is a real transition with NO host-agnostic effect — the engine emits none for it.
+const activate: ProposedAction = { commitment: "order_123", to: { type: "Active" }, actor: "agent" };
 
 describe("toEffect — host-agnostic effect descriptors (describe, not execute)", () => {
   it("describes a refund as a neutral { kind, target, payload } descriptor", () => {
@@ -40,18 +44,27 @@ describe("toEffect — host-agnostic effect descriptors (describe, not execute)"
     }
   });
 
+  it("describes fulfill, settle, and notify for their transitions", () => {
+    const f = toEffect(fulfill);
+    expect(f.ok && f.descriptor).toEqual({ kind: "fulfill", target: "order_123", payload: {} });
+    const s = toEffect(accept);
+    expect(s.ok && s.descriptor).toEqual({ kind: "settle", target: "order_123", payload: {} });
+    const n = toEffect(dispute);
+    expect(n.ok && n.descriptor).toEqual({ kind: "notify", target: "order_123", payload: { reason: "damaged" } });
+  });
+
   it("returns an honest non-ok result for an action with no host-agnostic effect", () => {
-    const e = toEffect(accept);
+    const e = toEffect(activate);
     expect(e.ok).toBe(false);
     if (!e.ok) {
       expect(e.platform).toBe("host");
       expect(e.reason).toContain("no host-agnostic effect");
-      expect(e.reason).toContain("Accepted");
+      expect(e.reason).toContain("Active");
     }
   });
 
   it("never throws on a non-representable action — it returns a result", () => {
-    expect(() => toEffect(accept)).not.toThrow();
+    expect(() => toEffect(activate)).not.toThrow();
   });
 
   it("is pure data — the descriptor carries no functions and is not a promise", () => {
@@ -97,7 +110,7 @@ describe("toEffects — batch, order- and slot-preserving", () => {
   });
 
   it("a non-representable action yields a non-ok result in its slot, not a thrown batch", () => {
-    const results = toEffects([refund(40), accept, cancel]);
+    const results = toEffects([refund(40), activate, cancel]);
     expect(results.map((r) => r.ok)).toEqual([true, false, true]);
   });
 
