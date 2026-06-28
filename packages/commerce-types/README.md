@@ -169,6 +169,42 @@ the canonical name:
 | `verifyInvariant6` | `checkI6TreeConsistency` |
 | `verifyMoneyBreakdown` | `checkI1MoneyBreakdownSum` |
 
+## Pure engine — `step(world, event)` (Phase 3.1)
+
+The canonical composition of the pure pieces into the one function that *is* a
+commerce engine:
+
+```ts
+import { step, run } from "@warp-lang/commerce-types";
+
+const result = step(world, { type: "action", action });
+// → { world, effects, verdict }
+//   world:   the next world on accept; the SAME world on a block
+//   effects: host effect DESCRIPTORS (refund | cancel | fulfill | settle | notify)
+//   verdict: ok, or the rule + message + fix + legal alternatives on a block
+run(world, events); // fold step over a stream → { world, effects, verdicts }
+```
+
+This is the **effects-as-data** boundary (the Elm/SQL pattern): the engine is a
+pure function of `(world, event)` that **decides** the transition and
+**describes** the host effects as data — it performs **no I/O**. A host receives
+the effect descriptors and performs them (charge, ship, notify, …) and persists
+the returned world. It **composes** `guardAction` (the validated state
+transition) and `toEffect` (the descriptor mapping); it reimplements no invariant
+or transition logic. See `examples/engine.mjs` for a runnable mock host.
+
+`step` is **total** (every event yields a result; a blocked event leaves the
+world unchanged with no effects and a verdict explaining why; it never throws) and
+**deterministic**: same `(world, event)` → same output, *modulo* one field — each
+transition's `history[].at`, which the underlying guard records from the system
+clock (the same field the reference runtime normalizes for replay). Making the
+core literally clock-free would require an injectable clock inside `guardAction`,
+a separate later change.
+
+**This is not a language.** It is a pure function over the frozen model. Whether
+to author commerce engines in a dedicated Warp *language* is a separate, future
+question, deliberately gated on whether this pure core proves out.
+
 ## The six invariants
 
 1. **Value Conservation** — money always carries currency; no silent mixing.

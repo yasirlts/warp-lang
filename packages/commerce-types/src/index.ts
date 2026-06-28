@@ -113,6 +113,12 @@ export * from "./reconcile.js";
 // (platform, API, credentials) to the host. Composes the same coverage shape as
 // the platform emitters; describes the effect, does NOT execute it. TS first.
 export * from "./effects.js";
+// `step` / `run` — the pure commerce ENGINE (Phase 3.1, effects-as-data core).
+// step(world, event) -> { world, effects, verdict } composes guardAction + toEffect:
+// a pure, total, deterministic function that DECIDES the transition and DESCRIBES the
+// host effects (descriptors) without performing any I/O. A model + a host that executes
+// — NOT a language. Composes existing pieces; reimplements no invariant/transition logic.
+export * from "./engine.js";
 // `validateSettlement` / `createSettlementTracker` — validate that a multi-component
 // settlement (principal / tax / fees / shipping) RECONCILES against a commitment's
 // committed total in one currency, and track partial settlements cumulatively.

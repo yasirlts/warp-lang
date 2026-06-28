@@ -32,55 +32,67 @@ import type { Money } from "./money.js";
  * A host-agnostic effect descriptor: a neutral statement of WHAT should happen,
  * with no platform binding. The host maps `kind` + `target` onto its own API.
  *
- *  - `refund` carries the {@link Money} to return on the target commitment.
- *  - `cancel` carries no payload beyond the target.
+ *  - `refund`  carries the {@link Money} to return on the target commitment.
+ *  - `cancel`  carries no payload beyond the target.
+ *  - `fulfill` the host delivers / ships; no payload beyond the target.
+ *  - `settle`  the host captures / settles the agreed payment; target only.
+ *  - `notify`  the host escalates / notifies; carries the dispute `reason`.
  *
- * This mirrors the coverage of the platform emitters (Refunded, Cancelled). It
- * is a description, not an instruction to a specific system: the host chooses
- * the platform and the call.
+ * It is a description, not an instruction to a specific system: the host chooses
+ * the platform and the call. Transitions with no host effect emit nothing.
  */
 export type Effect =
   | { kind: "refund"; target: string; payload: { amount: Money } }
-  | { kind: "cancel"; target: string; payload: Record<string, never> };
+  | { kind: "cancel"; target: string; payload: Record<string, never> }
+  | { kind: "fulfill"; target: string; payload: Record<string, never> }
+  | { kind: "settle"; target: string; payload: Record<string, never> }
+  | { kind: "notify"; target: string; payload: { reason: string } };
 
 /**
  * Describe the host-agnostic effect of a VALIDATED action, as a data descriptor.
  *
  * The caller must have already validated the action (guardAction / a session);
  * this only translates a validated action into a neutral descriptor — it does
- * NOT re-run, duplicate, or fork the invariant checks. Coverage matches the
- * platform emitters: Refunded → `refund`, Cancelled → `cancel`. Any other action
- * type has no host-agnostic effect in this layer and returns an honest non-ok
- * {@link EmitResult} (it never throws).
+ * NOT re-run, duplicate, or fork the invariant checks. It maps the model
+ * transitions that imply a host effect:
+ *
+ *   - `Refunded`  → `refund`  (return the carried {@link Money} on the target)
+ *   - `Cancelled` → `cancel`
+ *   - `Fulfilled` → `fulfill` (the host delivers / ships)
+ *   - `Accepted`  → `settle`  (the host captures / settles the agreed payment)
+ *   - `Disputed`  → `notify`  (the host escalates / notifies; carries the reason)
+ *
+ * Transitions that imply NO host effect (e.g. Proposed, Modified, Active) return
+ * an honest non-ok {@link EmitResult} — the engine emits no effect for them. It
+ * never throws.
  *
  * No I/O of any kind is performed. Warp describes the effect; the host performs
- * it (Boundary-A: effects-as-data).
- *
- * The `platform` field of {@link EmitResult} is reported as `"host"` to signal
- * that the descriptor is host-agnostic — it is not bound to any one platform.
+ * it (Boundary-A: effects-as-data). The `platform` field is `"host"` to signal
+ * the descriptor is host-agnostic — not bound to any one platform.
  */
 export function toEffect(action: ProposedAction): EmitResult<Effect> {
-  if (action.to.type === "Refunded") {
-    return {
-      ok: true,
-      platform: "host",
-      descriptor: { kind: "refund", target: action.commitment, payload: { amount: action.to.amount } },
-    };
+  const target = action.commitment;
+  const ok = (descriptor: Effect): EmitResult<Effect> => ({ ok: true, platform: "host", descriptor });
+  switch (action.to.type) {
+    case "Refunded":
+      return ok({ kind: "refund", target, payload: { amount: action.to.amount } });
+    case "Cancelled":
+      return ok({ kind: "cancel", target, payload: {} });
+    case "Fulfilled":
+      return ok({ kind: "fulfill", target, payload: {} });
+    case "Accepted":
+      return ok({ kind: "settle", target, payload: {} });
+    case "Disputed":
+      return ok({ kind: "notify", target, payload: { reason: action.to.reason } });
+    default:
+      return {
+        ok: false,
+        platform: "host",
+        reason:
+          `A '${action.to.type}' transition has no host-agnostic effect in this layer ` +
+          `(covered: Refunded, Cancelled, Fulfilled, Accepted, Disputed). The engine emits no effect for it.`,
+      };
   }
-  if (action.to.type === "Cancelled") {
-    return {
-      ok: true,
-      platform: "host",
-      descriptor: { kind: "cancel", target: action.commitment, payload: {} },
-    };
-  }
-  return {
-    ok: false,
-    platform: "host",
-    reason:
-      `A '${action.to.type}' action has no host-agnostic effect in this layer ` +
-      `(covered: Refunded → refund, Cancelled → cancel). Handle it in the host, or extend the descriptor set.`,
-  };
 }
 
 /**
