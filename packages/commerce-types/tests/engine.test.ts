@@ -32,6 +32,8 @@ function normTimes<T>(value: T): T {
   return w;
 }
 const refundTo = (amount: number): CommitmentState => ({ type: "Refunded", amount: { amount, currency: "MAD" }, at: "2026-03-01T00:00:00.000Z" });
+// A fixed clock LATER than any wall-clock build time, so it is temporally valid.
+const FIXED = () => "2030-01-01T00:00:00.000Z";
 
 describe("engine — valid transitions advance the world and emit host effects", () => {
   it("refund: world advances, one refund descriptor", () => {
@@ -100,6 +102,44 @@ describe("engine — purity, totality, no mutation", () => {
     expect(r.verdict.ok).toBe(false);
     expect(r.effects).toEqual([]);
     expect(r.world.commitments[0]!.state.type).toBe("Fulfilled"); // unchanged
+  });
+});
+
+describe("engine — injectable clock makes purity PROVABLE (Phase 3.1b)", () => {
+  it("byte-for-byte deterministic with a fixed clock (not just modulo the timestamp)", () => {
+    const c = order(200, { type: "Fulfilled" });
+    const w = worldWith(c);
+    const e = event(c.id, refundTo(200));
+    const r1 = step(w, e, { clock: FIXED });
+    const r2 = step(w, e, { clock: FIXED });
+    expect(JSON.stringify(r1)).toBe(JSON.stringify(r2)); // FULL byte-for-byte equality
+    const h = r1.world.commitments[0]!.history;
+    expect(h[h.length - 1]!.at).toBe("2030-01-01T00:00:00.000Z"); // the injected clock's value
+  });
+
+  it("run() with a fixed clock is byte-for-byte deterministic over a stream", () => {
+    const a = order(200, { type: "Fulfilled" });
+    const b = order(100, { type: "Proposed" });
+    const w = worldWith(a, b);
+    const events = [event(a.id, refundTo(200)), event(b.id, { type: "Accepted" })];
+    expect(JSON.stringify(run(w, events, { clock: FIXED }))).toBe(JSON.stringify(run(w, events, { clock: FIXED })));
+  });
+
+  it("an injected NON-MONOTONIC clock is STILL rejected by I-4 (integrity not weakened)", () => {
+    const c = order(200, { type: "Fulfilled" }); // built with wall-clock history (~now)
+    const earlier = () => "2000-01-01T00:00:00.000Z"; // before the existing history
+    const r = step(worldWith(c), event(c.id, refundTo(200)), { clock: earlier });
+    expect(r.verdict.ok).toBe(false);
+    expect(r.verdict.violations?.[0]?.rule).toBe("I-4");
+    expect(r.effects).toEqual([]);
+    expect(r.world.commitments[0]!.state.type).toBe("Fulfilled"); // unchanged
+  });
+
+  it("default (no clock) is unchanged behavior — accepts and advances", () => {
+    const c = order(200, { type: "Fulfilled" });
+    const r = step(worldWith(c), event(c.id, refundTo(200)));
+    expect(r.verdict.ok).toBe(true);
+    expect(r.world.commitments[0]!.state.type).toBe("Refunded");
   });
 });
 

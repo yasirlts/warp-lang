@@ -22,6 +22,17 @@ import type {
   FulfillmentState,
   IntentState,
 } from "./states.js";
+
+/**
+ * An injectable clock: returns an ISO-8601 instant for a transition's
+ * `history[].at`. Defaults to the real wall clock ({@link now}). Supplying a
+ * FIXED clock makes a transition — and the engine that composes it — byte-for-byte
+ * deterministic (replay, simulation, tests). The injected time is NOT exempt from
+ * Invariant 4 (Temporal Integrity): a time earlier than the previous transition is
+ * still rejected, exactly as a wall-clock time would be. The clock is injectable;
+ * temporal integrity is not negotiable.
+ */
+export type Clock = () => string;
 // The valid-transition tables are GENERATED from schema/behavior/transitions.json
 // (the 26 commitment edges, intent, and fulfillment maps) — they are no longer
 // hand-maintained here. The Failed -> Planned recoverable special case below is
@@ -135,6 +146,7 @@ export function transitionCommitment(
   to: CommitmentState,
   actor: PartyID,
   reason?: string,
+  clock: Clock = now,
 ): Result<Commitment> {
   if (!isValidCommitmentTransition(commitment.state, to)) {
     return {
@@ -146,7 +158,7 @@ export function transitionCommitment(
         `(Invariant 2: State Monotonicity).`,
     };
   }
-  const at = now();
+  const at = clock();
   const last = commitment.history[commitment.history.length - 1];
   if (last && !timestampNotBefore(at, last.at)) {
     return {
@@ -169,6 +181,7 @@ export function transitionIntent(
   to: IntentState,
   actor: PartyID,
   reason?: string,
+  clock: Clock = now,
 ): Result<Intent> {
   if (!isValidIntentTransition(intent.state, to)) {
     return {
@@ -176,7 +189,7 @@ export function transitionIntent(
       error: `Intent cannot transition from '${intent.state.type}' to '${to.type}' — not a valid transition (Invariant 2).`,
     };
   }
-  const at = now();
+  const at = clock();
   const last = intent.history[intent.history.length - 1];
   if (last && !timestampNotBefore(at, last.at)) {
     return {
@@ -198,6 +211,7 @@ export function transitionFulfillment(
   fulfillment: Fulfillment,
   to: FulfillmentState,
   actor: PartyID,
+  clock: Clock = now,
 ): Result<Fulfillment> {
   if (!isValidFulfillmentTransition(fulfillment.state, to)) {
     return {
@@ -205,7 +219,7 @@ export function transitionFulfillment(
       error: `Fulfillment cannot transition from '${fulfillment.state.type}' to '${to.type}' — not a valid transition (Invariant 2).`,
     };
   }
-  const at = now();
+  const at = clock();
   const last = fulfillment.history[fulfillment.history.length - 1];
   if (last && !timestampNotBefore(at, last.at)) {
     return {

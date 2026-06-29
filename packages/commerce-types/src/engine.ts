@@ -15,21 +15,21 @@
  *   - `toEffect` (from ./effects) maps a validated action to a host descriptor.
  * No invariant or transition logic is reimplemented here.
  *
- * Determinism note (an honest finding from this step): the engine itself reads
- * no clock, performs no I/O, and mutates no input. The ONE field that is not
- * byte-for-byte stable across calls is each transition's `history[].at`, which the
- * underlying `guardAction` records from the system clock — the same single field
- * the reference runtime normalizes for replay. `step` is therefore deterministic
- * MODULO that timestamp: same (world, event) -> same output in every other field.
- * The engine does not overwrite the timestamp (doing so would let an event time
- * predate existing history and break temporal monotonicity, which the guard
- * validates against the clock). Making the core literally clock-free would require
- * an injectable clock inside `guardAction` — a separate, later change, gated on
- * whether this pure core proves out.
+ * Determinism: the engine performs no I/O and mutates no input. The one field the
+ * model samples is each transition's `history[].at`; it now comes from an OPTIONAL
+ * injectable clock threaded into `guardAction` (Phase 3.1b). With a FIXED clock,
+ * `step`/`run` are byte-for-byte deterministic: same (world, event, clock) -> the
+ * same output, every field. With no clock supplied the default is the real wall
+ * clock (backward-compatible). The clock is injectable for determinism, but it is
+ * NOT exempt from Invariant 4: an injected time earlier than the previous
+ * transition is still rejected — the clock is injectable; temporal integrity is
+ * not. (This resolves the "deterministic modulo the timestamp" caveat from the
+ * first Phase-3.1 cut.)
  */
 import type { World, ProposedAction, GuardViolation, TransitionAlternative } from "./guard.js";
 import { guardAction } from "./guard.js";
 import { toEffect, type Effect } from "./effects.js";
+import type { Clock } from "./transitions.js";
 
 /**
  * The external input the engine interprets. A distinct type from
@@ -40,6 +40,17 @@ export interface CommerceEvent {
   type: "action";
   /** The proposed action this event asks the engine to apply. */
   action: ProposedAction;
+}
+
+/**
+ * Engine options. Supply a FIXED `clock` to make `step`/`run` byte-for-byte
+ * deterministic (replay, simulation, tests); omit it for the real wall clock.
+ * The injected time is still governed by Invariant 4 — an earlier-than-previous
+ * time is rejected, exactly as a wall-clock time would be. Mirrors the
+ * `{ now }` clock the reference runtime already accepts, threaded into the guard.
+ */
+export interface EngineOptions {
+  clock?: Clock;
 }
 
 /** The engine's decision for one event. */
@@ -77,16 +88,17 @@ export function interpret(event: CommerceEvent): ProposedAction[] {
  * the world on success, and returns host effect descriptors — or, on a block,
  * leaves the world unchanged and returns the verdict explaining why (no effects).
  *
- * Pure + total: same (world, event) -> same output; no clock, no I/O; the input
- * world is never mutated; it never throws.
+ * Pure + total: same (world, event, clock) -> same output; the input world is
+ * never mutated; it never throws. With a FIXED `opts.clock` the output is
+ * byte-for-byte deterministic; with no clock it uses the real wall clock.
  */
-export function step(world: World, event: CommerceEvent): StepResult {
+export function step(world: World, event: CommerceEvent, opts?: EngineOptions): StepResult {
   try {
     const actions = interpret(event);
     let w: World = world;
     const effects: Effect[] = [];
     for (const action of actions) {
-      const r = guardAction(w, action);
+      const r = guardAction(w, action, opts?.clock);
       if (!r.ok) {
         // blocked: the whole event is rejected — original world unchanged, no effects.
         return {
@@ -96,9 +108,8 @@ export function step(world: World, event: CommerceEvent): StepResult {
         };
       }
       // r.next is a fresh world built by the guard (it does not mutate the input).
-      // Surfaced as-is: the only non-deterministic field is the transition's
-      // wall-clock `at`, which the guard records and which determinism is measured
-      // modulo (see the module note).
+      // The transition's `at` comes from opts.clock (the wall clock by default);
+      // with a fixed clock the result is byte-for-byte deterministic.
       w = r.next;
       const e = toEffect(action);
       if (e.ok) effects.push(e.descriptor); // a transition with no host effect emits none (honest)
@@ -126,14 +137,15 @@ export function step(world: World, event: CommerceEvent): StepResult {
 /**
  * Fold {@link step} over a sequence of events — the engine processing a stream.
  * Deterministic, exactly like the reference runtime's replay: the same initial
- * world and the same events produce the same final world, effects, and verdicts.
+ * world, events, and (fixed) clock produce byte-for-byte the same final world,
+ * effects, and verdicts.
  */
-export function run(world: World, events: CommerceEvent[]): RunResult {
+export function run(world: World, events: CommerceEvent[], opts?: EngineOptions): RunResult {
   let w = world;
   const effects: Effect[] = [];
   const verdicts: EngineVerdict[] = [];
   for (const event of events) {
-    const r = step(w, event);
+    const r = step(w, event, opts);
     w = r.world;
     for (const e of r.effects) effects.push(e);
     verdicts.push(r.verdict);
