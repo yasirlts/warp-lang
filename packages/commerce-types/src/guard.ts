@@ -190,9 +190,31 @@ export function checkVersion(target: Commitment, expectedVersion: string | undef
 }
 
 /** Name the invariant a transition error cites, so the rule matches the message. */
-function ruleFromTransitionError(error: string): string {
+export function ruleFromTransitionError(error: string): string {
   const m = /Invariant (\d)/.exec(error);
   return m ? `I-${m[1]}` : "I-2";
+}
+
+/** True when an error message carries a recognizable invariant marker. */
+export function isInvariantError(message: string): boolean {
+  return /Invariant \d/.test(message);
+}
+
+/**
+ * The canonical "how to fix it" guidance for each invariant rule — so a rejection
+ * reads the same wherever it is surfaced (the guard, or the engine's safety net).
+ */
+export function fixForRule(rule: string): string {
+  switch (rule) {
+    case "I-1":
+      return "Conserve value: a refund cannot exceed what was committed (same currency). Lower the amount or model a partial refund.";
+    case "I-2":
+      return "Use only the model's valid transitions, or model a reversal as a new forward commitment with the parties exchanged.";
+    case "I-4":
+      return "Record the move at a time no earlier than the last transition (Invariant 4: Temporal Integrity).";
+    default:
+      return "Adjust the action so the resulting world satisfies the invariant.";
+  }
 }
 
 /** Short, agent-readable labels for each commitment move. */

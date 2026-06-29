@@ -10,9 +10,12 @@
   "files": [
     "dist",
     "examples",
+    "transitions.snapshot.json",
     "README.md"
   ],
   "scripts": {
+    "bundle:schema": "node scripts/bundle-schema.mjs",
+    "prebuild": "node scripts/bundle-schema.mjs",
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

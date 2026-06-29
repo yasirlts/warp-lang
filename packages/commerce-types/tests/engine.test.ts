@@ -125,14 +125,20 @@ describe("engine — injectable clock makes purity PROVABLE (Phase 3.1b)", () =>
     expect(JSON.stringify(run(w, events, { clock: FIXED }))).toBe(JSON.stringify(run(w, events, { clock: FIXED })));
   });
 
-  it("an injected NON-MONOTONIC clock is STILL rejected by I-4 (integrity not weakened)", () => {
+  it("an injected NON-MONOTONIC clock is STILL rejected by I-4, with a legible message + fix", () => {
     const c = order(200, { type: "Fulfilled" }); // built with wall-clock history (~now)
     const earlier = () => "2000-01-01T00:00:00.000Z"; // before the existing history
     const r = step(worldWith(c), event(c.id, refundTo(200)), { clock: earlier });
     expect(r.verdict.ok).toBe(false);
-    expect(r.verdict.violations?.[0]?.rule).toBe("I-4");
+    const v = r.verdict.violations?.[0];
+    // legible like every other Warp rejection (I-1/I-2): a real rule, not "engine-error",
+    expect(v?.rule).toBe("I-4");
+    expect(v?.rule).not.toBe("engine-error");
+    // a message that names the temporal-integrity invariant, and an actionable fix.
+    expect(v?.message).toMatch(/Temporal Integrity|Invariant 4/);
+    expect(v?.fix && v.fix.length).toBeGreaterThan(0);
     expect(r.effects).toEqual([]);
-    expect(r.world.commitments[0]!.state.type).toBe("Fulfilled"); // unchanged
+    expect(r.world.commitments[0]!.state.type).toBe("Fulfilled"); // unchanged (no behavior weakened)
   });
 
   it("default (no clock) is unchanged behavior — accepts and advances", () => {

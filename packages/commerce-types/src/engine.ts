@@ -27,7 +27,7 @@
  * first Phase-3.1 cut.)
  */
 import type { World, ProposedAction, GuardViolation, TransitionAlternative } from "./guard.js";
-import { guardAction } from "./guard.js";
+import { guardAction, isInvariantError, ruleFromTransitionError, fixForRule } from "./guard.js";
 import { toEffect, type Effect } from "./effects.js";
 import type { Clock } from "./transitions.js";
 
@@ -117,6 +117,19 @@ export function step(world: World, event: CommerceEvent, opts?: EngineOptions): 
     return { world: w, effects, verdict: { ok: true } };
   } catch (err) {
     // totality: never throw — surface the failure as a block, world unchanged.
+    const message = err instanceof Error ? err.message : String(err);
+    // If an invariant violation ever escaped as a THROW (rather than the normal
+    // guardAction return path, which already surfaces I-1/I-2/I-4 as a legible
+    // verdict), keep it legible: map it to its rule + fix instead of a generic
+    // engine-error. Only genuinely-unexpected failures fall through.
+    if (isInvariantError(message)) {
+      const rule = ruleFromTransitionError(message);
+      return {
+        world,
+        effects: [],
+        verdict: { ok: false, violations: [{ rule, message, fix: fixForRule(rule) }] },
+      };
+    }
     return {
       world,
       effects: [],
@@ -125,7 +138,7 @@ export function step(world: World, event: CommerceEvent, opts?: EngineOptions): 
         violations: [
           {
             rule: "engine-error",
-            message: `the engine could not process this event: ${err instanceof Error ? err.message : String(err)}`,
+            message: `the engine could not process this event: ${message}`,
             fix: "check the event's action is well-formed (a valid commitment id, target state, and actor).",
           },
         ],
