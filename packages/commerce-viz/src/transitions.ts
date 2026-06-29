@@ -1,19 +1,23 @@
 /**
- * Loads the REAL transition table from schema/behavior/transitions.json and
- * normalises it into a typed shape the renderer can walk. Nothing here is
- * hardcoded: the states and edges are read straight from the frozen schema. If
- * the schema changes, the rendered graph changes with it.
+ * Loads the REAL transition table and normalises it into a typed shape the
+ * renderer can walk. Nothing here is hardcoded: the states and edges are read
+ * straight from the frozen table. If the table changes, the rendered graph
+ * changes with it.
  *
- * This module reads, it does not define. The source of truth is the JSON.
+ * This module reads, it does not define. The source of truth is the repo's
+ * schema/behavior/transitions.json; at build time `scripts/bundle-schema.mjs`
+ * copies it to a package-root snapshot (transitions.snapshot.json) so the
+ * PUBLISHED CLI works standalone, without the repo present. The path below
+ * resolves to that snapshot in both dev (`tsx src/…`) and the published build
+ * (`dist/…`), since both `src/` and `dist/` sit one level under the package root.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-// packages/commerce-viz/src -> repo root is three levels up, then /schema.
-export const SCHEMA_DIR = join(HERE, "..", "..", "..", "schema");
-export const TRANSITIONS_PATH = join(SCHEMA_DIR, "behavior", "transitions.json");
+// src/ or dist/ -> package root -> the bundled snapshot of the frozen table.
+export const TRANSITIONS_PATH = join(HERE, "..", "transitions.snapshot.json");
 
 /** A primitive whose lifecycle is described by a transition table. */
 export type Primitive = "commitment" | "intent" | "fulfillment";

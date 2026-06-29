@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@warp-lang/commerce-mcp": "file:../commerce-mcp",
-    "@warp-lang/commerce-types": "^1.3.0"
+    "@warp-lang/commerce-mcp": "^0.1.0",
+    "@warp-lang/commerce-types": "^1.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

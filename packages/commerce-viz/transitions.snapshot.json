@@ -1,0 +1,39 @@
+{
+  "x-warp-schema-version": "1.0.0",
+  "description": "Declarative state-transition tables for the Warp Commerce Model. Each map is keyed by a source state; the value is the exhaustive list of states it may transition to. Every pair NOT listed is rejected (this is how Invariant 2, State Monotonicity, is enforced). Verified identical to the live TypeScript transition tables in packages/commerce-types/src/transitions.ts (commitment: 26 transitions across 11 states).",
+  "source_of_truth": "spec/COMMERCE_MODEL.md (Primitive 4 valid transitions; Primitive 3 Intent; Primitive 5 Fulfillment)",
+  "commitment": {
+    "Draft": ["Proposed", "Tendered", "Cancelled"],
+    "Proposed": ["Accepted", "Cancelled", "Modified"],
+    "Tendered": ["Accepted", "Cancelled"],
+    "Accepted": ["Modified", "PartiallyFulfilled", "Active", "Cancelled", "Disputed"],
+    "Modified": ["Accepted", "Cancelled"],
+    "PartiallyFulfilled": ["Fulfilled", "Modified", "Cancelled"],
+    "Active": ["Modified", "Cancelled", "Disputed"],
+    "Fulfilled": ["Disputed", "Refunded"],
+    "Cancelled": [],
+    "Disputed": ["Fulfilled", "Refunded", "Cancelled"],
+    "Refunded": []
+  },
+  "intent": {
+    "Active": ["Abandoned", "Converted", "Expired"],
+    "Abandoned": [],
+    "Converted": [],
+    "Expired": []
+  },
+  "fulfillment": {
+    "Planned": ["InProgress", "Failed"],
+    "InProgress": ["Completed", "Failed", "Reversed"],
+    "Completed": ["Reversed"],
+    "Failed": [],
+    "Reversed": []
+  },
+  "notes": {
+    "commitment_count": 26,
+    "commitment_terminal_states": ["Cancelled", "Refunded"],
+    "intent_terminal_states": ["Abandoned", "Converted", "Expired"],
+    "fulfillment_terminal_states": ["Reversed"],
+    "fulfillment_failed_recovery": "Failed is listed with an EMPTY transition set in the table above, but a Failed fulfillment MAY transition to Planned as a SPECIAL CASE — and ONLY when the Failed state's `recoverable` flag is true. A non-recoverable Failed is genuinely terminal. Generators MUST implement this identically: the table-driven check rejects Failed -> Planned, and the special case re-admits it iff `recoverable === true`. Reference implementation: packages/commerce-types/src/transitions.ts isValidFulfillmentTransition (lines 94-103).",
+    "monotonicity": "These tables ARE the machine-readable form of Invariant 2 (State Monotonicity). A reversal (return/refund) is never a backward state change on the original object — it is a NEW forward-moving Commitment with the parties exchanged."
+  }
+}
