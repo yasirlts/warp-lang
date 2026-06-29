@@ -209,6 +209,51 @@ mirroring the `{ now }` clock the reference runtime already accepts.
 to author commerce engines in a dedicated Warp *language* is a separate, future
 question, deliberately gated on whether this pure core proves out.
 
+## Bounded temporal verification — `verifyLifecycle()` (Phase 4.1)
+
+A reachability checker over the commitment lifecycle's **state machine**: explore
+the legal moves from a start state (up to an optional depth bound) and ask *"does
+any reachable transition take a move the frozen model forbids?"* — returning the
+exact path when it does.
+
+```ts
+import { reachableStates, verifyLifecycle, validTransitions } from "@warp-lang/commerce-types";
+
+reachableStates("Draft");
+// → { states: [...11 states], explored: 11, fixpointReached: true, depthReached: 4, bound: null }
+
+verifyLifecycle({ from: "Draft" });
+// → { verdict: "fixpoint-sound", violations: [], explored: 11, fixpointReached: true }
+
+// test a HYPOTHETICAL / broken table against the real legality oracle:
+const broken = (s) => (s === "Fulfilled" ? [...validTransitions({ type: s }), "Active"] : validTransitions({ type: s }));
+verifyLifecycle({ from: "Draft", transitions: broken });
+// → { verdict: "violation-found", violations: [{ rule: "I-2", state: "Active",
+//      path: ["Draft","Proposed","Accepted","PartiallyFulfilled","Fulfilled","Active"], ... }] }
+```
+
+It **composes** `validTransitions` (the edges) and `isValidCommitmentTransition`
+(the model's Invariant-2 legality oracle); it reimplements neither.
+
+**What this is — bounded model-checking of a finite state machine.** The graph is
+finite and the legality predicate is fixed, so reachability over it is tractable.
+
+**What this is NOT** — it is not an unbounded proof, not complete over data values,
+and not a claim that the system can never fail. The three honest verdicts:
+
+| verdict | meaning |
+|---|---|
+| `violation-found` | a reachable transition the model forbids, **with its counterexample path** |
+| `fixpoint-sound` | the **entire** reachable set was enumerated (a true fixpoint) and every move is legal — the reachable **state machine** is sound |
+| `sound-within-bound` | no reachable violation found **up to the depth bound**; the graph was not fully explored |
+
+`fixpoint-sound` is a statement about the **state machine**, not about data-level
+checks — a specific over-refund amount (I-1) or a non-monotonic timestamp (I-4) is
+a different axis, checked per concrete event by `guardAction` / `step`. On the real,
+frozen table the verdict is `fixpoint-sound` by construction; the practical value is
+catching a **broken or proposed** transition table before it ships (e.g. "is adding
+this edge sound?"). It reports what it explored — never "safe forever".
+
 ## The six invariants
 
 1. **Value Conservation** — money always carries currency; no silent mixing.
