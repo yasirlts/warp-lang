@@ -119,6 +119,12 @@ export * from "./effects.js";
 // host effects (descriptors) without performing any I/O. A model + a host that executes
 // — NOT a language. Composes existing pieces; reimplements no invariant/transition logic.
 export * from "./engine.js";
+// reachableStates / verifyLifecycle — BOUNDED reachability over the lifecycle state
+// machine: explore the legal moves from a start state (up to a bound) and report whether
+// any reachable transition is one the frozen model forbids, with a counterexample path.
+// Bounded model-checking of the state machine — NOT an unbounded/"forever" proof. Composes
+// validTransitions + isValidCommitmentTransition; reimplements no transition logic.
+export * from "./verify.js";
 // `validateSettlement` / `createSettlementTracker` — validate that a multi-component
 // settlement (principal / tax / fees / shipping) RECONCILES against a commitment's
 // committed total in one currency, and track partial settlements cumulatively.
