@@ -27,7 +27,7 @@ function moneyOf(value: Value): Money | null {
 }
 
 /** Sum the Money values in a list; flags if more than one currency appears. */
-function sumMoney(values: Value[]): { total: Money | null; mixed: boolean; currencies: string[] } {
+export function sumMoney(values: Value[]): { total: Money | null; mixed: boolean; currencies: string[] } {
   const currencies = new Set<string>();
   let amount = 0;
   for (const v of values) {

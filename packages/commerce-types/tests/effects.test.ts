@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import { toEffect, toEffects } from "../src/effects.js";
 import type { ProposedAction } from "../src/guard.js";
-import { partyId } from "../src/primitives.js";
+import { newCommitment, partyId, valueId } from "../src/primitives.js";
+
+// A commitment offering goods and requesting money — the source for host-actionable
+// fulfill (items to deliver) and settle (amount to capture) payloads.
+const goodsOrder = newCommitment(partyId("b"), partyId("s"), {
+  offered: [{ id: valueId("g"), form: { kind: "PhysicalGood", sku: "SKU1", condition: "New" }, quantity: 2, state: { type: "Available" } }],
+  requested: [{ id: valueId("m"), form: { kind: "Money", money: { amount: 150, currency: "MAD" } }, quantity: 1, state: { type: "Available" } }],
+});
 
 const refund = (amount: number): ProposedAction => ({
   commitment: "order_123",
@@ -36,21 +43,45 @@ describe("toEffect — host-agnostic effect descriptors (describe, not execute)"
     }
   });
 
-  it("describes a cancel with an empty payload", () => {
+  it("describes a cancel with who/why/when so the host can void downstream", () => {
     const e = toEffect(cancel);
     expect(e.ok).toBe(true);
     if (e.ok) {
-      expect(e.descriptor).toEqual({ kind: "cancel", target: "order_123", payload: {} });
+      expect(e.descriptor).toEqual({
+        kind: "cancel",
+        target: "order_123",
+        payload: { reason: "customer changed mind", by: "agent", at: "2026-03-01T00:00:00.000Z" },
+      });
     }
   });
 
-  it("describes fulfill, settle, and notify for their transitions", () => {
-    const f = toEffect(fulfill);
-    expect(f.ok && f.descriptor).toEqual({ kind: "fulfill", target: "order_123", payload: {} });
-    const s = toEffect(accept);
-    expect(s.ok && s.descriptor).toEqual({ kind: "settle", target: "order_123", payload: {} });
+  it("notify carries who/why/when from the dispute", () => {
     const n = toEffect(dispute);
-    expect(n.ok && n.descriptor).toEqual({ kind: "notify", target: "order_123", payload: { reason: "damaged" } });
+    expect(n.ok && n.descriptor).toEqual({
+      kind: "notify",
+      target: "order_123",
+      payload: { reason: "damaged", by: "agent", openedAt: "2026-03-01T00:00:00.000Z" },
+    });
+  });
+
+  it("fulfill lists the offered items, settle carries the committed amount (host-actionable)", () => {
+    const f = toEffect(fulfill, goodsOrder);
+    expect(f.ok && f.descriptor).toEqual({
+      kind: "fulfill",
+      target: "order_123",
+      payload: { items: [{ description: "PhysicalGood SKU1", quantity: 2 }] },
+    });
+    const s = toEffect(accept, goodsOrder);
+    expect(s.ok && s.descriptor).toEqual({
+      kind: "settle",
+      target: "order_123",
+      payload: { amount: { amount: 150, currency: "MAD" } },
+    });
+  });
+
+  it("fulfill/settle without the commitment are an honest non-ok (no empty descriptor)", () => {
+    expect(toEffect(fulfill).ok).toBe(false);
+    expect(toEffect(accept).ok).toBe(false);
   });
 
   it("returns an honest non-ok result for an action with no host-agnostic effect", () => {
