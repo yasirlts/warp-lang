@@ -44,16 +44,20 @@ describe("engine — valid transitions advance the world and emit host effects",
     expect(r.effects).toEqual([{ kind: "refund", target: c.id, payload: { amount: { amount: 200, currency: "MAD" } } }]);
   });
 
-  it("fulfill / settle / notify: each widened transition emits its descriptor", () => {
+  it("fulfill / settle / notify: each emits a host-actionable descriptor", () => {
     const f = order(100, { type: "PartiallyFulfilled", fulfilled_item_ids: ["a"], remaining_item_ids: ["b"] });
-    expect(step(worldWith(f), event(f.id, { type: "Fulfilled" })).effects.map((e) => e.kind)).toEqual(["fulfill"]);
+    const fulfilled = step(worldWith(f), event(f.id, { type: "Fulfilled" }));
+    expect(fulfilled.effects.map((e) => e.kind)).toEqual(["fulfill"]);
+    expect(fulfilled.effects[0]).toMatchObject({ kind: "fulfill", payload: { items: expect.any(Array) } });
 
     const p = order(100, { type: "Proposed" });
-    expect(step(worldWith(p), event(p.id, { type: "Accepted" })).effects.map((e) => e.kind)).toEqual(["settle"]);
+    const settled = step(worldWith(p), event(p.id, { type: "Accepted" }));
+    // settle carries the committed amount the host captures (from the requested money).
+    expect(settled.effects).toEqual([{ kind: "settle", target: p.id, payload: { amount: { amount: 100, currency: "MAD" } } }]);
 
     const d = order(100, { type: "Fulfilled" });
     const disputed = step(worldWith(d), event(d.id, { type: "Disputed", by: buyer, reason: "damaged", opened_at: "2026-03-01T00:00:00.000Z" }));
-    expect(disputed.effects).toEqual([{ kind: "notify", target: d.id, payload: { reason: "damaged" } }]);
+    expect(disputed.effects).toEqual([{ kind: "notify", target: d.id, payload: { reason: "damaged", by: buyer, openedAt: "2026-03-01T00:00:00.000Z" } }]);
   });
 });
 
@@ -163,5 +167,49 @@ describe("engine — run folds deterministically over an event stream", () => {
     expect(r2.verdicts).toEqual(r1.verdicts);
     expect(r2.effects).toEqual(r1.effects);
     expect(normTimes(r2.world)).toEqual(normTimes(r1.world));
+  });
+});
+
+describe("engine — complete lifecycle, as in examples/complete-engine.mjs", () => {
+  // An order offering goods, requesting money — drives create→accept→fulfill→refund.
+  function newOrder(amount: number, sku: string) {
+    return newCommitment(buyer, seller, {
+      offered: [{ id: valueId("g"), form: { kind: "PhysicalGood", sku, condition: "New" }, quantity: 1, state: { type: "Available" } }],
+      requested: [{ id: valueId("m"), form: { kind: "Money", money: { amount, currency: "MAD" } }, quantity: 1, state: { type: "Available" } }],
+    });
+  }
+  const clock = () => "2026-06-29T10:00:00.000Z";
+
+  it("runs the full lifecycle, emitting settle → fulfill → refund with real payloads", () => {
+    const o = newOrder(200, "TEABOX-200");
+    const events: CommerceEvent[] = [
+      event(o.id, { type: "Proposed" }),
+      event(o.id, { type: "Accepted" }),
+      event(o.id, { type: "PartiallyFulfilled", fulfilled_item_ids: [], remaining_item_ids: ["g"] }),
+      event(o.id, { type: "Fulfilled" }),
+      event(o.id, { type: "Refunded", amount: { amount: 200, currency: "MAD" }, at: "2026-06-29T10:00:00.000Z" }),
+    ];
+    const r = run({ commitments: [o], fulfillments: [], parties: [] }, events, { clock });
+    expect(r.verdicts.every((v) => v.ok)).toBe(true);
+    expect(r.effects.map((e) => e.kind)).toEqual(["settle", "fulfill", "refund"]);
+    expect(r.effects).toContainEqual({ kind: "settle", target: o.id, payload: { amount: { amount: 200, currency: "MAD" } } });
+    expect(r.effects).toContainEqual({ kind: "fulfill", target: o.id, payload: { items: [{ description: "PhysicalGood TEABOX-200", quantity: 1 }] } });
+    expect(r.world.commitments[0]!.state.type).toBe("Refunded");
+  });
+
+  it("blocks an over-refund at the end of the lifecycle with I-1 and no effect", () => {
+    const o = newOrder(100, "MUG-100");
+    const toFulfilled: CommerceEvent[] = [
+      event(o.id, { type: "Proposed" }),
+      event(o.id, { type: "Accepted" }),
+      event(o.id, { type: "PartiallyFulfilled", fulfilled_item_ids: [], remaining_item_ids: ["g"] }),
+      event(o.id, { type: "Fulfilled" }),
+    ];
+    const mid = run({ commitments: [o], fulfillments: [], parties: [] }, toFulfilled, { clock });
+    const over = step(mid.world, event(o.id, { type: "Refunded", amount: { amount: 500, currency: "MAD" }, at: "2026-06-29T10:00:00.000Z" }), { clock });
+    expect(over.verdict.ok).toBe(false);
+    expect(over.verdict.violations?.[0]?.rule).toBe("I-1");
+    expect(over.effects).toEqual([]);
+    expect(over.world.commitments[0]!.state.type).toBe("Fulfilled"); // unchanged
   });
 });

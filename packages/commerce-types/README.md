@@ -209,6 +209,42 @@ mirroring the `{ now }` clock the reference runtime already accepts.
 to author commerce engines in a dedicated Warp *language* is a separate, future
 question, deliberately gated on whether this pure core proves out.
 
+### The engine ↔ host contract
+
+The engine is the commerce **core**; a **host** does the I/O. The boundary is exact:
+
+**The engine promises** — `step(world, event, { clock? }) → { world, effects, verdict }`
+(and `run` folding it over a stream): **pure** (no I/O, no mutation of inputs),
+**total** (every event yields a result; it never throws), and **deterministic**
+with a fixed `clock` (byte-for-byte; see Phase 3.1b). It **decides** the transition
+and **describes** the effects as data — it performs **no I/O**.
+
+**The host promises** — supply the `events` and the `clock`; **persist** the
+returned `world` after each accepted step (and persist nothing on a block); and
+**perform** each emitted effect descriptor against its real systems. The host owns
+all side effects, credentials, retries, and idempotency at the boundary.
+
+**Effect catalog** — each descriptor is `{ kind, target, payload }`; `target` is the
+commitment id. The host maps `kind` + `payload` onto its own APIs:
+
+| kind | emitted on | payload | the host… |
+|---|---|---|---|
+| `settle` | `Accepted` | `{ amount }` | captures the committed amount |
+| `fulfill` | `Fulfilled` | `{ items: [{ description, quantity }] }` | delivers / ships the offered items |
+| `refund` | `Refunded` | `{ amount }` | returns the money |
+| `cancel` | `Cancelled` | `{ reason, by, at }` | voids the order downstream |
+| `notify` | `Disputed` | `{ reason, by, openedAt }` | escalates the dispute |
+
+Transitions with no host effect (e.g. `Proposed`, `PartiallyFulfilled`, `Active`,
+`Modified`) emit nothing — honestly. A blocked event emits nothing and leaves the
+world unchanged, with a legible verdict (the invariant `rule` + `message` + `fix`).
+
+**Scope.** This is the **effects-as-data engine** for authoring a commerce **core**
+as a Warp model; the host performs the I/O. It is **not a language** — there is no
+grammar, parser, or syntax — and it performs **no I/O** itself. See
+`examples/complete-engine.mjs` for the full lifecycle (create → accept → fulfill →
+refund, plus a blocked over-refund) driven end-to-end by a mock host.
+
 ## Bounded temporal verification — `verifyLifecycle()` (Phase 4.1)
 
 A reachability checker over the commitment lifecycle's **state machine**: explore

@@ -111,7 +111,11 @@ export function step(world: World, event: CommerceEvent, opts?: EngineOptions): 
       // The transition's `at` comes from opts.clock (the wall clock by default);
       // with a fixed clock the result is byte-for-byte deterministic.
       w = r.next;
-      const e = toEffect(action);
+      // Pass the (transitioned) commitment so fulfill/settle carry host-actionable
+      // payloads (items to deliver, amount to capture). The subject is unchanged by
+      // the transition, so the post-transition commitment is the right source.
+      const commitment = w.commitments.find((c) => (c.id as string) === action.commitment);
+      const e = toEffect(action, commitment);
       if (e.ok) effects.push(e.descriptor); // a transition with no host effect emits none (honest)
     }
     return { world: w, effects, verdict: { ok: true } };

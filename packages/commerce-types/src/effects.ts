@@ -27,26 +27,60 @@
 import type { EmitResult } from "./interop.js";
 import type { ProposedAction } from "./guard.js";
 import type { Money } from "./money.js";
+import type { Commitment, Value } from "./primitives.js";
+import { sumMoney } from "./invariants.js";
+
+/** One thing a host must deliver to fulfill a commitment, described host-agnostically. */
+export interface FulfillItem {
+  /** What to deliver — a SKU, a digital identifier, a service name, etc. */
+  description: string;
+  /** How many. */
+  quantity: number;
+}
 
 /**
  * A host-agnostic effect descriptor: a neutral statement of WHAT should happen,
- * with no platform binding. The host maps `kind` + `target` onto its own API.
+ * with enough in the payload for a host to actually perform it. The host maps
+ * `kind` + `target` + `payload` onto its own API.
  *
- *  - `refund`  carries the {@link Money} to return on the target commitment.
- *  - `cancel`  carries no payload beyond the target.
- *  - `fulfill` the host delivers / ships; no payload beyond the target.
- *  - `settle`  the host captures / settles the agreed payment; target only.
- *  - `notify`  the host escalates / notifies; carries the dispute `reason`.
+ *  - `refund`  the {@link Money} to return on the target commitment.
+ *  - `cancel`  who cancelled, why, and when — so the host can void downstream.
+ *  - `fulfill` the items the host must deliver (from the commitment's offered values).
+ *  - `settle`  the agreed amount the host captures / settles.
+ *  - `notify`  who opened the dispute, why, and when — so the host can escalate.
  *
  * It is a description, not an instruction to a specific system: the host chooses
  * the platform and the call. Transitions with no host effect emit nothing.
  */
 export type Effect =
   | { kind: "refund"; target: string; payload: { amount: Money } }
-  | { kind: "cancel"; target: string; payload: Record<string, never> }
-  | { kind: "fulfill"; target: string; payload: Record<string, never> }
-  | { kind: "settle"; target: string; payload: Record<string, never> }
-  | { kind: "notify"; target: string; payload: { reason: string } };
+  | { kind: "cancel"; target: string; payload: { reason: string; by: string; at: string } }
+  | { kind: "fulfill"; target: string; payload: { items: FulfillItem[] } }
+  | { kind: "settle"; target: string; payload: { amount: Money } }
+  | { kind: "notify"; target: string; payload: { reason: string; by: string; openedAt: string } };
+
+/** Describe one offered value host-agnostically (what the host delivers). */
+function describeValue(v: Value): FulfillItem {
+  const f = v.form;
+  let description: string;
+  switch (f.kind) {
+    case "PhysicalGood":
+      description = `PhysicalGood ${f.sku}`;
+      break;
+    case "DigitalGood":
+      description = `DigitalGood ${f.identifier}`;
+      break;
+    case "Service":
+      description = `Service ${f.identifier}`;
+      break;
+    case "Money":
+      description = `${f.money.amount} ${f.money.currency}`;
+      break;
+    default:
+      description = f.kind;
+  }
+  return { description, quantity: v.quantity };
+}
 
 /**
  * Describe the host-agnostic effect of a VALIDATED action, as a data descriptor.
@@ -57,41 +91,58 @@ export type Effect =
  * transitions that imply a host effect:
  *
  *   - `Refunded`  → `refund`  (return the carried {@link Money} on the target)
- *   - `Cancelled` → `cancel`
- *   - `Fulfilled` → `fulfill` (the host delivers / ships)
- *   - `Accepted`  → `settle`  (the host captures / settles the agreed payment)
- *   - `Disputed`  → `notify`  (the host escalates / notifies; carries the reason)
+ *   - `Cancelled` → `cancel`  (carries who/why/when)
+ *   - `Fulfilled` → `fulfill` (the host delivers the commitment's offered items)
+ *   - `Accepted`  → `settle`  (the host captures the committed amount)
+ *   - `Disputed`  → `notify`  (the host escalates; carries who/why/when)
  *
- * Transitions that imply NO host effect (e.g. Proposed, Modified, Active) return
- * an honest non-ok {@link EmitResult} — the engine emits no effect for them. It
+ * `fulfill` and `settle` need the {@link Commitment} to be host-actionable (the
+ * items to deliver, the amount to capture). Pass it — the engine always does. A
+ * `fulfill`/`settle` requested without the commitment, or a `settle` on a
+ * commitment with no committed money, returns an honest non-ok {@link EmitResult}
+ * rather than an empty, un-actionable descriptor. Transitions that imply NO host
+ * effect (e.g. Proposed, Modified, Active) likewise return a non-ok result. It
  * never throws.
  *
  * No I/O of any kind is performed. Warp describes the effect; the host performs
  * it (Boundary-A: effects-as-data). The `platform` field is `"host"` to signal
  * the descriptor is host-agnostic — not bound to any one platform.
  */
-export function toEffect(action: ProposedAction): EmitResult<Effect> {
+export function toEffect(action: ProposedAction, commitment?: Commitment): EmitResult<Effect> {
   const target = action.commitment;
   const ok = (descriptor: Effect): EmitResult<Effect> => ({ ok: true, platform: "host", descriptor });
+  const notOk = (reason: string): EmitResult<Effect> => ({ ok: false, platform: "host", reason });
   switch (action.to.type) {
     case "Refunded":
       return ok({ kind: "refund", target, payload: { amount: action.to.amount } });
     case "Cancelled":
-      return ok({ kind: "cancel", target, payload: {} });
-    case "Fulfilled":
-      return ok({ kind: "fulfill", target, payload: {} });
-    case "Accepted":
-      return ok({ kind: "settle", target, payload: {} });
+      return ok({ kind: "cancel", target, payload: { reason: action.to.reason, by: action.to.by, at: action.to.at } });
     case "Disputed":
-      return ok({ kind: "notify", target, payload: { reason: action.to.reason } });
+      return ok({
+        kind: "notify",
+        target,
+        payload: { reason: action.to.reason, by: action.to.by, openedAt: action.to.opened_at },
+      });
+    case "Fulfilled":
+      if (commitment === undefined) {
+        return notOk("a 'fulfill' effect needs the commitment to list the items to deliver — pass it (the engine does).");
+      }
+      return ok({ kind: "fulfill", target, payload: { items: commitment.subject.offered.map(describeValue) } });
+    case "Accepted": {
+      if (commitment === undefined) {
+        return notOk("a 'settle' effect needs the commitment to read the amount to capture — pass it (the engine does).");
+      }
+      const total = sumMoney(commitment.subject.requested).total;
+      if (total === null) {
+        return notOk("a 'settle' effect needs committed money on the commitment; none found in its requested values.");
+      }
+      return ok({ kind: "settle", target, payload: { amount: total } });
+    }
     default:
-      return {
-        ok: false,
-        platform: "host",
-        reason:
-          `A '${action.to.type}' transition has no host-agnostic effect in this layer ` +
+      return notOk(
+        `A '${action.to.type}' transition has no host-agnostic effect in this layer ` +
           `(covered: Refunded, Cancelled, Fulfilled, Accepted, Disputed). The engine emits no effect for it.`,
-      };
+      );
   }
 }
 
@@ -100,8 +151,10 @@ export function toEffect(action: ProposedAction): EmitResult<Effect> {
  * order and one-to-one correspondence with the input. Each entry is an
  * independent {@link EmitResult}: a non-representable action yields a non-ok
  * result in its slot rather than failing or dropping the whole batch. Composes
- * {@link toEffect}; performs no I/O.
+ * {@link toEffect}; performs no I/O. Optional per-action commitments (aligned by
+ * index) make `fulfill`/`settle` host-actionable; omit them and those kinds yield
+ * an honest non-ok result in their slot.
  */
-export function toEffects(actions: ProposedAction[]): EmitResult<Effect>[] {
-  return actions.map(toEffect);
+export function toEffects(actions: ProposedAction[], commitments?: (Commitment | undefined)[]): EmitResult<Effect>[] {
+  return actions.map((action, i) => toEffect(action, commitments?.[i]));
 }
