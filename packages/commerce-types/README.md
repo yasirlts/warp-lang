@@ -195,11 +195,15 @@ or transition logic. See `examples/engine.mjs` for a runnable mock host.
 
 `step` is **total** (every event yields a result; a blocked event leaves the
 world unchanged with no effects and a verdict explaining why; it never throws) and
-**deterministic**: same `(world, event)` → same output, *modulo* one field — each
-transition's `history[].at`, which the underlying guard records from the system
-clock (the same field the reference runtime normalizes for replay). Making the
-core literally clock-free would require an injectable clock inside `guardAction`,
-a separate later change.
+**provably deterministic**: pass a fixed `clock` via `EngineOptions`
+(`step(world, event, { clock })`) and the output is **byte-for-byte** identical for
+the same `(world, event, clock)` — the transition's `history[].at` comes from the
+injected clock. With no clock supplied the default is the real wall clock
+(backward-compatible). The clock is injectable for determinism, but **Invariant 4
+still governs**: an injected time earlier than the previous transition is rejected,
+exactly as a wall-clock time would be (the clock is injectable; temporal integrity
+is not). The clock threads `step`/`run` → `guardAction` → `transitionCommitment`,
+mirroring the `{ now }` clock the reference runtime already accepts.
 
 **This is not a language.** It is a pure function over the frozen model. Whether
 to author commerce engines in a dedicated Warp *language* is a separate, future

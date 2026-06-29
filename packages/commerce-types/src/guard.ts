@@ -23,7 +23,7 @@
 import { auditCommerce, type InvariantViolation } from "./invariants.js";
 import type { Commitment, Fulfillment, Party, PartyID } from "./primitives.js";
 import type { CommitmentState } from "./states.js";
-import { transitionCommitment, validTransitions } from "./transitions.js";
+import { transitionCommitment, validTransitions, type Clock } from "./transitions.js";
 
 /** The current commerce world the agent is acting on — however you already hold it. */
 export interface World {
@@ -251,7 +251,7 @@ function summarizeAlternatives(alts: TransitionAlternative[]): string {
  * }
  * ```
  */
-export function guardAction(world: World, action: ProposedAction): GuardResult {
+export function guardAction(world: World, action: ProposedAction, clock?: Clock): GuardResult {
   const target = world.commitments.find((c) => (c.id as string) === action.commitment);
   if (target === undefined) {
     return {
@@ -275,7 +275,7 @@ export function guardAction(world: World, action: ProposedAction): GuardResult {
 
   // 1. Validate the proposed move + replay history (composes transitionCommitment:
   //    the transition table is Invariant 2; timestamp monotonicity is Invariant 4).
-  const moved = transitionCommitment(target, action.to, action.actor as PartyID, action.reason);
+  const moved = transitionCommitment(target, action.to, action.actor as PartyID, action.reason, clock);
   if (!moved.ok) {
     const rule = ruleFromTransitionError(moved.error);
     // A transition-table rejection (I-2) is the planning case: enumerate the
