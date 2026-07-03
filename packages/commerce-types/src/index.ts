@@ -131,6 +131,13 @@ export * from "./verify.js";
 // the state MODEL only — not live data, not the whole platform. Composes verifyLifecycle +
 // isValidCommitmentTransition + the adapter mappings; reimplements no verify/invariant logic.
 export * from "./audit.js";
+// auditPlatformData / formatDataAuditReport — the Platform Auditor (Tier 2): scan SUPPLIED
+// order/refund/settlement records for commerce-integrity violations that already happened
+// (over-refund I-1, unbalanced/currency-mixed settlement I-1, illegal state history I-2),
+// per record. Audits data the user brings — not live-connected; integrity-only. Unmappable
+// records are UNAUDITABLE, never counted clean. Composes the invariant predicates + inbound
+// mappers; reimplements no invariant/mapper logic.
+export * from "./audit-data.js";
 // `validateSettlement` / `createSettlementTracker` — validate that a multi-component
 // settlement (principal / tax / fees / shipping) RECONCILES against a commitment's
 // committed total in one currency, and track partial settlements cumulatively.

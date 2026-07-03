@@ -328,6 +328,45 @@ never "your platform is safe."
 `unmappedStates` and its transitions as `uncheckedTransitions`, never faked into a clean
 result. See `examples/audit-platform.mjs` for the sound and broken cases end-to-end.
 
+## Platform auditor — Tier 2 (`auditPlatformData`)
+
+Where Tier 1 audits the *model*, Tier 2 audits the **data**: scan a store's actual
+order/refund/settlement records and find commerce-integrity violations that **already
+happened** — the "here are the N orders where you leaked money" report.
+
+```ts
+import { auditPlatformData, formatDataAuditReport } from "@warp-lang/commerce-types";
+
+const result = auditPlatformData({
+  platform: "Generic export",
+  records: [
+    { id: "ord-1001", committed: { amount: 200, currency: "MAD" }, finalState: "Fulfilled" },      // clean
+    { id: "ord-1003", committed: { amount: 200, currency: "MAD" }, refund: { amount: 250, currency: "MAD" } }, // I-1
+  ],
+});
+// → { recordsAudited, clean, violations: [{ recordId, rule, detail }], unauditable: [{ recordId, why }], summary }
+console.log(formatDataAuditReport(result));
+```
+
+Each record is mapped to a Warp Commitment (the default `orderRecordToCommitment`, or a
+platform inbound mapper you pass as `toCommitment` — e.g. `fromShopifyOrder`), then the
+invariants run per record: **over-refund** (I-1, refund > captured), **unbalanced or
+currency-mixed settlement** (I-1), **illegal state history** (I-2), value non-conservation.
+It **composes** `checkI1ValueConservation` / `checkI2StateMonotonicity` /
+`checkI1MoneyBreakdownSum` and the inbound mappers — reimplementing none.
+
+**Scope.** Tier 2 audits the records **you supply** (an exported order dump / API-response
+JSON). This build is **not live-connected** — it holds no credentials and makes no network
+calls; you bring the data. It finds commerce-**integrity** violations only; it does **not**
+find fraud intent, UI bugs, tax-rate correctness, security holes, or performance. It reports
+what the **data** shows, per invariant — not "your store has issues" but "order #1234
+over-refunded by 50 MAD (I-1)."
+
+**Unauditable, never hidden.** A record that can't be mapped to a Warp Commitment is listed
+in `unauditable` with the reason and is **never counted as clean** (`clean + withViolations
+= recordsAudited`; `recordsAudited + unauditable = total`). See `examples/audit-data.mjs`
+for a mostly-clean fixture with planted violations and an unmappable record.
+
 ## The six invariants
 
 1. **Value Conservation** — money always carries currency; no silent mixing.
