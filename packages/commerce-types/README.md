@@ -290,6 +290,44 @@ frozen table the verdict is `fixpoint-sound` by construction; the practical valu
 catching a **broken or proposed** transition table before it ships (e.g. "is adding
 this edge sound?"). It reports what it explored — never "safe forever".
 
+## Platform auditor — Tier 1 (`auditPlatformModel`)
+
+Point Warp at an existing commerce platform's declared order/refund **state model**
+and ask: *is its state machine sound* — does it permit a transition Warp's invariants
+forbid, or reach an invalid state?
+
+```ts
+import { auditPlatformModel, formatAuditReport, shopifyProfile } from "@warp-lang/commerce-types";
+
+auditPlatformModel(shopifyProfile);
+// → { platform: "Shopify", mappedStates: [...], unmappedStates: [], transitionsChecked: 9,
+//     illegalTransitions: [], reachabilityVerdict: "fixpoint-sound", counterexamples: [], sound: true }
+
+// a broken model — a shipped order can revert to unfulfilled:
+const broken = { ...shopifyProfile, transitions: [...shopifyProfile.transitions, { from: "fulfilled", to: "paid" }] };
+auditPlatformModel(broken).illegalTransitions;
+// → [{ from: "fulfilled", to: "paid", warpFrom: "Fulfilled", warpTo: "Accepted", rule: "I-2", why: "…" }]
+//   with counterexample path Proposed → Accepted → PartiallyFulfilled → Fulfilled → Accepted
+```
+
+You supply a `PlatformModel` — `{ platformName, states, transitions, stateMapping }` —
+or use a built-in profile (`shopifyProfile`, `wooCommerceProfile`, or `BUILT_IN_PROFILES`).
+The auditor maps each state onto Warp, checks every fully-mapped transition against
+`isValidCommitmentTransition` (Invariant 2), and runs `verifyLifecycle` over the mapped
+graph for a reachability verdict + counterexample paths. `formatAuditReport` renders a
+human-readable report. It **composes** those pieces; it reimplements none.
+
+**What Tier 1 audits** — the platform's declared **state model** (the states + transitions
+it permits), mapped to Warp. **What it does NOT do** — it does **not** read the platform's
+live orders/refunds (a later Tier 2), does **not** scan its code, and finds **nothing**
+outside commerce-integrity (no UI, security, tax, or performance issues). The verdict is
+about the **state model** — "your order state model is sound / has these specific issues,"
+never "your platform is safe."
+
+**Honest mapping gaps** — a platform state with no clean Warp counterpart is reported as
+`unmappedStates` and its transitions as `uncheckedTransitions`, never faked into a clean
+result. See `examples/audit-platform.mjs` for the sound and broken cases end-to-end.
+
 ## The six invariants
 
 1. **Value Conservation** — money always carries currency; no silent mixing.

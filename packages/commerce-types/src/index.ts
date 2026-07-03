@@ -125,6 +125,12 @@ export * from "./engine.js";
 // Bounded model-checking of the state machine — NOT an unbounded/"forever" proof. Composes
 // validTransitions + isValidCommitmentTransition; reimplements no transition logic.
 export * from "./verify.js";
+// auditPlatformModel / formatAuditReport + built-in profiles — the Platform Auditor
+// (Tier 1): map an existing platform's declared order/refund STATE MODEL onto Warp and
+// check its soundness (illegal transitions + reachability) against the invariants. Audits
+// the state MODEL only — not live data, not the whole platform. Composes verifyLifecycle +
+// isValidCommitmentTransition + the adapter mappings; reimplements no verify/invariant logic.
+export * from "./audit.js";
 // `validateSettlement` / `createSettlementTracker` — validate that a multi-component
 // settlement (principal / tax / fees / shipping) RECONCILES against a commitment's
 // committed total in one currency, and track partial settlements cumulatively.
