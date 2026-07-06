@@ -1,7 +1,6 @@
 {
   "name": "@warp-lang/agent-demo",
   "version": "0.1.0",
-  "private": true,
   "description": "Reference demo: a real LLM agent, mid-task, naturally reaches for a structurally-invalid commerce action (an over-refund) and is stopped by Warp — via the real commerce-mcp server — then self-corrects. Runs against any model API (bring your own key) or in a keyless, deterministic REPLAY of a recorded run for CI.",
   "type": "module",
   "files": [

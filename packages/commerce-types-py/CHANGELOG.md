@@ -5,6 +5,23 @@ package `@warp-lang/commerce-types` and tracks the same canonical
 [Warp Commerce Model schema](https://github.com/yasirlts/warp-lang/tree/main/schema),
 frozen at v1.0.0.
 
+## 1.5.0
+
+### Notes
+
+- **Version-parity release — no functional change.** This bump keeps the Python
+  package in lockstep with npm `@warp-lang/commerce-types@1.5.0` (the tag-triggered
+  release publishes both from one `vX.Y.Z` tag, and each package's declared version
+  must match the tag).
+- The npm 1.5.0 features — the pure effects-as-data **engine** (`step`/`run`),
+  **bounded temporal verification** (`verifyLifecycle`/`reachableStates`), the
+  injectable-clock determinism, and the **platform auditor** (Tier 1 model +
+  Tier 2 data) — are **TypeScript-only and are not part of this Python package**.
+  The Python surface (the five primitives, currency-safe money, the transition
+  validators, the six invariant checkers, the guardrail + session/interop/saga/
+  multi-agent layer shipped in 1.2.0–1.3.0) is unchanged and remains proven
+  equivalent to the TS binding on the shared model by the conformance cross-check.
+
 ## 1.4.0
 
 ### Notes

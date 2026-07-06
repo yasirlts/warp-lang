@@ -4,6 +4,56 @@ All notable changes to the npm package. The package tracks the canonical
 [Warp Commerce Model schema](https://github.com/yasirlts/warp-lang/tree/main/schema),
 frozen at v1.0.0.
 
+## 1.5.0
+
+### Added
+
+All additive over 1.4.0, expressed entirely from the frozen v1.0.0 model — no
+schema change; the conformance suite and the TS/Python/Rust/Go cross-check stay
+green.
+
+- **The pure effects-as-data engine — `step` / `run`.** `step(world, event) → {
+  world, effects, verdict }` (and `run` folding it over an event stream): a pure,
+  total function that DECIDES the transition (composing `guardAction`) and
+  DESCRIBES the host effects as data (composing `toEffect`) — it performs no I/O.
+  Effects are host-actionable descriptors: `settle { amount }`, `fulfill { items }`,
+  `refund { amount }`, `cancel { reason, by, at }`, `notify { reason, by, openedAt }`.
+  A host receives the descriptors and performs the I/O. It is an engine, not a
+  language — no grammar, parser, or syntax. See `examples/complete-engine.mjs` for
+  a full order lifecycle end-to-end.
+- **Injectable clock — provably-pure determinism.** `step`/`run` accept an optional
+  `clock`; with a fixed clock the output is byte-for-byte deterministic. Temporal
+  integrity is preserved: an injected time earlier than the previous transition is
+  still rejected (I-4). The clock threads down into `guardAction` / `transitionCommitment`.
+- **Bounded temporal verification — `verifyLifecycle` / `reachableStates`.** Bounded
+  model-checking of the commitment lifecycle's finite state machine: explore the
+  reachable states and report whether any reachable transition is one the model
+  forbids, with the counterexample path. Verdicts: `violation-found` (with path),
+  `fixpoint-sound` (full reachable set enumerated), `sound-within-bound`. Bounded,
+  not an unbounded/"forever" proof.
+- **Platform Auditor Tier 1 (model) — `auditPlatformModel`.** Map an existing
+  platform's declared order/refund STATE MODEL onto Warp and check its soundness:
+  illegal transitions (I-2) + reachability, with counterexample paths. Built-in
+  `shopifyProfile` / `wooCommerceProfile` + a custom-model path. Unmapped states are
+  reported, never faked. Audits the state model, not live data or the whole platform.
+- **Platform Auditor Tier 2 (data) — `auditPlatformData`.** Scan SUPPLIED order/
+  refund/settlement records for integrity violations that already happened:
+  over-refund (I-1), unbalanced/currency-mixed settlement (I-1), illegal recorded
+  history (I-2), per record. Composes the invariant predicates + inbound mappers. A
+  record that fails to map is UNAUDITABLE (listed, never counted clean). Audits data
+  the user supplies — not live-connected; commerce-integrity only.
+- **Engine temporal rejection is legible.** A non-monotonic-clock rejection surfaces
+  as a proper `I-4` verdict (rule + message + fix), like every other Warp rejection,
+  rather than a generic engine-error.
+
+### Notes
+
+- All additive over 1.4.0 — every name exported by 1.4.0 is still exported with no
+  signature change. No schema change.
+- The engine, verification, and auditor modules are part of this TypeScript package;
+  the Python package (`warp-commerce-types`) scopes to the shared model layer — see
+  its changelog.
+
 ## 1.4.0
 
 ### Added
