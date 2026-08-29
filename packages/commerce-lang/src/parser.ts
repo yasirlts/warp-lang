@@ -1,13 +1,13 @@
 /**
  * A hand-written recursive-descent parser: token stream → {@link Document} AST.
  * No parser-generator, no heavyweight compiler infrastructure — the grammar is
- * small enough (three declaration forms) that a direct descent is the clearest and
+ * small enough (four declaration forms) that a direct descent is the clearest and
  * gives the most controllable error messages, which is the point of the exercise.
  *
  * The grammar it accepts (see GRAMMAR.md for the canonical form):
  *
  *   document    := declaration*
- *   declaration := lifecycle | profile | auction
+ *   declaration := lifecycle | profile | auction | policy
  *   lifecycle   := "lifecycle" IDENT "{" lifecycleItem* "}"
  *   lifecycleItem := "state" IDENT
  *                  | IDENT "->" identList
@@ -21,7 +21,14 @@
  *                | "mechanism" IDENT [ "{" field* "}" ]
  *                | "tender" STRING "{" field* "}"
  *                | "state" IDENT [ "{" field* "}" ]
+ *   policy      := "policy" IDENT "{" policyField* "}"
+ *   policyField := ("label" | "description") STRING
+ *                | "applies_to" IDENT
+ *                | ("forbid_states" | "assert") identList
+ *                | ("concession_floor" | "committed_price") money
+ *                | "tax_rates" STRING numberList
  *   identList   := IDENT ("," IDENT)*
+ *   numberList  := NUMBER ("," NUMBER)*
  *   money       := NUMBER IDENT                        (* 1050000 MAD *)
  *
  * A `field` is `key value`, where the KEY fixes the value's shape (money, number,
@@ -45,6 +52,9 @@ import type {
   LifecycleDecl,
   MechanismDecl,
   MoneyLit,
+  PolicyDecl,
+  PolicyField,
+  PolicyFieldKey,
   ProfileDecl,
   ProfileField,
   StateDecl,
@@ -57,6 +67,22 @@ import { tokenize, type Token, type TokenType } from "./lexer.js";
 /** The four keywords legal as a profile field. */
 const PROFILE_FIELD_KEYS = ["label", "description", "states", "value_forms"] as const;
 type ProfileFieldKey = (typeof PROFILE_FIELD_KEYS)[number];
+
+/**
+ * The keys a `policy { … }` block accepts, in the order the error message lists
+ * them. Each one lowers to a rule structure the model already enforces; see
+ * {@link PolicyDecl}.
+ */
+const POLICY_FIELD_KEYS = [
+  "label",
+  "description",
+  "applies_to",
+  "forbid_states",
+  "concession_floor",
+  "committed_price",
+  "tax_rates",
+  "assert",
+] as const;
 
 /** The value shape a field key takes — what the parser reads after the key. */
 type Shape = FieldValue["shape"];
@@ -173,6 +199,16 @@ class Parser {
     return list;
   }
 
+  /** numberList := NUMBER ("," NUMBER)* — one or more comma-separated numbers. */
+  private numberList(expected: string): number[] {
+    const list: number[] = [Number(this.expect("number", expected).value)];
+    while (this.at("comma")) {
+      this.next(); // consume ','
+      list.push(Number(this.expect("number", expected).value));
+    }
+    return list;
+  }
+
   /** document := declaration* */
   parseDocument(): Document {
     const declarations: Declaration[] = [];
@@ -187,10 +223,11 @@ class Parser {
     if (t.type === "ident" && t.value === "lifecycle") return this.parseLifecycle();
     if (t.type === "ident" && t.value === "profile") return this.parseProfile();
     if (t.type === "ident" && t.value === "auction") return this.parseAuction();
+    if (t.type === "ident" && t.value === "policy") return this.parsePolicy();
     throw new WarpSyntaxError(
       `Expected a declaration but found ${describe(t)}.`,
       t.pos,
-      "'lifecycle', 'profile', or 'auction'",
+      "'lifecycle', 'profile', 'auction', or 'policy'",
     );
   }
 
@@ -450,6 +487,71 @@ class Parser {
       return { key, text: str.value, pos: t.pos };
     }
     // states | value_forms
+    const list = this.identList(`an identifier list after '${key}'`);
+    return { key, list, pos: t.pos };
+  }
+
+  /** policy := "policy" IDENT "{" policyField* "}" */
+  private parsePolicy(): PolicyDecl {
+    const kw = this.next(); // 'policy'
+    const name = this.ident("a policy id");
+    this.expect("lbrace", "'{'");
+    const fields: PolicyField[] = [];
+    while (!this.at("rbrace") && !this.at("eof")) {
+      fields.push(this.parsePolicyField());
+    }
+    this.expect("rbrace", "'}' to close the policy block");
+    return { kind: "policy", name, fields, pos: kw.pos };
+  }
+
+  /**
+   * policyField := ("label" | "description") STRING
+   *              | "applies_to" IDENT
+   *              | ("forbid_states" | "assert") identList
+   *              | ("concession_floor" | "committed_price") money
+   *              | "tax_rates" STRING numberList
+   *
+   * The KEY fixes the value's shape, so a missing value is reported by name.
+   */
+  private parsePolicyField(): PolicyField {
+    const t = this.peek();
+    if (t.type !== "ident" || !POLICY_FIELD_KEYS.includes(t.value as PolicyFieldKey)) {
+      throw new WarpSyntaxError(
+        `Expected a policy field but found ${describe(t)}.`,
+        t.pos,
+        `one of ${POLICY_FIELD_KEYS.map((k) => `'${k}'`).join(", ")}`,
+      );
+    }
+    const key = this.next().value as PolicyFieldKey;
+
+    if (key === "label" || key === "description") {
+      const str = this.expect("string", `a string after '${key}'`);
+      return { key, text: str.value, pos: t.pos };
+    }
+    if (key === "applies_to") {
+      const ref = this.ident("a profile id after 'applies_to'");
+      return { key, ref, pos: t.pos };
+    }
+    if (key === "concession_floor" || key === "committed_price") {
+      const amount = this.expect("number", `a money amount after '${key}' (like '150 MAD')`);
+      const currency = this.expect(
+        "ident",
+        `a currency code after the amount in '${key}' (like 'MAD')`,
+      );
+      return {
+        key,
+        money: { amount: Number(amount.value), currency: currency.value, pos: amount.pos },
+        pos: t.pos,
+      };
+    }
+    if (key === "tax_rates") {
+      const j = this.expect("string", "a jurisdiction code after 'tax_rates' (like \"MA\")");
+      const rates = this.numberList(
+        `a rate after the jurisdiction in 'tax_rates' (a fraction, like 0.2 for 20%)`,
+      );
+      return { key, taxRates: { jurisdiction: j.value, rates, pos: j.pos }, pos: t.pos };
+    }
+    // forbid_states | assert
     const list = this.identList(`an identifier list after '${key}'`);
     return { key, list, pos: t.pos };
   }

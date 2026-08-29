@@ -1,12 +1,16 @@
-# Warp language — grammar (rung 2)
+# Warp language — grammar (rung 3)
 
 A `.warp` document authors structures of the **current Warp Commerce Model**
 (Commerce Model v0.3, schema v1.0.0). The grammar is deliberately small: it
-expresses three things the model already has, each mapping one-to-one onto a
+expresses four things the model already has, each mapping one-to-one onto a
 structure the runtime understands — a commitment **lifecycle** (all 11 states,
-market-making included), a **profile**, and an **auction**. Party, Value, Intent,
-Fulfillment, commitment terms, and settlement have no syntax yet. It adds no new
-states, no new invariants, and no new schema.
+market-making included), a **profile**, an **auction**, and a **policy** (commerce
+rules). Party, Value, Intent, Fulfillment, commitment terms, and settlement
+breakdowns have no syntax yet. It adds no new states, no new invariants, and no
+new schema.
+
+Rungs 1–2 author the model's **shape**; rung 3 adds its **logic**. The language
+**authors** rules; the model **enforces** them.
 
 This document is the canonical grammar. The parser
 ([`src/parser.ts`](src/parser.ts)) implements exactly this.
@@ -15,7 +19,7 @@ This document is the canonical grammar. The parser
 
 ```ebnf
 document      = { declaration } ;
-declaration   = lifecycle | profile | auction ;
+declaration   = lifecycle | profile | auction | policy ;
 
 lifecycle     = "lifecycle" IDENT "{" { lifecycleItem } "}" ;
 lifecycleItem = stateDecl | transition ;
@@ -51,7 +55,18 @@ closedField   = "reason"        IDENT
               | "winner"        STRING
               | "winning_price" money ;
 
+policy        = "policy" IDENT "{" { policyField } "}" ;
+policyField   = "label"            STRING
+              | "description"      STRING
+              | "applies_to"       IDENT
+              | "forbid_states"    identList
+              | "concession_floor" money
+              | "committed_price"  money
+              | "tax_rates"        STRING numberList
+              | "assert"           identList ;
+
 identList     = IDENT { "," IDENT } ;
+numberList    = NUMBER { "," NUMBER } ;
 stringList    = STRING { "," STRING } ;
 money         = NUMBER IDENT ;                        (* 1050000 MAD *)
 
@@ -135,6 +150,63 @@ authors a *reference* to that existing record — it does not reinvent it.
 - A `ScoredSelection` names its weighted criteria one per line:
   `criterion "price" 0.6 100`.
 
+### The policy form, in full
+
+A `policy` authors commerce **rules**. Each field lowers to a rule structure the
+model already defines and already enforces — nothing here is a new rule type,
+because a rule the model cannot enforce would be fiction.
+
+```warp
+policy house_rules {
+  label       "House rules for digital sales"
+  description "Never discount below 150 MAD; digital sales do not enter dispute."
+
+  applies_to     digital          # a profile declared in this document
+  forbid_states  Disputed         # narrows that profile
+
+  concession_floor 150 MAD        # the lowest price the merchant will accept
+  committed_price  200 MAD        # the opening price the floor is measured against
+
+  tax_rates "MA" 0, 0.1, 0.2      # permitted tax_rate fractions for a jurisdiction
+
+  assert I1, I6                   # the invariants this policy reports on
+}
+```
+
+| `policy` field | Lowers to | Enforced by |
+|---|---|---|
+| `concession_floor`, `committed_price` | `NegotiationBounds` | `guardConcession` |
+| `applies_to` + `forbid_states` | a narrowed `CommerceProfile` | `guardWithProfile` |
+| `tax_rates` | `RegulatoryPolicyPack` | `checkSettlementPolicy` |
+| `assert` | `InvariantId[]` | selects from `auditCommerce` output |
+
+Because each compiled field is exactly the value its function already takes, an
+authored rule and a hand-written one are the **same value** — so they agree by
+construction, not because a second implementation happens to concur.
+
+Notes on the individual forms:
+
+- **`applies_to`** names a `profile` declared **anywhere** in the same document —
+  before or after the policy. Policies are lowered in a second pass, once every
+  profile is known. An unresolved name is a compile error naming the profiles that
+  *are* declared.
+- **`forbid_states`** removes states from the referenced profile's `allowedStates`.
+  A profile only ever **narrows** the model, so `guardWithProfile` can never
+  approve something `guardAction` would reject. `forbid_states` without
+  `applies_to` is a compile error — there would be nothing to narrow.
+- **`concession_floor`** is the lowest acceptable price; the concession budget is
+  `committed_price − concession_floor`. A floor above the committed price, or in a
+  different currency, is a compile error (mirroring `guardConcession`'s own
+  preconditions).
+- **`tax_rates`** carries its rates **verbatim** as authored fractions
+  (`0.2` = 20%). The language does not compute, validate, or vouch for tax law;
+  `checkSettlementPolicy` compares a settlement's declared rates against this data.
+- **`assert`** takes `I1`…`I6` and lowers to the model's `InvariantId`s. It
+  **selects** which invariants a caller reports on. It does **not** gate what the
+  model checks: an invariant a policy never mentions is still checked, and still
+  violated. A language that could switch invariants off would be a way to smuggle
+  unsound commerce past them.
+
 ## What the compiler checks (well-formedness — it keeps the language anchored)
 
 The compiler enforces that a document describes a **well-formed author-time model**.
@@ -160,6 +232,18 @@ are **not** new invariants:
 - A `winner`, if given, must be one of the auction's **own declared tenders** —
   the same kind of reference-resolution check the lifecycle form makes for a
   transition target.
+- A `policy`'s `applies_to` must name a **profile the document declares**; a state
+  in `forbid_states` must be a real model state; an asserted invariant must be one
+  of the model's six (`I1`…`I6`). Each is a positioned compile error naming the
+  legal alternatives.
+- A policy's `concession_floor` and `committed_price` must share a currency, and
+  the floor may not exceed the committed price — mirroring `guardConcession`'s own
+  preconditions, so the failure surfaces at compile time rather than as a thrown
+  error at enforcement time. `committed_price` without `concession_floor`, and
+  `forbid_states` without `applies_to`, are both rejected: each would be a rule
+  fragment with nothing to act on.
+- Policy ids are unique within a document, and each `tax_rates` jurisdiction is
+  listed once.
 
 Unlike the commitment states, the three auction vocabularies cannot be read from
 the model at runtime (they are TypeScript unions, erased at runtime), so the
@@ -239,8 +323,21 @@ auction "auction:datacentre-tender" {
 
 ## Scope (honest)
 
-This is rung 2 of the Warp language. It can author a lifecycle, a profile, and an
-auction — including the market-making constructs the model gained in Commerce
-Model v0.2/v0.3. It is a focused **commerce-model authoring syntax**, not a
-general-purpose language. It will grow only as more of the model earns a
-first-class syntax.
+This is rung 3 of the Warp language.
+
+- **Rungs 1–2 — shape.** A lifecycle, a profile, and an auction, including the
+  market-making constructs the model gained in Commerce Model v0.2/v0.3.
+- **Rung 3 — logic.** A `policy`: negotiation bounds, a narrowed profile, a
+  jurisdiction rate pack, and the invariants a deal reports on.
+
+What that does **not** mean: the language does not enforce anything. It authors
+rules the **model** enforces, using structures and functions that already shipped.
+A rule the model has no way to enforce has deliberately been left unauthorable —
+syntax for one would be fiction.
+
+Still without syntax: Party, Value, Intent and Fulfillment as first-class
+declarations, commitment terms, settlement breakdowns, and negotiation *sequences*
+(rung 3 authors the bounds a negotiation runs under, not the steps themselves).
+
+It is a focused **commerce-model authoring syntax**, not a general-purpose
+language. It will grow only as more of the model earns a first-class syntax.

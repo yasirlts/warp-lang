@@ -4,20 +4,22 @@ A focused **syntax for authoring the current Warp Commerce Model**.
 
 Warp-the-language is a nicer way to **write** a Warp model — it is not a new model.
 A `.warp` file describes a commitment **lifecycle** (named states and the legal
-transitions between them), a **profile** (a named data subset of the model), and an
+transitions between them), a **profile** (a named data subset of the model), an
 **auction** (the market-making form: an `AuctionProcess` and the `Tendered`
-commitments it collects). This package parses that source and compiles it **down to
-the exact structures the model already uses** — a transition table, a
+commitments it collects), and a **policy** (commerce rules: a negotiation floor, a
+narrowed profile, a jurisdiction rate pack, the invariants a deal reports on). This
+package parses that source and compiles it **down to the exact structures the model
+already uses** — a transition table, a
 [`CommerceProfile`](https://www.npmjs.com/package/@warp-lang/commerce-types), an
-`AuctionProcess`, `Tendered` commitment states, and the `UnderAuction` value state.
-It introduces **no new states, no new invariants, and no new schema**.
+`AuctionProcess`, `Tendered` commitment states, the `UnderAuction` value state,
+`NegotiationBounds`, and a `RegulatoryPolicyPack`. It introduces **no new states,
+no new invariants, and no new schema**.
 
-The compiled output is checked by the model's **own** guard and temporal
-verifier. The language authors the model; the model does the work.
+The compiled output is checked by the model's **own** guard, temporal verifier, and
+rule checkers. **The language authors; the model enforces.**
 
-> This is an **early rung** of the Warp language. It can express a lifecycle, a
-> profile, and an auction — the structures the model already has, including the
-> market-making constructs added in Commerce Model v0.2/v0.3. It is a
+> This is **rung 3** of the Warp language. Rungs 1–2 author the model's **shape**
+> (lifecycle, profile, auction); rung 3 adds its **logic** (policies). It is a
 > commerce-model authoring language, **not** a general-purpose one.
 
 ## Install
@@ -171,6 +173,74 @@ All five mechanisms the model defines are authorable — `English`, `Dutch`,
 per line, `criterion "price" 0.6 100`). Each takes exactly the fields the schema
 gives that variant; a field belonging to a different variant is a compile error.
 
+## Policies — authoring commerce rules
+
+A `policy` authors **rules**, where the other declarations author **structure**.
+Every field lowers to a rule structure the model already defines, enforced by a
+function that already shipped:
+
+```warp
+profile digital {
+  label       "Digital goods"
+  description "digital goods paid in money"
+  states Draft, Proposed, Accepted, Fulfilled, Disputed, Refunded, Cancelled
+  value_forms DigitalGood, Money
+}
+
+policy house_rules {
+  label       "House rules for digital sales"
+  description "Never discount below 150 MAD; digital sales do not enter dispute."
+
+  applies_to     digital
+  forbid_states  Disputed
+
+  concession_floor 150 MAD
+  committed_price  200 MAD
+
+  tax_rates "MA" 0, 0.1, 0.2
+
+  assert I1, I6
+}
+```
+
+| `policy` field | Lowers to | Enforced by |
+|---|---|---|
+| `concession_floor`, `committed_price` | `NegotiationBounds` | `guardConcession` |
+| `applies_to` + `forbid_states` | a narrowed `CommerceProfile` | `guardWithProfile` |
+| `tax_rates` | `RegulatoryPolicyPack` | `checkSettlementPolicy` |
+| `assert` | `InvariantId[]` | selects from `auditCommerce` output |
+
+```ts
+import { compile } from "@warp-lang/commerce-lang"
+import { guardConcession } from "@warp-lang/commerce-types"
+
+const policy = compile(source).policies[0]
+
+// policy.bounds IS a NegotiationBounds — the same value you would have written
+// by hand. So the authored rule and the hand-written one cannot disagree.
+const verdict = guardConcession(world, deal.id, policy.bounds)
+  .step({ kind: "offer", price: { amount: 120, currency: "MAD" }, by: seller })
+
+verdict.ok // false — 120 is below the authored 150 MAD floor (I-1)
+```
+
+**The language authors the rule; the model enforces it.** Nothing in this package
+decides an outcome: each compiled policy field is exactly the parameter its
+function already took, so an authored rule and a hand-written one agree by
+construction rather than because a second implementation happens to concur.
+
+Two consequences worth being explicit about:
+
+- **A policy can only narrow.** `guardWithProfile` delegates to the unmodified
+  `guardAction`, so no authored profile can approve an action the model rejects.
+- **`assert` does not gate what the model checks.** It selects which invariants a
+  caller reports on. An invariant a policy never mentions is still checked and
+  still violated — a language that could switch invariants off would be a way to
+  smuggle unsound commerce past them.
+
+And what it deliberately will **not** do: author a rule the model has no way to
+enforce. Syntax for one would be fiction, so there is none.
+
 ## API
 
 | Export | What it does |
@@ -192,12 +262,17 @@ The compiled shape:
   `AuctionProcess`; `tenders` are `CompiledTender` `{ commitment, state }` pairs
   whose `state` is the model's `Tendered`; `subjectState` is the `UnderAuction`
   `ValueState` while the auction is open, else `null`.
+- `CompiledPolicy` — `{ id, label, description, bounds?, profile?, appliesTo?, pack?, asserts }`.
+  Each optional field is the model's own rule structure: `bounds` is a
+  `NegotiationBounds`, `profile` a narrowed `CommerceProfile`, `pack` a
+  `RegulatoryPolicyPack`, and `asserts` the model's `InvariantId`s.
 
 ## The round-trip, runnable
 
 ```sh
 npm run build && npm run example          # examples/lang.mjs
 npm run build && npm run example:auction  # examples/lang-auction.mjs
+npm run build && npm run example:policy   # examples/lang-policy.mjs
 ```
 
 `examples/lang.mjs` authors a lifecycle and a profile in `.warp`, compiles them,
@@ -214,6 +289,16 @@ legal and an illegal move, then authors `Tendered -> Fulfilled` — which compil
 because it is well-formed — and shows the temporal verifier **catching** it with
 the counterexample path.
 
+`examples/lang-policy.mjs` does the same for **policies**: it authors a profile and
+a policy over it, shows the four model structures the policy compiled to, then runs
+a concession **within** and **below** the authored floor through `guardConcession`
+for verdicts **identical** to the hand-written bounds — message text included —
+shows a forbidden state refused by `guardWithProfile`, a tax rate the pack does not
+permit refused by `checkSettlementPolicy`, a dangling `applies_to` caught at
+**compile** time with a precise position, and finally an invariant the policy never
+asserted **still** being reported by the model. It asserts every verdict and exits
+non-zero if any of them changes.
+
 ## Grammar
 
 The canonical grammar (and exactly what the compiler checks — and deliberately does
@@ -225,9 +310,19 @@ not check) is in [`GRAMMAR.md`](GRAMMAR.md).
 model's 11 commitment states, its transition table, and its six invariants are
 exactly as the schema defines them. What this package does is let you **write** that
 model in a small, checkable syntax and lower it to the structures the runtime
-already runs. It authors a lifecycle, a profile, and an auction — including the
-market-making constructs — and that is the whole of this rung. The compiler judges
-**well-formedness**; the model judges **soundness**.
+already runs.
+
+- **Rungs 1–2 — shape.** A lifecycle, a profile, an auction (including the
+  market-making constructs).
+- **Rung 3 — logic.** A `policy`: negotiation bounds, a narrowed profile, a
+  jurisdiction rate pack, and the invariants a deal reports on.
+
+The compiler judges **well-formedness**; the model judges **soundness**. The
+language **authors** rules; the model **enforces** them.
+
+Still without syntax: Party, Value, Intent and Fulfillment as first-class
+declarations, commitment terms, settlement breakdowns, and negotiation *sequences*
+(rung 3 authors the bounds a negotiation runs under, not its steps).
 
 ## License
 
