@@ -86,6 +86,15 @@ jobs:
       - name: Codegen drift gate
         run: npm run codegen
 
+      # Rung 4a: the COMPOSED engine. One CommerceModel (a profile + a policy) run
+      # through one runModel call, with three classes of violation refused by three
+      # different layers — profile, policy, and base invariant — plus the additive
+      # property (a bare model behaves exactly like `run`) and determinism. The
+      # example ASSERTS every verdict and exits non-zero if any changes, so it is a
+      # gate rather than a demo.
+      - name: Run the composed-model example verbatim
+        run: npm run example:model
+
   # --- MCP server (@warp-lang/commerce-mcp) --------------------------------
   # Thin wrapper that exposes the published commerce-types guardrail as Model
   # Context Protocol tools. Installs from its lockfile (pulling the published

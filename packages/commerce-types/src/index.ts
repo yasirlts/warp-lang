@@ -119,6 +119,15 @@ export * from "./effects.js";
 // host effects (descriptors) without performing any I/O. A model + a host that executes
 // — NOT a language. Composes existing pieces; reimplements no invariant/transition logic.
 export * from "./engine.js";
+// `runModel` / `stepModel` — the COMPOSED engine entry point (rung 4a). Takes ONE
+// CommerceModel (a lifecycle, an optional profile, optional policies — exactly the
+// structures a `.warp` policy already compiles to) and applies every layer that model
+// declares to every event: the base guard, the profile constraints, the negotiation
+// bounds, the regulatory pack, and the asserted invariants — advancing the world only if
+// all pass. It COMPOSES the shipped checks and reimplements none of them; it adds no
+// invariant, state, transition, or schema field. `step`/`run` are unchanged, and a model
+// with no profile and no policies produces exactly their verdicts (tested).
+export * from "./model.js";
 // reachableStates / verifyLifecycle — BOUNDED reachability over the lifecycle state
 // machine: explore the legal moves from a start state (up to a bound) and report whether
 // any reachable transition is one the frozen model forbids, with a counterexample path.
