@@ -6,10 +6,12 @@
  *
  * The AST is deliberately small: every node mirrors, one-to-one, something the
  * model ALREADY has — a commitment LIFECYCLE (states + the legal transitions
- * between them), a PROFILE (a named data subset of the model), and an AUCTION
+ * between them), a PROFILE (a named data subset of the model), an AUCTION
  * (the `AuctionProcess` auxiliary coordination record, plus the `Tendered`
- * commitment states it collects). It introduces no node the model has no
- * counterpart for.
+ * commitment states it collects), and a POLICY (commerce RULES that lower to the
+ * model's existing rule structures: `NegotiationBounds`, a narrowed
+ * `CommerceProfile`, a `RegulatoryPolicyPack`, and the invariant ids an audit
+ * selects on). It introduces no node the model has no counterpart for.
  */
 
 import type { SourcePosition } from "./errors.js";
@@ -177,8 +179,71 @@ export interface AuctionDecl {
   pos: SourcePosition;
 }
 
-/** A top-level declaration: a lifecycle, a profile, or an auction. */
-export type Declaration = LifecycleDecl | ProfileDecl | AuctionDecl;
+
+// ---------------------------------------------------------------------------
+// Policy (this rung) — the LOGIC forms. Where a lifecycle/profile/auction author
+// the model's SHAPE, a policy authors commerce RULES. Every field below lowers to
+// a rule structure the model ALREADY defines and ALREADY enforces:
+//
+//   concession_floor / committed_price  → NegotiationBounds   (guardConcession)
+//   applies_to + forbid_states          → CommerceProfile     (guardWithProfile)
+//   tax_rates                           → RegulatoryPolicyPack (checkSettlementPolicy)
+//   assert                              → InvariantId[]       (auditCommerce)
+//
+// The language AUTHORS these rules; the model ENFORCES them. No new rule type is
+// introduced here, because a rule the model cannot enforce would be fiction.
+// ---------------------------------------------------------------------------
+
+/** `tax_rates "MA" 0, 0.1, 0.2` — one jurisdiction's permitted rates. Lowers to `JurisdictionTaxRates`. */
+export interface TaxRatesLit {
+  /** ISO 3166-1 alpha-2 jurisdiction code, exactly as authored. */
+  jurisdiction: string;
+  /** The permitted `tax_rate` fractions, in source order (0.2 === 20%). */
+  rates: number[];
+  pos: SourcePosition;
+}
+
+/** The field keys a `policy { … }` block accepts. */
+export type PolicyFieldKey =
+  | "label"
+  | "description"
+  | "applies_to"
+  | "forbid_states"
+  | "concession_floor"
+  | "committed_price"
+  | "tax_rates"
+  | "assert";
+
+/** One `key value` field inside a `policy { … }` block. */
+export interface PolicyField {
+  key: PolicyFieldKey;
+  /** Present for `label` / `description` (a string literal). */
+  text?: string;
+  /** Present for `concession_floor` / `committed_price` (a money literal). */
+  money?: MoneyLit;
+  /** Present for `applies_to` (the referenced profile id). */
+  ref?: Ident;
+  /** Present for `forbid_states` / `assert` (a comma-separated identifier list). */
+  list?: Ident[];
+  /** Present for `tax_rates` (a jurisdiction plus its permitted rates). */
+  taxRates?: TaxRatesLit;
+  pos: SourcePosition;
+}
+
+/**
+ * `policy <id> { … }` — authors commerce RULES over the model the other
+ * declarations describe. Lowers to the model's existing rule structures; it adds
+ * no enforcement of its own.
+ */
+export interface PolicyDecl {
+  kind: "policy";
+  name: Ident;
+  fields: PolicyField[];
+  pos: SourcePosition;
+}
+
+/** A top-level declaration: a lifecycle, a profile, an auction, or a policy. */
+export type Declaration = LifecycleDecl | ProfileDecl | AuctionDecl | PolicyDecl;
 
 /** A parsed `.warp` document — a sequence of declarations. */
 export interface Document {

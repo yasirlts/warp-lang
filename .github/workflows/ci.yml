@@ -353,6 +353,19 @@ jobs:
         working-directory: packages/commerce-lang
         run: node examples/lang-auction.mjs
 
+      # Rung 3: the POLICY round-trip. An authored policy lowers to the model's
+      # own rule structures (NegotiationBounds, a narrowed CommerceProfile, a
+      # RegulatoryPolicyPack, InvariantId[]) and is enforced by the functions that
+      # already shipped — guardConcession, guardWithProfile, checkSettlementPolicy,
+      # auditCommerce. The example ASSERTS every verdict (a concession below the
+      # authored floor blocked identically to the hand-written rule, a forbidden
+      # state refused, a dangling reference caught at compile time, and an
+      # invariant the policy never asserted still reported), so it exits non-zero
+      # if any of them changes. A gate, not a demo.
+      - name: Run the policy example verbatim
+        working-directory: packages/commerce-lang
+        run: npm run example:policy
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding

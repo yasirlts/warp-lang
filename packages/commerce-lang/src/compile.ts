@@ -45,6 +45,12 @@
 
 import { reachableStates } from "@warp-lang/commerce-types";
 import type { CommerceProfile } from "@warp-lang/commerce-types";
+import type {
+  InvariantId,
+  JurisdictionTaxRates,
+  NegotiationBounds,
+  RegulatoryPolicyPack,
+} from "@warp-lang/commerce-types";
 import type { CommitmentStateType } from "@warp-lang/commerce-types";
 import type {
   AuctionCloseReason,
@@ -63,10 +69,12 @@ import type {
   Declaration,
   Document,
   Field,
+  Ident,
   LifecycleDecl,
   MoneyLit,
   ProfileDecl,
   TenderDecl,
+  PolicyDecl,
 } from "./ast.js";
 import { WarpCompileError, type SourcePosition } from "./errors.js";
 import { parse } from "./parser.js";
@@ -111,6 +119,53 @@ export interface CompiledLifecycle {
 export type CompiledProfile = CommerceProfile;
 
 /**
+ * A policy lowered to the model's EXISTING rule structures. Every field is a
+ * structure some already-shipped function consumes; this object holds no
+ * enforcement logic of its own, and the language never decides an outcome:
+ *
+ *   `bounds`   → `guardConcession(world, commitmentId, bounds)`
+ *   `profile`  → `guardWithProfile(profile, world, action)`
+ *   `pack`     → `checkSettlementPolicy(settlement, committedTotal, pack)`
+ *   `asserts`  → the invariant ids to select from `auditCommerce(...)` output
+ *
+ * Because each field is exactly the type the model already takes, an authored
+ * policy and a hand-written rule are the SAME VALUE, and therefore produce the
+ * same verdict by construction rather than by a re-implementation that agrees.
+ */
+export interface CompiledPolicy {
+  /** The policy id, as authored. */
+  id: string;
+  /** Human-readable label (defaults to the id). */
+  label: string;
+  /** One-line description (defaults to the id). */
+  description: string;
+  /**
+   * Negotiation bounds, when the policy declared `concession_floor`. Feed
+   * straight to `guardConcession`, which enforces the floor via I-1.
+   */
+  bounds?: NegotiationBounds;
+  /**
+   * A narrowed {@link CommerceProfile}, when the policy declared `applies_to`.
+   * It is the referenced profile with any `forbid_states` removed. Feed straight
+   * to `guardWithProfile`. The profile only ever NARROWS the model.
+   */
+  profile?: CommerceProfile;
+  /** The profile id this policy narrowed, when it declared `applies_to`. */
+  appliesTo?: string;
+  /**
+   * A regulatory policy pack, when the policy declared `tax_rates`. Feed straight
+   * to `checkSettlementPolicy`. The rates are carried VERBATIM as authored — the
+   * language does not compute, validate, or vouch for tax law.
+   */
+  pack?: RegulatoryPolicyPack;
+  /**
+   * The invariant ids this policy asserts must hold, in source order. These SELECT
+   * from `auditCommerce(...)` output; the checks themselves are the model's.
+   */
+  asserts: InvariantId[];
+}
+
+/**
  * One authored tender, lowered to the model's existing `Tendered` commitment
  * state. The id is used exactly as authored and never derived — commitment ids
  * are permanent (Invariant 5, Identity Permanence).
@@ -145,11 +200,12 @@ export interface CompiledAuction {
   subjectState: ValueState | null;
 }
 
-/** The full lowered document: every lifecycle, profile, and auction it declared. */
+/** The full lowered document: every lifecycle, profile, auction, and policy it declared. */
 export interface CompiledModel {
   lifecycles: CompiledLifecycle[];
   profiles: CompiledProfile[];
   auctions: CompiledAuction[];
+  policies: CompiledPolicy[];
 }
 
 /** Assert that `name` is a state the current model defines, or throw at `pos`. */
@@ -650,14 +706,226 @@ function compileAuction(decl: AuctionDecl): CompiledAuction {
  * NOT judge soundness — that is the model's temporal verifier's job. Throws
  * {@link WarpCompileError} at a precise position on the first semantic problem.
  */
+
+// ---------------------------------------------------------------------------
+// Policy lowering
+//
+// A policy authors RULES. Each field below becomes a value some existing model
+// function already takes as a parameter — so "the authored rule enforces like the
+// hand-written one" is true by CONSTRUCTION (they are the same value), not by a
+// second implementation that happens to agree.
+//
+// What the compiler checks here is WELL-FORMEDNESS and REFERENCE RESOLUTION only:
+// that an asserted invariant is one of the model's six, that a narrowed state is a
+// real model state, that `applies_to` names a profile the document declares, and
+// that a floor and its committed price share a currency. It does NOT check whether
+// a rule is economically sound — an authored policy that permits an incoherent
+// outcome still compiles, and is still caught downstream by the model's own
+// invariants. The language cannot smuggle unsound logic past them.
+// ---------------------------------------------------------------------------
+
+/** `I1`…`I6` as authored → the model's `InvariantId` (`"I-1"`…`"I-6"`). */
+const INVARIANT_ALIASES: Readonly<Record<string, InvariantId>> = {
+  I1: "I-1",
+  I2: "I-2",
+  I3: "I-3",
+  I4: "I-4",
+  I5: "I-5",
+  I6: "I-6",
+};
+
+function dupPolicyField(key: string, pos: SourcePosition, policy: string): never {
+  throw new WarpCompileError(`Duplicate '${key}' field in policy '${policy}'.`, pos);
+}
+
+/**
+ * Lower one policy declaration. `profilesById` is every profile the document
+ * declared, already compiled — policies are lowered in a SECOND pass so a policy
+ * may reference a profile declared before OR after it in the file.
+ */
+function compilePolicy(decl: PolicyDecl, profilesById: Map<string, CompiledProfile>): CompiledPolicy {
+  const id = decl.name.name;
+  let label: string | undefined;
+  let description: string | undefined;
+  let appliesTo: { ident: string; pos: SourcePosition } | undefined;
+  let forbidStates: { names: string[]; pos: SourcePosition } | undefined;
+  let floor: Money | undefined;
+  let floorPos: SourcePosition | undefined;
+  let committed: Money | undefined;
+  let committedPos: SourcePosition | undefined;
+  const jurisdictions: JurisdictionTaxRates[] = [];
+  const seenJurisdictions = new Set<string>();
+  let asserts: InvariantId[] | undefined;
+
+  for (const f of decl.fields) {
+    if (f.key === "label") {
+      if (label !== undefined) dupPolicyField("label", f.pos, id);
+      label = f.text as string;
+    } else if (f.key === "description") {
+      if (description !== undefined) dupPolicyField("description", f.pos, id);
+      description = f.text as string;
+    } else if (f.key === "applies_to") {
+      if (appliesTo !== undefined) dupPolicyField("applies_to", f.pos, id);
+      const ref = f.ref as Ident;
+      appliesTo = { ident: ref.name, pos: ref.pos };
+    } else if (f.key === "forbid_states") {
+      if (forbidStates !== undefined) dupPolicyField("forbid_states", f.pos, id);
+      const names: string[] = [];
+      for (const st of f.list ?? []) {
+        assertKnownState(st.name, st.pos, `in policy '${id}' forbid_states`);
+        if (!names.includes(st.name)) names.push(st.name);
+      }
+      forbidStates = { names, pos: f.pos };
+    } else if (f.key === "concession_floor") {
+      if (floor !== undefined) dupPolicyField("concession_floor", f.pos, id);
+      floor = toMoney(f.money as MoneyLit);
+      floorPos = f.pos;
+    } else if (f.key === "committed_price") {
+      if (committed !== undefined) dupPolicyField("committed_price", f.pos, id);
+      committed = toMoney(f.money as MoneyLit);
+      committedPos = f.pos;
+    } else if (f.key === "tax_rates") {
+      const tr = f.taxRates as NonNullable<typeof f.taxRates>;
+      if (seenJurisdictions.has(tr.jurisdiction)) {
+        throw new WarpCompileError(
+          `Duplicate 'tax_rates' entry for jurisdiction "${tr.jurisdiction}" in policy '${id}'. ` +
+            `List each jurisdiction once, with all its permitted rates on that line.`,
+          tr.pos,
+        );
+      }
+      seenJurisdictions.add(tr.jurisdiction);
+      jurisdictions.push({ jurisdiction: tr.jurisdiction, rates: [...tr.rates] });
+    } else {
+      // assert
+      if (asserts !== undefined) dupPolicyField("assert", f.pos, id);
+      const ids: InvariantId[] = [];
+      for (const a of f.list ?? []) {
+        const mapped = INVARIANT_ALIASES[a.name];
+        if (mapped === undefined) {
+          throw new WarpCompileError(
+            `Unknown invariant '${a.name}' asserted by policy '${id}'. The model defines six ` +
+              `invariants; assert them as ${Object.keys(INVARIANT_ALIASES).join(", ")} ` +
+              `(I1 = Value Conservation, I2 = State Monotonicity, I3 = Capacity Verification, ` +
+              `I4 = Temporal Integrity, I5 = Identity Permanence, I6 = Commitment Tree Consistency).`,
+            a.pos,
+          );
+        }
+        if (!ids.includes(mapped)) ids.push(mapped);
+      }
+      asserts = ids;
+    }
+  }
+
+  // --- reference resolution: applies_to must name a profile this document declares
+  let narrowed: CommerceProfile | undefined;
+  if (appliesTo !== undefined) {
+    const base = profilesById.get(appliesTo.ident);
+    if (base === undefined) {
+      const declared = [...profilesById.keys()].sort();
+      throw new WarpCompileError(
+        `Policy '${id}' applies_to profile '${appliesTo.ident}', which this document does not ` +
+          `declare. ` +
+          (declared.length === 0
+            ? `No profile is declared in this document — declare one with 'profile ${appliesTo.ident} { … }'.`
+            : `Declared profiles: ${declared.join(", ")}.`),
+        appliesTo.pos,
+      );
+    }
+    const forbidden = forbidStates?.names ?? [];
+    narrowed = {
+      id,
+      label: label ?? id,
+      // The BASE profile's description, deliberately: `guardWithProfile` embeds it
+      // as "configured for <description>", which needs the noun phrase describing
+      // the KIND OF COMMERCE, not the policy's rationale. The policy's own
+      // description stays on CompiledPolicy.description.
+      description: base.description,
+      allowedStates: base.allowedStates.filter((st) => !forbidden.includes(st)),
+      allowedValueForms: base.allowedValueForms,
+    };
+  } else if (forbidStates !== undefined) {
+    throw new WarpCompileError(
+      `Policy '${id}' declares 'forbid_states' but no 'applies_to'. A forbidden state narrows a ` +
+        `profile, so the policy must say which profile it narrows: add ` +
+        `'applies_to <profile-id>'.`,
+      forbidStates.pos,
+    );
+  }
+
+  // --- negotiation bounds well-formedness (mirrors guardConcession's own preconditions)
+  let bounds: NegotiationBounds | undefined;
+  if (floor !== undefined) {
+    if (committed !== undefined && committed.currency !== floor.currency) {
+      throw new WarpCompileError(
+        `Policy '${id}' sets a concession_floor in ${floor.currency} but a committed_price in ` +
+          `${committed.currency}. A cross-currency concession is out of scope — express both in ` +
+          `one currency (Invariant 1: Value Conservation).`,
+        committedPos as SourcePosition,
+      );
+    }
+    if (committed !== undefined && floor.amount > committed.amount) {
+      throw new WarpCompileError(
+        `Policy '${id}' sets a concession_floor of ${floor.amount} ${floor.currency} above its ` +
+          `committed_price of ${committed.amount} ${committed.currency}. The floor is the LOWEST ` +
+          `acceptable price, so it cannot exceed the opening price.`,
+        floorPos as SourcePosition,
+      );
+    }
+    bounds = committed === undefined ? { floor } : { floor, committed };
+  } else if (committed !== undefined) {
+    throw new WarpCompileError(
+      `Policy '${id}' sets a 'committed_price' but no 'concession_floor'. The committed price is ` +
+        `the opening price a floor is measured against, so it is only meaningful alongside one.`,
+      committedPos as SourcePosition,
+    );
+  }
+
+  const pack: RegulatoryPolicyPack | undefined =
+    jurisdictions.length === 0
+      ? undefined
+      : {
+          id,
+          label: label ?? id,
+          description: description ?? id,
+          jurisdictions,
+        };
+
+  const compiled: CompiledPolicy = {
+    id,
+    label: label ?? id,
+    description: description ?? id,
+    asserts: asserts ?? [],
+  };
+  if (bounds !== undefined) compiled.bounds = bounds;
+  if (narrowed !== undefined) {
+    compiled.profile = narrowed;
+    compiled.appliesTo = appliesTo?.ident as string;
+  }
+  if (pack !== undefined) compiled.pack = pack;
+  return compiled;
+}
+
+/**
+ * Lower a parsed {@link Document} to the model's structures.
+ *
+ * TWO PASSES. Lifecycles, profiles and auctions are lowered in source order;
+ * POLICIES are lowered afterwards, once every profile in the document is known,
+ * so a policy may `applies_to` a profile declared either before or after it. An
+ * unresolved reference is a positioned {@link WarpCompileError}, not a silent
+ * skip.
+ */
 export function compileDocument(doc: Document): CompiledModel {
   const lifecycles: CompiledLifecycle[] = [];
   const profiles: CompiledProfile[] = [];
   const auctions: CompiledAuction[] = [];
+  const policies: CompiledPolicy[] = [];
   const lifecycleNames = new Set<string>();
   const profileNames = new Set<string>();
   const auctionNames = new Set<string>();
+  const policyNames = new Set<string>();
+  const policyDecls: PolicyDecl[] = [];
 
+  // Pass 1 — structure (lifecycle / profile / auction), in source order.
   for (const decl of doc.declarations as Declaration[]) {
     if (decl.kind === "lifecycle") {
       if (lifecycleNames.has(decl.name.name)) {
@@ -674,7 +942,7 @@ export function compileDocument(doc: Document): CompiledModel {
       }
       profileNames.add(decl.name.name);
       profiles.push(compileProfile(decl));
-    } else {
+    } else if (decl.kind === "auction") {
       if (auctionNames.has(decl.name.name)) {
         throw new WarpCompileError(
           `Duplicate auction '${decl.name.name}'. An AuctionProcess id identifies ` +
@@ -684,10 +952,22 @@ export function compileDocument(doc: Document): CompiledModel {
       }
       auctionNames.add(decl.name.name);
       auctions.push(compileAuction(decl));
+    } else {
+      if (policyNames.has(decl.name.name)) {
+        throw new WarpCompileError(`Duplicate policy '${decl.name.name}'.`, decl.name.pos);
+      }
+      policyNames.add(decl.name.name);
+      policyDecls.push(decl);
     }
   }
 
-  return { lifecycles, profiles, auctions };
+  // Pass 2 — policies, now that every profile is resolvable.
+  const profilesById = new Map<string, CompiledProfile>(profiles.map((pr) => [pr.id, pr]));
+  for (const decl of policyDecls) {
+    policies.push(compilePolicy(decl, profilesById));
+  }
+
+  return { lifecycles, profiles, auctions, policies };
 }
 
 /** Parse `.warp` source and lower it in one step. Throws on syntax or semantic error. */
