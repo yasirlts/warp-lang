@@ -245,6 +245,79 @@ grammar, parser, or syntax — and it performs **no I/O** itself. See
 `examples/complete-engine.mjs` for the full lifecycle (create → accept → fulfill →
 refund, plus a blocked over-refund) driven end-to-end by a mock host.
 
+## Composed model — `runModel(model, world, events)` (rung 4a)
+
+`step`/`run` enforce the **base** layer only: the transition table and the six
+invariants, via `guardAction`. A profile is enforced by `guardWithProfile`, a
+negotiation floor by `guardConcession`, a regulatory pack by
+`checkSettlementPolicy` — separate functions a caller wires together by hand. So
+before this, you could author a profile and a policy and have the engine ignore
+both: there was no entry point that ran a whole authored system.
+
+`runModel` takes **one** `CommerceModel` and applies **every layer it declares** to
+every event, advancing the world only if all of them pass.
+
+```ts
+const model: CommerceModel = {
+  id: "house_rules",
+  profile: {                       // the model's own states, narrowed
+    id: "digital_strict",
+    label: "Digital goods, no disputes",
+    description: "digital goods paid in money",
+    allowedStates: ["Draft", "Proposed", "Accepted", "Fulfilled", "Refunded", "Cancelled"],
+    allowedValueForms: ["DigitalGood", "Money"],
+  },
+  policies: [{
+    id: "floor_and_vat",
+    bounds: { floor: { amount: 150, currency: "MAD" }, committed: { amount: 200, currency: "MAD" } },
+    pack: { id: "ma-vat", label: "MA VAT", description: "permitted MA rates",
+            jurisdictions: [{ jurisdiction: "MA", rates: [0, 0.1, 0.2] }] },
+  }],
+}
+
+const { world, effects, verdicts } = runModel(model, initialWorld, events, { clock })
+verdicts[0].ok      // false
+verdicts[0].layer   // "profile" | "policy" | "base" — which layer refused
+verdicts[0].policy  // the policy id, when a policy refused
+```
+
+| Layer | Applies | Enforced by |
+|---|---|---|
+| `profile` | every action | `guardWithProfile` (the model's, plus each policy's narrowed one) |
+| `policy` | a `concession` event | `guardConcession` against the policy's `bounds` |
+| `policy` | a `settlement` event | `checkSettlementPolicy` against the policy's `pack` |
+| `base` | every action | `step` → `guardAction` — the transition table and all six invariants |
+
+`CommerceModel` is plain serializable data, and deliberately the shape a
+`.warp` policy already compiles to, so an authored system drops straight in.
+
+**What this composes, and what it does not add.** Every check `runModel` fires
+already shipped. It adds no invariant, no state, no transition, and no schema
+field — it decides *which* existing checks apply to an event and calls them.
+Not one is reimplemented. Purity and determinism are the engine's, unchanged: no
+I/O, no mutation of any input, never throws, and with a fixed `clock` the output
+is byte-for-byte deterministic.
+
+**It is additive.** `step`/`run` are untouched, and a model with no profile and no
+policies produces exactly the verdicts, world, and effects `step`/`run` produce —
+tested, not asserted.
+
+**`transitions` does not decide anything.** A model may carry its authored
+lifecycle table for provenance and for separate verification with
+`verifyLifecycle`, but the table that governs a move is the model's own, inside
+`guardAction`. A caller cannot widen the legal moves by authoring a table.
+
+**There is no assertion layer, on purpose.** A policy's `asserts` list is carried
+as declared intent, not a gate. `guardAction` already audits **all six** invariants
+over the whole resulting world on every action, so asserting one cannot strengthen
+that and omitting one cannot weaken it. A layer that appeared to enforce and
+enforced nothing would be worse than no layer at all.
+
+Run `npm run example:model` (`examples/run-model.mjs`) for the worked proof: one
+model object, one `runModel` call, three classes of violation refused by three
+different layers, plus the additive and determinism properties. It asserts every
+verdict and exits non-zero if any changes.
+
 ## Bounded temporal verification — `verifyLifecycle()` (Phase 4.1)
 
 A reachability checker over the commitment lifecycle's **state machine**: explore
