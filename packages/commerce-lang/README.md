@@ -18,8 +18,9 @@ no new invariants, and no new schema**.
 The compiled output is checked by the model's **own** guard, temporal verifier, and
 rule checkers. **The language authors; the model enforces.**
 
-> This is **rung 3** of the Warp language. Rungs 1–2 author the model's **shape**
-> (lifecycle, profile, auction); rung 3 adds its **logic** (policies). It is a
+> This is **rung 4** of the Warp language. Rungs 1–2 author the model's **shape**
+> (lifecycle, profile, auction); rung 3 adds its **logic** (policies); rung 4
+> compiles a whole file into the one `CommerceModel` the engine runs. It is a
 > commerce-model authoring language, **not** a general-purpose one.
 
 ## Install
@@ -241,6 +242,60 @@ Two consequences worth being explicit about:
 And what it deliberately will **not** do: author a rule the model has no way to
 enforce. Syntax for one would be fiction, so there is none.
 
+## A whole system — `compileSystem` → `runModel`
+
+A `.warp` file authors the **system**: the standing model a business runs under.
+`compileSystem` gathers its declarations into the one `CommerceModel` the engine's
+`runModel` takes, and the **host supplies the events**.
+
+```ts
+import { compileSystem } from "@warp-lang/commerce-lang"
+import { runModel } from "@warp-lang/commerce-types"
+
+const { model } = compileSystem(source, { file: "shop.warp" })
+const { world, effects, verdicts } = runModel(model, initialWorld, hostEvents, { clock })
+
+verdicts[0].layer   // "profile" | "policy" | "base" — which layer refused
+verdicts[0].policy  // the policy id, when a policy refused
+```
+
+Nothing is hand-wired between those two calls: `compileSystem(...).model` **is**
+the `CommerceModel` `runModel` takes, and the compiled model deep-equals the
+hand-built one for the same system (tested). **The language produces the model;
+the engine runs it; the host does the I/O.**
+
+**Events are deliberately not authorable.** They are runtime input. A file with
+its events baked in would be a fixture, not a system definition.
+
+`compileSystem` also resolves references *across* declarations, with the same
+positioned errors: a policy applying to a profile the file does not declare, a
+profile permitting a state its own lifecycle omits, or an ambiguous choice of base
+profile (`runModel` applies every profile it holds to every action, so two
+profiles permitting different states would together permit only what both allow —
+better a compile error than a system that blocks everything).
+
+### Three things authoring does NOT do
+
+These are properties of the engine, stated here so the language does not describe
+itself as more than it is. All three are asserted in `examples/system.mjs`.
+
+1. **An authored `assert` is declared intent, not a gate.** `guardAction` already
+   audits **all six** invariants over the whole resulting world on every action.
+   Writing `assert I1` does not cause the engine to check I-1 — it already does —
+   and omitting it does not stop the engine checking. Removing the assert changes
+   no verdict.
+2. **An authored lifecycle is provenance.** It populates `model.transitions` for
+   the record and for separate checking with `verifyLifecycle`, but the table that
+   governs a move is the model's own, inside `guardAction`. A lifecycle claiming
+   `Draft -> Fulfilled` compiles, and the engine still refuses the move (I-2).
+3. **The audit is world-wide, not per-commitment.** A pre-existing violation on
+   any commitment blocks every event, including one targeting a different, healthy
+   commitment. There is no per-commitment isolation to rely on.
+
+**Auctions are compiled but not run.** `CommerceModel` has no auction field and
+`runModel` has no auction layer, so an authored auction is returned on
+`CompiledSystem.auctions` as compiled data — it is not enforced by the engine run.
+
 ## API
 
 | Export | What it does |
@@ -248,6 +303,8 @@ enforce. Syntax for one would be fiction, so there is none.
 | `parse(source, opts?)` | `.warp` source → AST (throws `WarpSyntaxError` with line/col) |
 | `compile(source, opts?)` | source → compiled model structures (parse + lower) |
 | `compileDocument(doc)` | AST → compiled model structures |
+| `compileSystem(source, opts?)` | a whole `.warp` file → `{ model, lifecycle?, profiles, policies, auctions }`; `model` is the `CommerceModel` the engine's `runModel` takes |
+| `systemFromDocument(doc, compiled, opts?)` | the same gather, from an AST you already parsed |
 | `WarpLangError` / `WarpSyntaxError` / `WarpCompileError` | positioned errors (`.line`, `.column`, `.format()`) |
 | `knownCommitmentStates()` | the model's commitment state names (read from the model) |
 | `AUCTION_MECHANISM_KINDS` / `AUCTION_STATE_TYPES` / `AUCTION_CLOSE_REASONS` | the auction vocabularies the compiler accepts (held to the schema by a drift test) |
@@ -273,6 +330,7 @@ The compiled shape:
 npm run build && npm run example          # examples/lang.mjs
 npm run build && npm run example:auction  # examples/lang-auction.mjs
 npm run build && npm run example:policy   # examples/lang-policy.mjs
+npm run build && npm run example:system   # examples/system.mjs
 ```
 
 `examples/lang.mjs` authors a lifecycle and a profile in `.warp`, compiles them,
@@ -299,6 +357,12 @@ permit refused by `checkSettlementPolicy`, a dangling `applies_to` caught at
 asserted **still** being reported by the model. It asserts every verdict and exits
 non-zero if any of them changes.
 
+`examples/system.mjs` is the end-to-end run: a complete `.warp` file (lifecycle +
+profile + policy) compiled by `compileSystem` into one `CommerceModel`, then run
+through the engine's `runModel` with host-supplied events — a policy block, a
+profile block and a base invariant block, with nothing hand-wired. It also asserts
+the three honesty properties above rather than claiming them.
+
 ## Grammar
 
 The canonical grammar (and exactly what the compiler checks — and deliberately does
@@ -316,6 +380,8 @@ already runs.
   market-making constructs).
 - **Rung 3 — logic.** A `policy`: negotiation bounds, a narrowed profile, a
   jurisdiction rate pack, and the invariants a deal reports on.
+- **Rung 4 — the whole system.** `compileSystem` gathers a file into the one
+  `CommerceModel` the engine runs, and the host supplies the events.
 
 The compiler judges **well-formedness**; the model judges **soundness**. The
 language **authors** rules; the model **enforces** them.

@@ -35,6 +35,8 @@
  * one.
  */
 
+export { compileSystem, systemFromDocument } from "./system.js";
+export type { CompiledSystem, SystemOptions } from "./system.js";
 export { parse } from "./parser.js";
 export { tokenize } from "./lexer.js";
 export type { Token, TokenType } from "./lexer.js";
