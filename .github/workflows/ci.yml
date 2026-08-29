@@ -300,8 +300,9 @@ jobs:
           echo "enforce correctly failed (nonzero) on the unguarded gap fixture"
 
   # --- Warp language (@warp-lang/commerce-lang) ----------------------------
-  # A syntax for AUTHORING the frozen commerce model: parse a .warp lifecycle +
-  # profile and compile it to the exact structures the model already uses. It
+  # A syntax for AUTHORING the current commerce model: parse a .warp lifecycle,
+  # profile, and auction (market-making: AuctionProcess + Tendered commitments)
+  # and compile it to the exact structures the model already uses. It
   # links the in-repo commerce-types build (it uses that package's
   # verifyLifecycle / reachableStates), so build that dependency first — exactly
   # as the agent-demo job builds commerce-mcp before the demo. Additive: it
@@ -343,6 +344,14 @@ jobs:
       - name: Run the round-trip example verbatim
         working-directory: packages/commerce-lang
         run: node examples/lang.mjs
+
+      # Rung 2: the market-making round-trip — an authored lifecycle through
+      # Tendered, a full auction lowered to the model's AuctionProcess, an
+      # authored tender judged identically to a hand-written one by the guard,
+      # and an unsound authored edge caught by the temporal verifier.
+      - name: Run the market-making example verbatim
+        working-directory: packages/commerce-lang
+        run: node examples/lang-auction.mjs
 
   # --- Python binding (warp-commerce-types) --------------------------------
   python:

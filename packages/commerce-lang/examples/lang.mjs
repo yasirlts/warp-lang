@@ -7,7 +7,7 @@
  * The claim this rung makes: you can AUTHOR a commitment lifecycle (and a profile)
  * in `.warp` syntax, compile it, and get a model INDISTINGUISHABLE from writing
  * those structures by hand — checked by the model's OWN guard and temporal
- * verifier. Nothing new is introduced; the language is a front-end onto the frozen
+ * verifier. Nothing new is introduced; the language is a front-end onto the current
  * model, and the invariants still govern what it can express.
  *
  * The four things this file shows:
@@ -43,7 +43,7 @@ const rule = () => line("─".repeat(72));
 // ───────────────────────────────────────────────────────────────────────────
 line("1) Author the commitment lifecycle in .warp, compile, verify\n");
 
-// This is the model's frozen commitment transition table, WRITTEN in .warp. It
+// This is the model's current commitment transition table, WRITTEN in .warp. It
 // declares the 11 states and the 26 legal edges between them — nothing more.
 const lifecycleSource = `
   lifecycle commitment {
@@ -157,7 +157,7 @@ rule();
 // ───────────────────────────────────────────────────────────────────────────
 line("3) Author an UNSOUND lifecycle — the invariants still govern\n");
 
-// A minimal lifecycle that claims a move the frozen model FORBIDS: Fulfilled may
+// A minimal lifecycle that claims a move the current model FORBIDS: Fulfilled may
 // only go to Disputed or Refunded, never back to Draft. This is well-formed (both
 // are real states), so it COMPILES — but it is not sound.
 const unsoundSource = `
@@ -215,4 +215,4 @@ line("\nAuthored a lifecycle + a profile in .warp; the compiled output was verif
 line("and guarded by the model's OWN checks with results identical to hand-writing");
 line("it, an unsound authored lifecycle was still caught by the temporal verifier,");
 line("and a syntax error pointed at the exact character. The language authors the");
-line("frozen model; the model does the work.");
+line("current model; the model does the work.");

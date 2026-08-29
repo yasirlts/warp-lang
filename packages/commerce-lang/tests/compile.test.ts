@@ -2,7 +2,7 @@
  * Compiler tests: AST → the EXACT model structures. A lifecycle lowers to the
  * transition table `verifyLifecycle`/`reachableStates` consume; a profile lowers
  * to the `CommerceProfile` `guardWithProfile` consumes. Plus the semantic checks
- * that keep the language anchored to the frozen model (unknown state, undeclared
+ * that keep the language anchored to the current model (unknown state, undeclared
  * reference, duplicate, missing profile field) — each positioned.
  */
 import { describe, expect, it } from "vitest";
@@ -87,7 +87,7 @@ describe("compiler — semantic errors keep the language anchored to the model",
     }
   }
 
-  it("rejects a state the frozen model does not define", () => {
+  it("rejects a state the current model does not define", () => {
     // 'Shipped' is not one of the model's commitment states.
     expectCompileErrorContaining(
       `lifecycle c { state Draft state Shipped Draft -> Shipped }`,

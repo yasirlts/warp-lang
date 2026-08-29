@@ -1,13 +1,15 @@
 /**
  * The AST — the shape a `.warp` document parses INTO, before it is lowered to the
- * frozen model's structures. Every node carries the source position of its FIRST
+ * current model's structures. Every node carries the source position of its FIRST
  * token so the compiler can report semantic errors (unknown state, undeclared
  * reference) with the same line/col precision the parser gives syntax errors.
  *
- * The AST is deliberately small: it mirrors, one-to-one, the two things the model
- * already has that this rung can author — a commitment LIFECYCLE (states + the
- * legal transitions between them) and a PROFILE (a named data subset of the
- * model). It introduces no node the model has no counterpart for.
+ * The AST is deliberately small: every node mirrors, one-to-one, something the
+ * model ALREADY has — a commitment LIFECYCLE (states + the legal transitions
+ * between them), a PROFILE (a named data subset of the model), and an AUCTION
+ * (the `AuctionProcess` auxiliary coordination record, plus the `Tendered`
+ * commitment states it collects). It introduces no node the model has no
+ * counterpart for.
  */
 
 import type { SourcePosition } from "./errors.js";
@@ -73,8 +75,110 @@ export interface ProfileDecl {
   pos: SourcePosition;
 }
 
-/** A top-level declaration: a lifecycle or a profile. */
-export type Declaration = LifecycleDecl | ProfileDecl;
+// ---------------------------------------------------------------------------
+// Auction (this rung) — the market-making forms. Every node below lowers to a
+// structure the model already defines in `schema/structure/auxiliary.schema.json`
+// (`AuctionProcess`, `AuctionMechanism`, `AuctionState`) or to the model's
+// existing `Tendered` commitment state. Nothing here is a new model concept.
+// ---------------------------------------------------------------------------
+
+/** A money literal — `1050000 MAD`. Lowers to the model's `Money`. */
+export interface MoneyLit {
+  amount: number;
+  currency: string;
+  pos: SourcePosition;
+}
+
+/** One weighted award criterion — `criterion "price" 0.6 100` (ScoredSelection). */
+export interface CriterionLit {
+  name: string;
+  weight: number;
+  maxPoints: number;
+  pos: SourcePosition;
+}
+
+/**
+ * The value side of a `key value` field. Which shape a key takes is fixed by the
+ * key (see the parser's field tables), so the parser knows what to read next and
+ * can name it precisely when it is missing.
+ */
+export type FieldValue =
+  | { shape: "money"; money: MoneyLit }
+  | { shape: "number"; number: number }
+  | { shape: "string"; text: string }
+  | { shape: "bool"; bool: boolean }
+  | { shape: "strings"; texts: string[] }
+  | { shape: "ident"; ident: Ident }
+  | { shape: "criterion"; criterion: CriterionLit };
+
+/** One `key value` field inside an auction, mechanism, tender, or state block. */
+export interface Field {
+  kind: "field";
+  key: Ident;
+  value: FieldValue;
+  pos: SourcePosition;
+}
+
+/**
+ * `mechanism <Kind> { … }` — how the auction determines its winner. `kind` is one
+ * of the model's `AuctionMechanism` variants; the fields are that variant's.
+ */
+export interface MechanismDecl {
+  kind: "mechanism";
+  /** The mechanism variant name (English, Dutch, SealedBid, Vickrey, ScoredSelection). */
+  mechanismKind: Ident;
+  fields: Field[];
+  pos: SourcePosition;
+}
+
+/**
+ * `state <Scheduled | Open | Closed { … }>` inside an auction — the model's
+ * `AuctionState`. Only `Closed` takes a block (it carries the close reason and,
+ * optionally, the winner and winning price).
+ */
+export interface AuctionStateDecl {
+  kind: "auctionState";
+  /** The state variant name (Scheduled, Open, Closed). */
+  stateType: Ident;
+  fields: Field[];
+  pos: SourcePosition;
+}
+
+/**
+ * `tender "<commitment-id>" { offer … closes_at … }` — one open offer in the
+ * auction. Lowers to the model's existing `Tendered` commitment state. The id is
+ * authored as a STRING and used verbatim: commitment ids are never derived
+ * (Invariant 5, Identity Permanence).
+ */
+export interface TenderDecl {
+  kind: "tender";
+  /** The tendered commitment's id, exactly as authored. */
+  id: Ident;
+  fields: Field[];
+  pos: SourcePosition;
+}
+
+/** An item inside an `auction { … }` block: a plain field, a mechanism, a state, or a tender. */
+export type AuctionItem = Field | MechanismDecl | AuctionStateDecl | TenderDecl;
+
+/**
+ * `auction "<id>" { subject … seller … mechanism … tender … state … }` — authors
+ * the model's `AuctionProcess` auxiliary record together with the `Tendered`
+ * commitments it collects. It is a coordination record, NOT a sixth primitive.
+ */
+export interface AuctionDecl {
+  kind: "auction";
+  /** The AuctionProcess id, exactly as authored. */
+  name: Ident;
+  fields: Field[];
+  mechanism: MechanismDecl | undefined;
+  state: AuctionStateDecl | undefined;
+  tenders: TenderDecl[];
+  pos: SourcePosition;
+}
+
+/** A top-level declaration: a lifecycle, a profile, or an auction. */
+export type Declaration = LifecycleDecl | ProfileDecl | AuctionDecl;
 
 /** A parsed `.warp` document — a sequence of declarations. */
 export interface Document {
