@@ -48,12 +48,13 @@ const refundTo = (amount: number, currency = "MAD") => ({
 });
 
 describe("server", () => {
-  it("lists all five tools", async () => {
+  it("lists all six tools", async () => {
     const client = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "check_compensation",
       "guard_action",
+      "guard_protocol_action",
       "unify_sources",
       "valid_transitions",
       "validate_settlement",

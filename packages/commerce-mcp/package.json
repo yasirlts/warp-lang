@@ -16,7 +16,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
-    "example": "node examples/over-refund.mjs"
+    "example": "node examples/over-refund.mjs",
+    "example:protocol": "node examples/protocol-bridge.mjs",
+    "overclaim": "node ../../scripts/overclaim-sweep.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

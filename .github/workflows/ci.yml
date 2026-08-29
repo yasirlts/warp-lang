@@ -119,6 +119,23 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The protocol bridge, end to end: spawns the built stdio server, sends
+      # ACP/UCP/AP2-shaped actions through guard_protocol_action, and asserts
+      # every outcome it prints — the over-refund is blocked, the correction
+      # clears, a cart mutation yields NO verdict, an illegal move is blocked,
+      # and a refund inside its payment mandate still fails I-1. The example
+      # throws (non-zero exit) if any verdict differs, so it is a gate, not a
+      # demo that merely runs.
+      - name: Run the protocol-bridge example
+        run: npm run example:protocol
+
+      # Positioning gate: fails if the protocol-integrity surface describes
+      # Warp's relationship to the agentic-commerce protocols as anything it is
+      # not — replacing them, sitting on top of them, competing with them, or
+      # having been adopted or endorsed by them. Zero-dependency; no install.
+      - name: Overclaim sweep
+        run: npm run overclaim
+
   # --- Reference agent demo (@warp-lang/agent-demo) ------------------------
   # A real LLM agent naturally reaching for an over-refund, stopped by Warp via
   # the real MCP server, then self-correcting. CI runs the KEYLESS canned mode:

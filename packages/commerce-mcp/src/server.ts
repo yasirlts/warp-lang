@@ -37,7 +37,11 @@ import {
   checkCompensationInput,
   validTransitionsInput,
   unifySourcesInput,
+  guardProtocolActionInput,
+  PROTOCOL_ACTION_SCHEMAS,
 } from "./schemas.js";
+import { guardProtocolAction, taggedAction } from "./protocol/index.js";
+import type { ProtocolId } from "./protocol/index.js";
 
 export const SERVER_NAME = "warp-commerce-integrity";
 export const SERVER_VERSION = "0.1.0";
@@ -178,6 +182,45 @@ export function createWarpMcpServer(): McpServer {
     async ({ sources }) => {
       try {
         return verdict(unify(sources as unknown as UnifySource[]));
+      } catch (e) {
+        return toolError(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
+
+  // guard_protocol_action — the protocol bridge: map a protocol-shaped action
+  // onto a Warp action, then let the SAME guardAction above decide. It adds no
+  // integrity semantics; the verdict it returns is `guard_action`'s, verbatim.
+  server.registerTool(
+    "guard_protocol_action",
+    {
+      title: "Check a protocol-shaped commerce action for structural integrity",
+      description:
+        "Take a commerce action shaped the way an agentic-commerce protocol carries it (ACP-style checkout/order status, UCP-style cart/order operation, AP2-style spending action under a mandate), map it onto a Warp action, and return the integrity verdict BEFORE the protocol commits it. Returns { mapped: true, action, verdict, notes } where `verdict` is exactly what guard_action would return for the mapped action (e.g. an I-1 over-refund or I-2 illegal move, with the fix and the legal alternatives), or { mapped: false, verdict: null, gap } when the action has no sound Warp counterpart. IMPORTANT: `verdict: null` is NOT an approval — Warp evaluated nothing. This checks structural commerce integrity only; it does not authorize payment, verify identity or consent, run checkout, settle funds, or assess fraud.",
+      inputSchema: guardProtocolActionInput,
+      annotations: READ_ONLY,
+    },
+    async ({ protocol, world, action }) => {
+      try {
+        // Re-parse against the declared protocol's own schema, so a mismatch
+        // reports that protocol's expectations rather than a union-wide failure.
+        const schema = PROTOCOL_ACTION_SCHEMAS[protocol as ProtocolId];
+        const parsed = schema.safeParse(action);
+        if (!parsed.success) {
+          const detail = parsed.error.issues
+            .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+            .join("; ");
+          return toolError(
+            `The supplied action does not match the '${protocol}' action shape — ${detail}. ` +
+              `No integrity verdict was produced: the action was not checked.`,
+          );
+        }
+        return verdict(
+          guardProtocolAction(
+            world as unknown as World,
+            taggedAction(protocol as ProtocolId, parsed.data),
+          ),
+        );
       } catch (e) {
         return toolError(e instanceof Error ? e.message : String(e));
       }

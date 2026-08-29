@@ -52,6 +52,40 @@ legal `alternatives` from the current state.
 | `check_compensation` | `planCompensation` + `validateCompensation` | A compensating (unwinding) sequence for a set of forward steps validates coherently; reports the step that fails (e.g. an over-refund). Validates the unwind; it does not execute any rollback. |
 | `valid_transitions` | `validTransitions` | The planning oracle: the legal target states from a given state, read from the frozen transition table. A listed move is legal, not guaranteed safe — check the concrete move with `guard_action`. |
 | `unify_sources` | `unify` | Caller-corresponded platform objects (e.g. a Shopify order and a Stripe charge) merge into one validated commitment and conserve value — a cross-source amount mismatch is caught as I-1. |
+| `guard_protocol_action` | the adapters + `guardAction` | A commerce action shaped the way an agentic-commerce protocol carries it (checkout/order status, cart/order operation, a spending action under a payment mandate), mapped onto a Warp action and checked. Returns exactly what `guard_action` would say about the mapped action — or `verdict: null` when the action has no sound Warp counterpart, which is **not** an approval. |
+
+## The protocol bridge
+
+The agentic-commerce protocols are layers, not rivals — discovery and cart, then
+checkout, then payment authorization, increasingly all spoken over MCP. Each draws
+its scope boundary in the same place: commerce integrity stays with "the merchant's
+existing systems." Nobody in that stack checks that a refund is within what was
+captured, that value is conserved, or that a shipped order is not being walked
+backwards.
+
+`guard_protocol_action` lets an agent ask Warp that question in the shape it
+already has, before the action commits. It does two things and nothing else:
+
+1. **Map** the protocol payload onto a Warp `ProposedAction` — pure translation.
+2. **Guard** it with the unmodified `guardAction`, returning its verdict verbatim.
+
+The bridge adds no integrity semantics, and the test suite asserts that: for every
+mappable action, its verdict is identical to sending the mapped action to plain
+`guard_action`.
+
+Where a protocol concept has no sound Warp counterpart — a cart mutation (nobody
+has committed to anything yet), a bare "shipped" (which line items?), a payment
+capture (funds moving is not a state change) — the adapter **refuses to map** and
+returns `verdict: null` rather than inventing a commitment move. A null verdict
+means Warp checked nothing; treating it as a pass defeats the point of asking.
+
+One thing worth stating plainly: **a payment mandate's spending cap is not a Warp
+invariant.** An action within its cap can still be blocked by Warp, and an action
+that breaches its cap can still be coherent commerce. The two checks are
+independent, and the authorization layer must enforce its own.
+
+See **[docs/protocol-integrity.md](../../docs/protocol-integrity.md)** for the
+layer map, the mapping tables, and the honest gaps.
 
 ## Run it
 
@@ -81,7 +115,8 @@ Claude Desktop / Cursor / VS Code (MCP config), pointing at the built entry:
 ### See it work
 
 ```bash
-npm run example
+npm run example           # the over-refund guardrail
+npm run example:protocol  # the protocol bridge
 ```
 
 The example spawns the server over stdio, connects an MCP client, and calls
@@ -89,6 +124,11 @@ The example spawns the server over stdio, connects an MCP client, and calls
 the amount → gets `ok`. It frames the layering explicitly: Warp confirms the
 action is internally coherent commerce; authorization (AP2) and checkout
 execution (ACP/UCP) remain the job of those protocols.
+
+`example:protocol` runs the bridge: a checkout-shaped over-refund blocked with its
+fix, the agent correcting it, a cart mutation that returns no verdict at all, an
+illegal state move blocked with the legal alternatives, and a refund that
+satisfies its payment mandate but still fails value conservation.
 
 ## Security: untrusted input
 
@@ -117,7 +157,7 @@ correct.
 
 - **MCP spec:** targets the current stable spec `2025-11-25`, built on the
   official `@modelcontextprotocol/sdk` **v1.x** (`McpServer` + Zod tool schemas).
-- **Commerce model:** wraps `@warp-lang/commerce-types@^1.3.0`, which tracks the
+- **Commerce model:** wraps `@warp-lang/commerce-types@^1.4.0`, which tracks the
   Warp Commerce Model schema frozen at v1.0.0. This package does not modify the
   schema or the commerce-types package.
 
