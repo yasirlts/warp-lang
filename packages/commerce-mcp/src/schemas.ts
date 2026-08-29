@@ -22,6 +22,12 @@
  * the published functions, which do the authoritative checking.
  */
 import { z } from "zod";
+import {
+  AcpActionSchema,
+  Ap2ActionSchema,
+  ProtocolIdSchema,
+  UcpActionSchema,
+} from "./protocol/shapes.js";
 
 // --- Money ------------------------------------------------------------------
 
@@ -203,4 +209,28 @@ export const validTransitionsInput = {
 
 export const unifySourcesInput = {
   sources: z.array(UnifySourceSchema).min(1),
+} as const;
+
+/**
+ * `guard_protocol_action` — a protocol-shaped action, plus the world it acts on.
+ *
+ * `action` is declared as the union of the three protocol shapes so the tool's
+ * published JSON-Schema shows an agent exactly what each protocol accepts. The
+ * three are structurally disjoint (an ACP action carries `status`, a UCP one
+ * `operation`, an AP2 one `mandate_type`) and each is `.strict()`, so a payload
+ * cannot silently satisfy the wrong protocol's shape. The handler re-parses with
+ * the schema for the declared `protocol` anyway, to give a precise error naming
+ * that protocol rather than a union-wide one.
+ */
+export const guardProtocolActionInput = {
+  protocol: ProtocolIdSchema,
+  world: WorldSchema,
+  action: z.union([AcpActionSchema, UcpActionSchema, Ap2ActionSchema]),
+} as const;
+
+/** The per-protocol action schemas, for the handler's precise re-parse. */
+export const PROTOCOL_ACTION_SCHEMAS = {
+  acp: AcpActionSchema,
+  ucp: UcpActionSchema,
+  ap2: Ap2ActionSchema,
 } as const;
