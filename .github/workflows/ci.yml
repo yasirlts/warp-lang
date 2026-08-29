@@ -375,6 +375,17 @@ jobs:
         working-directory: packages/commerce-lang
         run: npm run example:policy
 
+      # Rung 4: the END-TO-END system. A whole .warp file (lifecycle + profile +
+      # policy) compiled by compileSystem into ONE CommerceModel, then run through
+      # the engine's runModel with host-supplied events — a policy block, a profile
+      # block and a base invariant block, with nothing hand-wired. It also asserts
+      # the three honesty properties: an authored `assert` changes no verdict, an
+      # authored lifecycle does not govern legal moves, and the audit is world-wide
+      # rather than per-commitment. Exits non-zero if any verdict changes.
+      - name: Run the end-to-end system example verbatim
+        working-directory: packages/commerce-lang
+        run: npm run example:system
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding

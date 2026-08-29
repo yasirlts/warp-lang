@@ -2,6 +2,55 @@
 
 All notable changes to this package are documented here.
 
+## 0.4.0 — rung 4: a whole system, compiled and run
+
+`compileSystem(source)` gathers a complete `.warp` file into the ONE
+`CommerceModel` the engine's `runModel` takes (rung 4a). The language produces the
+model; the engine runs it; the **host supplies the events**.
+
+This rung is a GATHER, not new lowering. Every piece is produced by the rung-1/2/3
+compilers unchanged; nothing here computes a new structure. No new states, no new
+invariants, no schema change.
+
+- **`compileSystem(source, opts?)`** → `{ model, lifecycle?, profiles, policies, auctions }`.
+  `model` is the `CommerceModel` `runModel` takes, with no adaptation step.
+- **`systemFromDocument(doc, compiled, opts?)`** — the same gather from an AST you
+  already parsed.
+- **Cross-declaration checks**, positioned like every other error: a policy
+  applying to an undeclared profile; a profile permitting a state its own lifecycle
+  omits; an ambiguous base profile or lifecycle when a file declares several
+  (`opts.profile` / `opts.lifecycle` select one). The ambiguous-profile case is an
+  error rather than a guess because `runModel` applies every profile it holds to
+  every action — two profiles permitting different states would together permit
+  only what both allow.
+- **`examples/system.mjs`** — the end-to-end run, in CI: authored file →
+  `compileSystem` → `runModel` with host events, with a policy block, a profile
+  block and a base invariant block, nothing hand-wired.
+- **20 new tests** (`tests/system.test.ts`), including the model-object
+  equivalence: the compiled model deep-equals the hand-built one, which is what
+  makes "authored and hand-written behave identically" true by construction —
+  identical input to identical function.
+
+**Events are deliberately not authorable.** They are runtime I/O. A `.warp` file
+carrying its own events would be a fixture, not a system definition.
+
+**Three things authoring does NOT do**, each a property of the engine, each
+asserted in the example rather than claimed:
+
+1. An authored `assert` is declared intent, not a gate — `guardAction` audits all
+   six invariants on every action regardless. Removing the assert changes no
+   verdict.
+2. An authored lifecycle is provenance — it populates `model.transitions` for the
+   record, but the governing table is the model's own inside `guardAction`. A
+   lifecycle claiming `Draft -> Fulfilled` compiles and the engine still refuses
+   the move.
+3. The audit is world-wide — a pre-existing violation on any commitment blocks
+   every event, including one aimed at a different, healthy commitment.
+
+**Auctions compile but are not run.** `CommerceModel` has no auction field and
+`runModel` no auction layer, so an authored auction is returned on
+`CompiledSystem.auctions` as compiled data, not as something the engine enforces.
+
 ## 0.3.0 — rung 3: authoring commerce policies (structure → logic)
 
 Rungs 1–2 author the model's **shape**. This rung adds its **logic**: a `policy`
