@@ -1,12 +1,18 @@
 /**
  * The compiler — lowers a parsed {@link Document} to the EXACT structures the
- * frozen Warp Commerce Model already uses. There is no new representation here:
+ * current Warp Commerce Model already uses. There is no new representation here:
  *
  *   a `lifecycle`  →  a transition table `Record<StateType, StateType[]>` plus a
  *                     {@link TransitionFn}, the precise shape `verifyLifecycle`
  *                     and `reachableStates` consume.
  *   a `profile`    →  a {@link CommerceProfile}, the precise object
  *                     `guardWithProfile` consumes.
+ *   an `auction`   →  an `AuctionProcess` (the model's auxiliary coordination
+ *                     record), the `Tendered` `CommitmentState` of each tender it
+ *                     collects, and the `UnderAuction` `ValueState` its subject
+ *                     carries while the auction is open. All three are existing
+ *                     model structures; the auction form authors a REFERENCE to
+ *                     the auxiliary record, it does not reinvent it.
  *
  * The compiled output is INDISTINGUISHABLE from hand-writing those structures —
  * that is the whole claim of this rung, and the round-trip test proves it by
@@ -16,33 +22,57 @@
  * WHAT THE COMPILER ENFORCES (well-formedness, keeping the language anchored to
  * the existing model — it adds NO new semantics):
  *   - Every state named in a lifecycle or a profile MUST be one of the model's
- *     commitment states. You cannot invent a state; the grammar authors the frozen
+ *     commitment states. You cannot invent a state; the grammar authors the current
  *     model, so state names come from it. (The set is read FROM the model at
  *     runtime — see {@link knownCommitmentStates} — not hardcoded here.)
  *   - A transition may only reference declared states; declarations are unique.
  *   - A profile supplies the fields `guardWithProfile` needs.
+ *   - An auction's mechanism kind, state, and close reason must be ones the model
+ *     defines; each mechanism carries exactly the fields the schema gives that
+ *     variant; a declared winner must be one of the auction's own tenders.
+ *     (These three vocabularies have no runtime form to read, so they are mirrored
+ *     here and held to the schema by `tests/schema-drift.test.ts`.)
  *
  * WHAT THE COMPILER DOES NOT DO: it does not check that the authored lifecycle is
  * SOUND. An author can declare a transition between two real states that the model
- * forbids (e.g. `Fulfilled -> Draft`); it is well-formed, so it compiles. The
- * model's temporal verifier (`verifyLifecycle`) is what rejects it. The invariants
- * govern; the language cannot smuggle an unsound model past them.
+ * forbids (e.g. `Fulfilled -> Draft`, or `Tendered -> Fulfilled`, which skips the
+ * commitment); it is well-formed, so it compiles. The model's temporal verifier
+ * (`verifyLifecycle`) is what rejects it. Nor does it check auction DATA — that
+ * `opens_at` precedes `closes_at`, that an offer clears the reserve, or that
+ * ScoredSelection weights sum to 1.0. The invariants govern; the language cannot
+ * smuggle an unsound model past them.
  */
 
 import { reachableStates } from "@warp-lang/commerce-types";
 import type { CommerceProfile } from "@warp-lang/commerce-types";
 import type { CommitmentStateType } from "@warp-lang/commerce-types";
 import type {
+  AuctionCloseReason,
+  AuctionMechanism,
+  AuctionProcess,
+  AuctionState,
+  CommitmentID,
+  CommitmentState,
+  Money,
+  PartyID,
+  ValueID,
+  ValueState,
+} from "@warp-lang/commerce-types";
+import type {
+  AuctionDecl,
   Declaration,
   Document,
+  Field,
   LifecycleDecl,
+  MoneyLit,
   ProfileDecl,
+  TenderDecl,
 } from "./ast.js";
 import { WarpCompileError, type SourcePosition } from "./errors.js";
 import { parse } from "./parser.js";
 
 /**
- * The set of commitment state NAMES the frozen model defines, read from the model
+ * The set of commitment state NAMES the current model defines, read from the model
  * itself: the reachable states of the real commitment lifecycle from its entry
  * (`Draft`). Composing {@link reachableStates} keeps this list a mirror of the
  * model — it is never hand-maintained here, so it cannot drift from the schema.
@@ -80,19 +110,55 @@ export interface CompiledLifecycle {
 /** A profile lowered to the model's {@link CommerceProfile} — a pure data subset. */
 export type CompiledProfile = CommerceProfile;
 
-/** The full lowered document: every lifecycle and profile it declared. */
+/**
+ * One authored tender, lowered to the model's existing `Tendered` commitment
+ * state. The id is used exactly as authored and never derived — commitment ids
+ * are permanent (Invariant 5, Identity Permanence).
+ */
+export interface CompiledTender {
+  /** The tendered commitment's id, verbatim from the source. */
+  commitment: CommitmentID;
+  /** The model's `Tendered` CommitmentState, carrying the offer and closing time. */
+  state: Extract<CommitmentState, { type: "Tendered" }>;
+}
+
+/**
+ * An authored auction, lowered to the model's structures.
+ *
+ * `process` is an `AuctionProcess` exactly as `schema/structure/auxiliary.schema.json`
+ * defines it — its `tendered_commitments` are the ids of `tenders`, in source order.
+ *
+ * `subjectState` is the model's existing `UnderAuction` `ValueState` for the
+ * auction's subject, present ONLY while the auction's state is `Open` (the state in
+ * which the model says a value is under an active auction and so cannot be reserved
+ * or committed elsewhere); it is `null` for a `Scheduled` or `Closed` auction. This
+ * is a LOWERING of authored data into an existing model record — the compiler does
+ * not, and cannot, check the real state of any Value, because a `.warp` document
+ * declares no values.
+ */
+export interface CompiledAuction {
+  /** The model's AuctionProcess auxiliary record. */
+  process: AuctionProcess;
+  /** Each authored tender, as the model's `Tendered` commitment state. */
+  tenders: CompiledTender[];
+  /** The `UnderAuction` ValueState the subject carries while open; `null` otherwise. */
+  subjectState: ValueState | null;
+}
+
+/** The full lowered document: every lifecycle, profile, and auction it declared. */
 export interface CompiledModel {
   lifecycles: CompiledLifecycle[];
   profiles: CompiledProfile[];
+  auctions: CompiledAuction[];
 }
 
-/** Assert that `name` is a state the frozen model defines, or throw at `pos`. */
+/** Assert that `name` is a state the current model defines, or throw at `pos`. */
 function assertKnownState(name: string, pos: SourcePosition, context: string): void {
   const known = knownCommitmentStates();
   if (!known.has(name)) {
     const list = [...known].sort().join(", ");
     throw new WarpCompileError(
-      `Unknown commitment state '${name}' ${context}. The Warp Commerce Model is frozen; ` +
+      `Unknown commitment state '${name}' ${context}. The Warp Commerce Model is versioned and evolves only through an accepted model change; ` +
         `you can only author its existing states. Valid states: ${list}.`,
       pos,
     );
@@ -229,8 +295,357 @@ function dupField(key: string, pos: SourcePosition, profile: string): never {
   throw new WarpCompileError(`Duplicate '${key}' field in profile '${profile}'.`, pos);
 }
 
+// ---------------------------------------------------------------------------
+// Auction lowering
+//
+// The three vocabularies below MIRROR `schema/structure/auxiliary.schema.json`.
+// Unlike the commitment states — which are read from the model at runtime via
+// {@link knownCommitmentStates} — the model exposes no RUNTIME enumeration of
+// them (they exist only as erased TypeScript unions), so they cannot be derived
+// the same way. `tests/schema-drift.test.ts` therefore reads the schema and fails
+// if these lists drift from it, which is what keeps the schema the source of
+// truth here, exactly as the repo's codegen-drift gates do elsewhere.
+// ---------------------------------------------------------------------------
+
+/** The model's `AuctionMechanism` variants. */
+export const AUCTION_MECHANISM_KINDS = [
+  "English",
+  "Dutch",
+  "SealedBid",
+  "Vickrey",
+  "ScoredSelection",
+] as const;
+
+/** The model's `AuctionState` variants. */
+export const AUCTION_STATE_TYPES = ["Scheduled", "Open", "Closed"] as const;
+
+/** The model's `AuctionCloseReason` values. */
+export const AUCTION_CLOSE_REASONS = [
+  "NormalClose",
+  "ReserveNotMet",
+  "BuyItNowExercised",
+  "SellerCancelled",
+  "AwardProtestUpheld",
+] as const;
+
 /**
- * Lower a parsed {@link Document} to the frozen model's structures. Enforces
+ * Which authored fields each mechanism variant requires and permits. Exported so
+ * `tests/schema-drift.test.ts` can hold it against the schema's own `required` /
+ * `properties` for each variant.
+ */
+export const MECHANISM_SPEC: Readonly<
+  Record<string, { required: readonly string[]; optional: readonly string[] }>
+> = {
+  English: { required: [], optional: ["reserve_price", "increment"] },
+  Dutch: { required: ["start_price", "decrement", "interval_seconds"], optional: [] },
+  SealedBid: { required: ["reveal_at"], optional: ["reserve_price"] },
+  Vickrey: { required: [], optional: ["reserve_price"] },
+  ScoredSelection: {
+    required: ["criterion", "committee", "publication_required"],
+    optional: ["minimum_threshold"],
+  },
+};
+
+/** `'a', 'b', or 'c'` for an error message. */
+function orList(items: readonly string[]): string {
+  const q = items.map((i) => `'${i}'`);
+  if (q.length === 0) return "(none)";
+  if (q.length === 1) return q[0] as string;
+  return `${q.slice(0, -1).join(", ")}, or ${q[q.length - 1] as string}`;
+}
+
+/**
+ * Index a block's fields by key, rejecting a repeat of any key except `criterion`
+ * (a ScoredSelection names several criteria, one per line).
+ */
+function indexFields(fields: Field[], blockLabel: string): Map<string, Field[]> {
+  const byKey = new Map<string, Field[]>();
+  for (const f of fields) {
+    const existing = byKey.get(f.key.name);
+    if (existing === undefined) {
+      byKey.set(f.key.name, [f]);
+      continue;
+    }
+    if (f.key.name !== "criterion") {
+      throw new WarpCompileError(
+        `Duplicate '${f.key.name}' field in ${blockLabel}.`,
+        f.key.pos,
+      );
+    }
+    existing.push(f);
+  }
+  return byKey;
+}
+
+/** The single field for `key`, or undefined. */
+function one(byKey: Map<string, Field[]>, key: string): Field | undefined {
+  return byKey.get(key)?.[0];
+}
+
+/** Lower a money literal to the model's `Money`. */
+function toMoney(lit: MoneyLit): Money {
+  return { amount: lit.amount, currency: lit.currency };
+}
+
+/** Read a required field, or throw naming what is missing and where. */
+function required(
+  byKey: Map<string, Field[]>,
+  key: string,
+  blockLabel: string,
+  pos: SourcePosition,
+): Field {
+  const f = one(byKey, key);
+  if (f === undefined) {
+    throw new WarpCompileError(`${blockLabel} is missing required field '${key}'.`, pos);
+  }
+  return f;
+}
+
+/** The money value of a field (its shape is fixed by the parser's field table). */
+function moneyOf(f: Field): Money {
+  return toMoney((f.value as Extract<typeof f.value, { shape: "money" }>).money);
+}
+
+/** The string value of a field. */
+function textOf(f: Field): string {
+  return (f.value as Extract<typeof f.value, { shape: "string" }>).text;
+}
+
+/** The number value of a field. */
+function numberOf(f: Field): number {
+  return (f.value as Extract<typeof f.value, { shape: "number" }>).number;
+}
+
+/**
+ * Lower a `mechanism` block to the model's `AuctionMechanism`. Checks the variant
+ * name against the model's list, that every field the variant REQUIRES is present,
+ * and that no field belongs to a different variant (the schema declares each
+ * variant `additionalProperties: false`).
+ */
+function compileMechanism(decl: NonNullable<AuctionDecl["mechanism"]>, auction: string): AuctionMechanism {
+  const kind = decl.mechanismKind.name;
+  if (!(AUCTION_MECHANISM_KINDS as readonly string[]).includes(kind)) {
+    throw new WarpCompileError(
+      `Unknown auction mechanism '${kind}' in auction '${auction}'. The model defines ` +
+        `${orList(AUCTION_MECHANISM_KINDS)}.`,
+      decl.mechanismKind.pos,
+    );
+  }
+  const spec = MECHANISM_SPEC[kind] as { required: readonly string[]; optional: readonly string[] };
+  const label = `mechanism '${kind}' in auction '${auction}'`;
+  const byKey = indexFields(decl.fields, label);
+
+  // No field from a different variant — the schema forbids extra properties.
+  const permitted = new Set([...spec.required, ...spec.optional]);
+  for (const [key, fields] of byKey) {
+    if (!permitted.has(key)) {
+      throw new WarpCompileError(
+        `Field '${key}' does not belong to the '${kind}' mechanism. '${kind}' takes ` +
+          `${orList([...spec.required, ...spec.optional])}.`,
+        (fields[0] as Field).key.pos,
+      );
+    }
+  }
+  for (const key of spec.required) {
+    required(byKey, key, label[0]!.toUpperCase() + label.slice(1), decl.mechanismKind.pos);
+  }
+
+  switch (kind) {
+    case "English": {
+      const reserve = one(byKey, "reserve_price");
+      const increment = one(byKey, "increment");
+      return {
+        kind: "English",
+        ...(reserve ? { reserve_price: moneyOf(reserve) } : {}),
+        ...(increment ? { increment: moneyOf(increment) } : {}),
+      };
+    }
+    case "Dutch":
+      return {
+        kind: "Dutch",
+        start_price: moneyOf(required(byKey, "start_price", label, decl.pos)),
+        decrement: moneyOf(required(byKey, "decrement", label, decl.pos)),
+        interval_seconds: numberOf(required(byKey, "interval_seconds", label, decl.pos)),
+      };
+    case "SealedBid": {
+      const reserve = one(byKey, "reserve_price");
+      return {
+        kind: "SealedBid",
+        ...(reserve ? { reserve_price: moneyOf(reserve) } : {}),
+        reveal_at: textOf(required(byKey, "reveal_at", label, decl.pos)),
+      };
+    }
+    case "Vickrey": {
+      const reserve = one(byKey, "reserve_price");
+      return {
+        kind: "Vickrey",
+        ...(reserve ? { reserve_price: moneyOf(reserve) } : {}),
+      };
+    }
+    default: {
+      const criteria = (byKey.get("criterion") ?? []).map((f) => {
+        const c = (f.value as Extract<typeof f.value, { shape: "criterion" }>).criterion;
+        return { name: c.name, weight: c.weight, max_points: c.maxPoints };
+      });
+      const committee = (
+        one(byKey, "committee")!.value as Extract<Field["value"], { shape: "strings" }>
+      ).texts.map((t) => t as PartyID);
+      const publication = (
+        one(byKey, "publication_required")!.value as Extract<Field["value"], { shape: "bool" }>
+      ).bool;
+      const threshold = one(byKey, "minimum_threshold");
+      return {
+        kind: "ScoredSelection",
+        criteria,
+        ...(threshold ? { minimum_threshold: numberOf(threshold) } : {}),
+        evaluation_committee: committee,
+        publication_required: publication,
+      };
+    }
+  }
+}
+
+/** Lower one `tender` block to the model's `Tendered` commitment state. */
+function compileTender(decl: TenderDecl, auction: string): CompiledTender {
+  const label = `Tender '${decl.id.name}' in auction '${auction}'`;
+  const byKey = indexFields(decl.fields, `tender '${decl.id.name}'`);
+  const offer = required(byKey, "offer", label, decl.pos);
+  const closesAt = required(byKey, "closes_at", label, decl.pos);
+  const superseded = one(byKey, "superseded_by");
+  const money = moneyOf(offer);
+  return {
+    commitment: decl.id.name as CommitmentID,
+    state: {
+      type: "Tendered",
+      offer_amount: money.amount,
+      offer_currency: money.currency,
+      closes_at: textOf(closesAt),
+      ...(superseded ? { superseded_by: textOf(superseded) as CommitmentID } : {}),
+    },
+  };
+}
+
+/**
+ * Lower an auction `state` block to the model's `AuctionState`. A `Closed` auction
+ * must name a close reason from the model's list; a `winner`, if given, must be one
+ * of the auction's own declared tenders (a reference-resolution check, the same
+ * kind the lifecycle form makes for a transition target — NOT a model invariant).
+ */
+function compileAuctionState(
+  decl: NonNullable<AuctionDecl["state"]>,
+  auction: string,
+  tenderIds: Set<string>,
+): AuctionState {
+  const type = decl.stateType.name;
+  if (!(AUCTION_STATE_TYPES as readonly string[]).includes(type)) {
+    throw new WarpCompileError(
+      `Unknown auction state '${type}' in auction '${auction}'. The model defines ` +
+        `${orList(AUCTION_STATE_TYPES)}.`,
+      decl.stateType.pos,
+    );
+  }
+  if (type !== "Closed") {
+    if (decl.fields.length > 0) {
+      throw new WarpCompileError(
+        `Auction state '${type}' takes no fields; only 'Closed' carries a reason, a ` +
+          `winner, and a winning price.`,
+        (decl.fields[0] as Field).key.pos,
+      );
+    }
+    return { type: type as "Scheduled" | "Open" };
+  }
+
+  const label = `Auction '${auction}' state 'Closed'`;
+  const byKey = indexFields(decl.fields, `auction '${auction}' state 'Closed'`);
+  const reasonField = required(byKey, "reason", label, decl.stateType.pos);
+  const reason = (reasonField.value as Extract<Field["value"], { shape: "ident" }>).ident;
+  if (!(AUCTION_CLOSE_REASONS as readonly string[]).includes(reason.name)) {
+    throw new WarpCompileError(
+      `Unknown auction close reason '${reason.name}'. The model defines ` +
+        `${orList(AUCTION_CLOSE_REASONS)}.`,
+      reason.pos,
+    );
+  }
+  const winner = one(byKey, "winner");
+  if (winner !== undefined && !tenderIds.has(textOf(winner))) {
+    throw new WarpCompileError(
+      `Winning commitment '${textOf(winner)}' is not a tender of auction '${auction}'. ` +
+        `An auction can only be won by a commitment it collected — declare it with ` +
+        `'tender "${textOf(winner)}" { … }'.`,
+      winner.key.pos,
+    );
+  }
+  const price = one(byKey, "winning_price");
+  return {
+    type: "Closed",
+    ...(winner ? { winning_commitment: textOf(winner) as CommitmentID } : {}),
+    ...(price ? { winning_price: moneyOf(price) } : {}),
+    reason: reason.name as AuctionCloseReason,
+  };
+}
+
+/** Lower one `auction` declaration to the model's AuctionProcess + its tenders. */
+function compileAuction(decl: AuctionDecl): CompiledAuction {
+  const name = decl.name.name;
+  const label = `Auction '${name}'`;
+  const byKey = indexFields(decl.fields, `auction '${name}'`);
+
+  const subject = textOf(required(byKey, "subject", label, decl.pos)) as ValueID;
+  const seller = textOf(required(byKey, "seller", label, decl.pos)) as PartyID;
+  const opensAt = textOf(required(byKey, "opens_at", label, decl.pos));
+  const closesAt = textOf(required(byKey, "closes_at", label, decl.pos));
+
+  if (decl.mechanism === undefined) {
+    throw new WarpCompileError(
+      `${label} is missing its 'mechanism' (how the winner is determined).`,
+      decl.pos,
+    );
+  }
+  if (decl.state === undefined) {
+    throw new WarpCompileError(`${label} is missing its 'state'.`, decl.pos);
+  }
+
+  // Tenders, in source order — their ids ARE the process's tendered_commitments.
+  const tenders: CompiledTender[] = [];
+  const seen = new Set<string>();
+  for (const t of decl.tenders) {
+    if (seen.has(t.id.name)) {
+      throw new WarpCompileError(
+        `Duplicate tender '${t.id.name}' in auction '${name}'. A commitment id ` +
+          `identifies exactly one commitment (Invariant 5: Identity Permanence).`,
+        t.id.pos,
+      );
+    }
+    seen.add(t.id.name);
+    tenders.push(compileTender(t, name));
+  }
+
+  const mechanism = compileMechanism(decl.mechanism, name);
+  const state = compileAuctionState(decl.state, name, seen);
+
+  const process: AuctionProcess = {
+    id: name,
+    subject,
+    seller,
+    mechanism,
+    tendered_commitments: tenders.map((t) => t.commitment),
+    opens_at: opensAt,
+    closes_at: closesAt,
+    state,
+  };
+
+  // The model's UnderAuction ValueState applies to the subject while the auction
+  // is OPEN — that is the state in which the value is under an active auction.
+  const subjectState: ValueState | null =
+    state.type === "Open"
+      ? { type: "UnderAuction", auction_process_id: process.id, closes_at: closesAt }
+      : null;
+
+  return { process, tenders, subjectState };
+}
+
+/**
+ * Lower a parsed {@link Document} to the current model's structures. Enforces
  * well-formedness (known states, resolved references, unique declarations); does
  * NOT judge soundness — that is the model's temporal verifier's job. Throws
  * {@link WarpCompileError} at a precise position on the first semantic problem.
@@ -238,8 +653,10 @@ function dupField(key: string, pos: SourcePosition, profile: string): never {
 export function compileDocument(doc: Document): CompiledModel {
   const lifecycles: CompiledLifecycle[] = [];
   const profiles: CompiledProfile[] = [];
+  const auctions: CompiledAuction[] = [];
   const lifecycleNames = new Set<string>();
   const profileNames = new Set<string>();
+  const auctionNames = new Set<string>();
 
   for (const decl of doc.declarations as Declaration[]) {
     if (decl.kind === "lifecycle") {
@@ -251,16 +668,26 @@ export function compileDocument(doc: Document): CompiledModel {
       }
       lifecycleNames.add(decl.name.name);
       lifecycles.push(compileLifecycle(decl));
-    } else {
+    } else if (decl.kind === "profile") {
       if (profileNames.has(decl.name.name)) {
         throw new WarpCompileError(`Duplicate profile '${decl.name.name}'.`, decl.name.pos);
       }
       profileNames.add(decl.name.name);
       profiles.push(compileProfile(decl));
+    } else {
+      if (auctionNames.has(decl.name.name)) {
+        throw new WarpCompileError(
+          `Duplicate auction '${decl.name.name}'. An AuctionProcess id identifies ` +
+            `exactly one auction (Invariant 5: Identity Permanence).`,
+          decl.name.pos,
+        );
+      }
+      auctionNames.add(decl.name.name);
+      auctions.push(compileAuction(decl));
     }
   }
 
-  return { lifecycles, profiles };
+  return { lifecycles, profiles, auctions };
 }
 
 /** Parse `.warp` source and lower it in one step. Throws on syntax or semantic error. */

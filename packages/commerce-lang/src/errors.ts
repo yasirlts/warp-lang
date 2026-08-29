@@ -61,7 +61,7 @@ export class WarpSyntaxError extends WarpLangError {
  * A COMPILE (semantic) failure — the source parses, but it does not describe a
  * legal author-time model: an unknown commitment state, a transition referencing
  * an undeclared state, a duplicate declaration, a profile missing a required
- * field. These are the checks that keep the language ANCHORED to the frozen model
+ * field. These are the checks that keep the language ANCHORED to the current model
  * (you cannot name a state the model does not define). They are NOT the model's
  * runtime invariants — an authored lifecycle that is syntactically fine but
  * UNSOUND (a forbidden transition between two real states) compiles, and is caught

@@ -4,11 +4,17 @@
  * what make the parser's and compiler's errors point at a real spot in the file.
  *
  * The token set is tiny by design (this is a focused authoring syntax, not a
- * general language): punctuation (`{ } , ->`), double-quoted strings, and bare
- * identifiers. Keywords (`lifecycle`, `profile`, `state`, `label`, `description`,
- * `states`, `value_forms`) are not a distinct token class — they lex as ordinary
- * identifiers and the parser gives them meaning by position. Line comments start
- * with `//` or `#` and run to end of line. Whitespace is insignificant.
+ * general language): punctuation (`{ } , ->`), double-quoted strings, numbers,
+ * and bare identifiers. Keywords (`lifecycle`, `profile`, `auction`, `state`,
+ * `mechanism`, `tender`, `label`, `description`, `states`, `value_forms`, …) are
+ * not a distinct token class — they lex as ordinary identifiers and the parser
+ * gives them meaning by position. Line comments start with `//` or `#` and run to
+ * end of line. Whitespace is insignificant.
+ *
+ * NUMBERS are unsigned: digits with an optional single fractional part
+ * (`1500`, `0.6`). There is no negative-number literal, because `-` only ever
+ * begins the transition arrow `->`. A money amount therefore cannot be authored
+ * negative — see GRAMMAR.md.
  */
 
 import { WarpSyntaxError, type SourcePosition } from "./errors.js";
@@ -17,6 +23,7 @@ import { WarpSyntaxError, type SourcePosition } from "./errors.js";
 export type TokenType =
   | "ident"
   | "string"
+  | "number"
   | "lbrace"
   | "rbrace"
   | "comma"
@@ -26,7 +33,10 @@ export type TokenType =
 /** One lexed token: its kind, its text value, and where it began. */
 export interface Token {
   type: TokenType;
-  /** The token's text. For strings this is the DECODED value (no quotes). */
+  /**
+   * The token's text. For strings this is the DECODED value (no quotes); for
+   * numbers it is the literal as written (parse it with `Number(token.value)`).
+   */
   value: string;
   pos: SourcePosition;
 }
@@ -39,6 +49,11 @@ function isIdentStart(ch: string): boolean {
 /** True for a subsequent identifier character: letter, digit, or underscore. */
 function isIdentPart(ch: string): boolean {
   return /[A-Za-z0-9_]/.test(ch);
+}
+
+/** True for a decimal digit — the start of a number literal. */
+function isDigit(ch: string): boolean {
+  return ch >= "0" && ch <= "9";
 }
 
 /**
@@ -155,6 +170,29 @@ export function tokenize(source: string, file?: string): Token[] {
       continue;
     }
 
+    // Number: digits with an optional single fractional part. Unsigned — `-` is
+    // only ever the start of `->`, so a negative literal cannot be written.
+    if (isDigit(ch)) {
+      let value = "";
+      while (i < n && isDigit(source[i] as string)) value += advance();
+      if (source[i] === "." && isDigit(source[i + 1] ?? "")) {
+        value += advance(); // the '.'
+        while (i < n && isDigit(source[i] as string)) value += advance();
+      }
+      // A number may not run straight into an identifier (`12abc`): that is
+      // almost always a typo, and silently splitting it would hide the mistake.
+      if (i < n && isIdentStart(source[i] as string)) {
+        throw new WarpSyntaxError(
+          `Unexpected '${source[i] as string}' immediately after the number '${value}'. ` +
+            `Separate a number from what follows it (a money amount is written '1500 MAD').`,
+          start,
+          "whitespace after a number",
+        );
+      }
+      tokens.push({ type: "number", value, pos: start });
+      continue;
+    }
+
     // Identifier / keyword.
     if (isIdentStart(ch)) {
       let value = "";
@@ -166,7 +204,7 @@ export function tokenize(source: string, file?: string): Token[] {
     throw new WarpSyntaxError(
       `Unexpected character '${ch}'.`,
       start,
-      "a declaration, identifier, string, or one of { } , ->",
+      "a declaration, identifier, string, number, or one of { } , ->",
     );
   }
 

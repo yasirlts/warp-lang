@@ -23,10 +23,10 @@ import type { CommitmentState, PartyID, TransitionFn, World } from "@warp-lang/c
 import { compile } from "../src/compile.js";
 
 /** The compiled table's plain-string fn, viewed as the model's branded TransitionFn.
- *  Sound because the compiler validated every state against the frozen model. */
+ *  Sound because the compiler validated every state against the current model. */
 const asTransitionFn = (fn: (s: string) => string[]): TransitionFn => fn as unknown as TransitionFn;
 
-// The frozen commitment lifecycle, authored in .warp — the 11 states and 26 edges.
+// The current commitment lifecycle, authored in .warp — the 11 states and 26 edges.
 const COMMITMENT_WARP = `
   lifecycle commitment {
     state Draft
@@ -146,7 +146,7 @@ describe("round-trip — authored profile == built-in profile through the guard"
 
 describe("round-trip — the language cannot smuggle an unsound model", () => {
   it("an illegal transition authored in .warp is caught by the temporal verifier", () => {
-    // Fulfilled -> Draft is forbidden by the frozen model. It is WELL-FORMED
+    // Fulfilled -> Draft is forbidden by the current model. It is WELL-FORMED
     // (both are real states) so it compiles — but it is not sound.
     const lc = compile(`
       lifecycle sneaky {

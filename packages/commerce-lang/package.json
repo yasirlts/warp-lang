@@ -1,7 +1,7 @@
 {
   "name": "@warp-lang/commerce-lang",
-  "version": "0.1.0",
-  "description": "A focused syntax for AUTHORING the frozen Warp Commerce Model — parse a .warp file into a commitment lifecycle + profile and compile it to the exact structures the model already uses. Adds no new semantics; the compiled output is checked by the same guard and temporal verifier.",
+  "version": "0.2.0",
+  "description": "A focused syntax for AUTHORING the current Warp Commerce Model — parse a .warp file into a commitment lifecycle, profile, and auction (market-making: AuctionProcess + Tendered commitments) and compile it to the exact structures the model already uses. Adds no new semantics; the compiled output is checked by the same guard and temporal verifier.",
   "type": "module",
   "sideEffects": false,
   "main": "dist/index.cjs",
@@ -30,6 +30,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "example": "node examples/lang.mjs",
+    "example:auction": "node examples/lang-auction.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -40,6 +41,8 @@
     "compiler",
     "state-machine",
     "lifecycle",
+    "auction",
+    "market-making",
     "formal-methods"
   ],
   "license": "MIT",
