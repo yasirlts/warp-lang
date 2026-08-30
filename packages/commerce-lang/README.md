@@ -242,6 +242,68 @@ Two consequences worth being explicit about:
 And what it deliberately will **not** do: author a rule the model has no way to
 enforce. Syntax for one would be fiction, so there is none.
 
+## Derived logic — computed policy values
+
+A policy value may be a **pure arithmetic expression** over the commerce context,
+not only a literal:
+
+```warp
+policy house {
+  concession_floor committed * 0.75
+}
+
+policy subscription {
+  concession_floor committed * (remaining_days / term_days)
+}
+```
+
+One authored rule, a different floor for every deal. The context is a **closed
+list** — referencing anything else is a compile error naming these:
+
+| Variable | Meaning |
+|---|---|
+| `committed` | the commitment's committed amount (Money) |
+| `quantity` | total quantity across the requested values (number) |
+| `term_days` | whole days from `created_at` to a fixed `terms.duration.ends_at` |
+| `elapsed_days` | whole days from `created_at` to the `now` you supply |
+| `remaining_days` | `term_days − elapsed_days`, floored at 0 |
+
+Operators are `+ - * /`, grouping, and `min` / `max`. Money is currency-safe:
+`MAD + EUR` is an error rather than a silent coercion, and `money * money` is
+refused because a squared currency is meaningless.
+
+```ts
+const system = compileSystem(source)
+const resolved = resolveForCommitment(system, commitment, now)   // → { ok, model } | { ok: false, failures }
+if (resolved.ok) runModel(resolved.model, world, hostEvents, { clock })
+```
+
+Evaluation is **pure and total**: the same context always yields the same value,
+and failures (an unknown variable, division by zero, a currency mismatch, a
+variable with no value for this commitment) come back as **data** rather than
+thrown. A variable that is unavailable is an error, never a silent zero — a
+prorated refund computed against a zero term looks fine and is badly wrong.
+
+### The computed value is checked exactly like a literal
+
+This is the property the rung is built around. **An expression changes how a value
+is produced; it never changes whether that value is checked.** The computed number
+populates the same `NegotiationBounds` a literal populates, and the same
+`guardConcession` and the same six invariants judge it.
+
+`examples/derived.mjs` demonstrates it rather than asserting it: a computed floor
+and the identical literal floor go through the same guard at four prices, and the
+verdicts match **down to the message text**. An over-refund is still `I-1` under a
+computed policy. A computed floor above the committed price is refused by the same
+check a constant gets.
+
+The language gained functions. It gained no way past its own guarantees.
+
+**Scope, honestly.** Arithmetic over commerce quantities — no loops, no
+user-defined functions, no assignment, no side effects, no I/O, and no way to read
+a clock (`now` is passed in). It is not general-purpose computation and is not
+meant to become it.
+
 ## A whole system — `compileSystem` → `runModel`
 
 A `.warp` file authors the **system**: the standing model a business runs under.
@@ -348,6 +410,7 @@ npm run build && npm run example:auction  # examples/lang-auction.mjs
 npm run build && npm run example:policy   # examples/lang-policy.mjs
 npm run build && npm run example:system   # examples/system.mjs
 npm run build && npm run example:auction-run  # examples/auction-run.mjs
+npm run build && npm run example:derived  # examples/derived.mjs
 ```
 
 `examples/lang.mjs` authors a lifecycle and a profile in `.warp`, compiles them,

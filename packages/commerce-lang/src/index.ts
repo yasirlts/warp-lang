@@ -35,8 +35,29 @@
  * one.
  */
 
-export { compileSystem, systemFromDocument } from "./system.js";
-export type { CompiledSystem, SystemOptions } from "./system.js";
+export { compileSystem, systemFromDocument, resolveSystem, resolveForCommitment, deriveContext } from "./system.js";
+export type { CompiledSystem, SystemOptions, ResolveResult, ResolutionFailure } from "./system.js";
+export {
+  evaluate,
+  formatExpr,
+  isConstant,
+  variablesOf,
+  CONTEXT_VARIABLES,
+  CONTEXT_VARIABLE_NAMES,
+  EXPR_FUNCTIONS,
+  money,
+  num,
+} from "./expr.js";
+export type {
+  Expr,
+  EvalContext,
+  EvalError,
+  EvalResult,
+  Value,
+  MoneyValue,
+  NumberValue,
+  ContextVariable,
+} from "./expr.js";
 export { parse } from "./parser.js";
 export { tokenize } from "./lexer.js";
 export type { Token, TokenType } from "./lexer.js";

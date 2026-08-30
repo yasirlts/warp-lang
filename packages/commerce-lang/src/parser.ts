@@ -25,8 +25,12 @@
  *   policyField := ("label" | "description") STRING
  *                | "applies_to" IDENT
  *                | ("forbid_states" | "assert") identList
- *                | ("concession_floor" | "committed_price") money
+ *                | ("concession_floor" | "committed_price") expr
  *                | "tax_rates" STRING numberList
+ *   expr        := term { ("+" | "-") term }
+ *   term        := factor { ("*" | "/") factor }
+ *   factor      := money | NUMBER | IDENT | "(" expr ")"
+ *                | ("min" | "max") "(" expr { "," expr } ")"
  *   identList   := IDENT ("," IDENT)*
  *   numberList  := NUMBER ("," NUMBER)*
  *   money       := NUMBER IDENT                        (* 1050000 MAD *)
@@ -63,6 +67,7 @@ import type {
 } from "./ast.js";
 import { WarpSyntaxError } from "./errors.js";
 import { tokenize, type Token, type TokenType } from "./lexer.js";
+import { EXPR_FUNCTIONS, type Expr } from "./expr.js";
 
 /** The four keywords legal as a profile field. */
 const PROFILE_FIELD_KEYS = ["label", "description", "states", "value_forms"] as const;
@@ -491,6 +496,104 @@ class Parser {
     return { key, list, pos: t.pos };
   }
 
+  /**
+   * expr := term { ("+" | "-") term }
+   *
+   * A policy VALUE position accepts an expression (rung 5A). A bare money literal
+   * is just the trivial expression, so every pre-5A policy still parses exactly as
+   * it did. Left-associative, with `*` and `/` binding tighter than `+` and `-`.
+   */
+  private parseExpr(what: string): Expr {
+    let left = this.parseTerm(what);
+    while (this.at("plus") || this.at("minus")) {
+      const opTok = this.next();
+      const right = this.parseTerm(what);
+      left = {
+        kind: "binary",
+        op: opTok.type === "plus" ? "+" : "-",
+        left,
+        right,
+        pos: opTok.pos,
+      };
+    }
+    return left;
+  }
+
+  /** term := factor { ("*" | "/") factor } */
+  private parseTerm(what: string): Expr {
+    let left = this.parseFactor(what);
+    while (this.at("star") || this.at("slash")) {
+      const opTok = this.next();
+      const right = this.parseFactor(what);
+      left = {
+        kind: "binary",
+        op: opTok.type === "star" ? "*" : "/",
+        left,
+        right,
+        pos: opTok.pos,
+      };
+    }
+    return left;
+  }
+
+  /**
+   * factor := money | NUMBER | IDENT | "(" expr ")" | ("min"|"max") "(" args ")"
+   *
+   * `NUMBER IDENT` is a money literal (`1500 MAD`); a bare NUMBER is a plain
+   * number (`0.75`). The distinction is resolved by lookahead, so `committed *
+   * 0.75` and `150 MAD` both read naturally.
+   */
+  private parseFactor(what: string): Expr {
+    const t = this.peek();
+
+    if (this.at("lparen")) {
+      this.next();
+      const inner = this.parseExpr(what);
+      this.expect("rparen", "')' to close the group");
+      return inner;
+    }
+
+    if (t.type === "number") {
+      this.next();
+      const amount = Number(t.value);
+      // `1500 MAD` — an ISO-SHAPED code directly after the amount makes it money.
+      //
+      // The shape test is what keeps the grammar unambiguous now that a value
+      // position holds an expression. In `concession_floor committed * 2` followed
+      // by the field `committed_price 200 MAD`, a bare "number then identifier"
+      // rule would read `2 committed_price` as an amount and a currency and then
+      // choke on the 200. Currency codes are uppercase (ISO 4217: MAD, EUR, JPY)
+      // and field keys are lower_snake_case, so the two never collide.
+      if (this.at("ident") && isCurrencyCode(this.peek().value)) {
+        const cur = this.next();
+        return { kind: "money", amount, currency: cur.value, pos: t.pos };
+      }
+      return { kind: "number", value: amount, pos: t.pos };
+    }
+
+    if (t.type === "ident") {
+      if (EXPR_FUNCTIONS.includes(t.value as (typeof EXPR_FUNCTIONS)[number])) {
+        const fnTok = this.next();
+        this.expect("lparen", `'(' after '${fnTok.value}'`);
+        const args: Expr[] = [this.parseExpr(what)];
+        while (this.at("comma")) {
+          this.next();
+          args.push(this.parseExpr(what));
+        }
+        this.expect("rparen", `')' to close ${fnTok.value}(...)`);
+        return { kind: "call", fn: fnTok.value as "min" | "max", args, pos: fnTok.pos };
+      }
+      const name = this.next();
+      return { kind: "var", name: name.value, pos: name.pos };
+    }
+
+    throw new WarpSyntaxError(
+      `Expected ${what} but found ${describe(t)}.`,
+      t.pos,
+      what,
+    );
+  }
+
   /** policy := "policy" IDENT "{" policyField* "}" */
   private parsePolicy(): PolicyDecl {
     const kw = this.next(); // 'policy'
@@ -533,16 +636,12 @@ class Parser {
       return { key, ref, pos: t.pos };
     }
     if (key === "concession_floor" || key === "committed_price") {
-      const amount = this.expect("number", `a money amount after '${key}' (like '150 MAD')`);
-      const currency = this.expect(
-        "ident",
-        `a currency code after the amount in '${key}' (like 'MAD')`,
+      // An EXPRESSION, of which a bare money literal is the trivial case — so
+      // `concession_floor 150 MAD` parses exactly as it did before rung 5A.
+      const expr = this.parseExpr(
+        `a money amount or expression after '${key}' (like '150 MAD' or 'committed * 0.75')`,
       );
-      return {
-        key,
-        money: { amount: Number(amount.value), currency: currency.value, pos: amount.pos },
-        pos: t.pos,
-      };
+      return { key, expr, pos: t.pos };
     }
     if (key === "tax_rates") {
       const j = this.expect("string", "a jurisdiction code after 'tax_rates' (like \"MA\")");
@@ -555,6 +654,21 @@ class Parser {
     const list = this.identList(`an identifier list after '${key}'`);
     return { key, list, pos: t.pos };
   }
+}
+
+/**
+ * True for an identifier shaped like a currency code: three or more UPPERCASE
+ * letters (ISO 4217 — MAD, EUR, JPY). This is a syntactic test for the money
+ * literal `1500 MAD`, and the reason `committed * 2` followed by the field
+ * `committed_price` is read correctly: field keys are lower_snake_case, so they
+ * can never be mistaken for a currency.
+ *
+ * A lowercase code (`150 mad`) is therefore NOT money — the number stands alone
+ * and the compiler says a floor must be a money amount, which points at the real
+ * mistake.
+ */
+function isCurrencyCode(value: string): boolean {
+  return /^[A-Z]{3,}$/.test(value);
 }
 
 /** A human description of a token, for error messages. */
