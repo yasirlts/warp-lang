@@ -28,6 +28,12 @@ export type TokenType =
   | "rbrace"
   | "comma"
   | "arrow"
+  | "plus"
+  | "minus"
+  | "star"
+  | "slash"
+  | "lparen"
+  | "rparen"
   | "eof";
 
 /** One lexed token: its kind, its text value, and where it began. */
@@ -118,7 +124,11 @@ export function tokenize(source: string, file?: string): Token[] {
       continue;
     }
 
-    // Arrow `->`.
+    // Arithmetic punctuation (rung 5A — expressions in policy value positions).
+    // `-` is the one ambiguous character: `->` is still the transition arrow, and
+    // ONLY a `-` not followed by `>` is a minus. A money amount still cannot be
+    // written negative, because a leading `-` is a binary operator here, never
+    // part of a number literal.
     if (ch === "-") {
       if (source[i + 1] === ">") {
         advance();
@@ -126,11 +136,35 @@ export function tokenize(source: string, file?: string): Token[] {
         tokens.push({ type: "arrow", value: "->", pos: start });
         continue;
       }
-      throw new WarpSyntaxError(
-        `Unexpected '-'. Did you mean '->' (a transition arrow)?`,
-        start,
-        "'->'",
-      );
+      advance();
+      tokens.push({ type: "minus", value: "-", pos: start });
+      continue;
+    }
+    if (ch === "+") {
+      advance();
+      tokens.push({ type: "plus", value: "+", pos: start });
+      continue;
+    }
+    if (ch === "*") {
+      advance();
+      tokens.push({ type: "star", value: "*", pos: start });
+      continue;
+    }
+    if (ch === "/" && source[i + 1] !== "/") {
+      // `//` is a line comment, handled above; a lone `/` is division.
+      advance();
+      tokens.push({ type: "slash", value: "/", pos: start });
+      continue;
+    }
+    if (ch === "(") {
+      advance();
+      tokens.push({ type: "lparen", value: "(", pos: start });
+      continue;
+    }
+    if (ch === ")") {
+      advance();
+      tokens.push({ type: "rparen", value: ")", pos: start });
+      continue;
     }
 
     // Double-quoted string with \\ \" \n \t escapes.
@@ -204,7 +238,7 @@ export function tokenize(source: string, file?: string): Token[] {
     throw new WarpSyntaxError(
       `Unexpected character '${ch}'.`,
       start,
-      "a declaration, identifier, string, number, or one of { } , ->",
+      "a declaration, identifier, string, number, or one of { } , -> + - * / ( )",
     );
   }
 

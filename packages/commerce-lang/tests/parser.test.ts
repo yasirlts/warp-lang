@@ -114,7 +114,10 @@ describe("parser — invalid source → precise error", () => {
   });
 
   it("stray '-' that is not an arrow", () => {
-    expectSyntaxErrorAt("lifecycle c {\n  Draft - Proposed\n}", 2, 9, "'->'");
+    // Since rung 5A a lone '-' is a valid token (subtraction in an expression),
+    // so this is caught by the PARSER wanting a transition arrow rather than by
+    // the lexer rejecting the character. Same position, more contextual message.
+    expectSyntaxErrorAt("lifecycle c {\n  Draft - Proposed\n}", 2, 9, "'->' after the source state");
   });
 
   it("unknown profile field", () => {

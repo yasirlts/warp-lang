@@ -15,6 +15,7 @@
  */
 
 import type { SourcePosition } from "./errors.js";
+import type { Expr } from "./expr.js";
 
 /** An identifier token with its position — a state name, a value-form name, etc. */
 export interface Ident {
@@ -219,8 +220,12 @@ export interface PolicyField {
   key: PolicyFieldKey;
   /** Present for `label` / `description` (a string literal). */
   text?: string;
-  /** Present for `concession_floor` / `committed_price` (a money literal). */
-  money?: MoneyLit;
+  /**
+   * Present for `concession_floor` / `committed_price` — an EXPRESSION over the
+   * commerce context (rung 5A). A money literal is the trivial expression, so a
+   * pre-5A policy produces the same tree it always did.
+   */
+  expr?: Expr;
   /** Present for `applies_to` (the referenced profile id). */
   ref?: Ident;
   /** Present for `forbid_states` / `assert` (a comma-separated identifier list). */

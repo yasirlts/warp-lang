@@ -2,6 +2,58 @@
 
 All notable changes to this package are documented here.
 
+## 0.6.0 — rung 5A: derived logic (computed policy values)
+
+A policy value may be a **pure arithmetic expression** over the commerce context,
+not only a literal — `concession_floor committed * 0.75`, or a floor prorated by
+`remaining_days / term_days`. One authored rule, a different floor per deal: the
+step from authoring VALUES to authoring FUNCTIONS.
+
+**The safety property this rung is built around.** An expression changes how a
+value is PRODUCED. It never changes whether that value is CHECKED. The computed
+number populates exactly the `NegotiationBounds` a literal populates, and the same
+`guardConcession` and the same six invariants judge it. `packages/commerce-types`
+has **zero diff** — the enforcement layer is untouched, which is the strongest
+form of that claim available.
+
+It is demonstrated, not asserted: `examples/derived.mjs` and `tests/derived.test.ts`
+run a computed floor and the identical literal floor through the same guard at four
+prices and require the verdicts to match **down to the message text**.
+
+- **Expression grammar** in policy value positions. `+ - * /`, grouping, `min`,
+  `max`. A money literal is the trivial expression, so every pre-5A policy parses
+  and compiles exactly as before.
+- **Closed context**: `committed`, `quantity`, `term_days`, `elapsed_days`,
+  `remaining_days`. Anything else is a positioned compile error naming the list.
+  A variable with no value for a commitment is an ERROR, never a silent zero — a
+  proration against a zero term looks fine and is badly wrong.
+- **Pure, total evaluator**: same context → same value; failures are data, never
+  throws. Currency-safe — `MAD + EUR` is refused, and `money * money` too.
+- **`resolveSystem` / `resolveForCommitment` / `deriveContext`** turn a derived
+  system into the plain `CommerceModel` `runModel` takes. The two checks a constant
+  gets at compile time (floor ≤ committed, one currency) are applied to the
+  evaluated numbers, so a derived value is held to the identical standard.
+- **Constant folding**: a policy with no context references compiles to exactly the
+  `bounds` it always did, with nothing derived.
+
+**Two error behaviours changed**, both toward better guidance, both recorded in
+the tests that assert them:
+
+- A lone `-` is now a token (subtraction), so `Draft - Proposed` is caught by the
+  parser wanting a transition arrow rather than by the lexer rejecting the
+  character. Same position, more contextual message.
+- `concession_floor 150` (no currency) was a syntax error; it is now a compile
+  error saying a floor must be a money amount, not the plain number 150.
+
+**Money literals are disambiguated by currency shape.** `1500 MAD` is money
+because `MAD` is uppercase; field keys are lower_snake_case, so `committed * 2`
+followed by the field `committed_price` reads correctly. A lowercase code is not
+money, and the compiler says so.
+
+**Not in this rung:** loops, user-defined functions, assignment, side effects, I/O,
+or any way to read a clock (`now` is passed in). Arithmetic over commerce
+quantities, and no new enforcement of any kind.
+
 ## 0.4.0 — rung 4: a whole system, compiled and run
 
 `compileSystem(source)` gathers a complete `.warp` file into the ONE

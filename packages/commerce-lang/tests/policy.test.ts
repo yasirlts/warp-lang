@@ -107,16 +107,21 @@ describe("parse — a policy becomes a PolicyDecl", () => {
     );
   });
 
-  it("a money field missing its currency points at the character after the amount", () => {
-    let err: WarpSyntaxError | undefined;
+  it("a money field with no currency is rejected — as a compile error since rung 5A", () => {
+    // Before expressions, `concession_floor 150` was a SYNTAX error: the parser
+    // demanded a currency code. Now `150` parses as a valid bare-number
+    // expression, and the failure moves to compile time, where the message can
+    // say what is actually wrong — a floor must be money, not a plain number.
+    let err: WarpCompileError | undefined;
     try {
-      parse("policy p {\n  concession_floor 150\n}", { file: "d.warp" });
+      compile("policy p {\n  concession_floor 150\n}", { file: "d.warp" });
     } catch (e) {
-      err = e as WarpSyntaxError;
+      err = e as WarpCompileError;
     }
-    expect(err).toBeInstanceOf(WarpSyntaxError);
-    expect(err!.expected).toContain("currency code");
-    expect(err!.line).toBe(3); // the '}' where a currency belonged
+    expect(err).toBeInstanceOf(WarpCompileError);
+    expect(err!.message).toContain("must be a money amount");
+    expect(err!.message).toContain("evaluates to the plain number 150");
+    expect(err!.line).toBe(2);
   });
 });
 

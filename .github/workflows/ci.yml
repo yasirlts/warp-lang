@@ -397,6 +397,18 @@ jobs:
         working-directory: packages/commerce-lang
         run: npm run example:auction-run
 
+      # Rung 5A: DERIVED LOGIC. A policy value may be a computed expression over the
+      # commerce context. The example proves both halves: the POWER (one authored
+      # rule yields a different floor per deal, and a prorated floor follows the
+      # remaining term) and — the load-bearing half — the SAFETY, running a computed
+      # floor and the identical literal floor through the same guard at four prices
+      # and asserting the verdicts match down to the message text. It also asserts an
+      # over-refund is still I-1 under a computed policy. Exits non-zero if any
+      # verdict changes, so the safety property is a gate, not prose.
+      - name: Run the derived-logic example verbatim
+        working-directory: packages/commerce-lang
+        run: npm run example:derived
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding

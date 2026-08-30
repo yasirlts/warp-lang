@@ -77,6 +77,15 @@ import type {
   PolicyDecl,
 } from "./ast.js";
 import { WarpCompileError, type SourcePosition } from "./errors.js";
+import {
+  CONTEXT_VARIABLE_NAMES,
+  evaluate,
+  formatExpr,
+  isConstant,
+  variablesOf,
+  type EvalContext,
+  type Expr,
+} from "./expr.js";
 import { parse } from "./parser.js";
 
 /**
@@ -163,6 +172,20 @@ export interface CompiledPolicy {
    * from `auditCommerce(...)` output; the checks themselves are the model's.
    */
   asserts: InvariantId[];
+  /**
+   * The unevaluated expressions behind `bounds`, when the policy computed them
+   * (rung 5A). Present only where a value referenced the commerce context; a
+   * constant is folded into `bounds` at compile time and leaves nothing here.
+   *
+   * A derived value is resolved by `resolveSystem(...)` into exactly the same
+   * `NegotiationBounds` a literal produces, and is then enforced by the same
+   * `guardConcession`. The expression decides how the number is PRODUCED; it has
+   * no bearing on whether the number is CHECKED.
+   */
+  derived?: {
+    floor?: Expr;
+    committed?: Expr;
+  };
 }
 
 /**
@@ -749,9 +772,9 @@ function compilePolicy(decl: PolicyDecl, profilesById: Map<string, CompiledProfi
   let description: string | undefined;
   let appliesTo: { ident: string; pos: SourcePosition } | undefined;
   let forbidStates: { names: string[]; pos: SourcePosition } | undefined;
-  let floor: Money | undefined;
+  let floorExpr: Expr | undefined;
   let floorPos: SourcePosition | undefined;
-  let committed: Money | undefined;
+  let committedExpr: Expr | undefined;
   let committedPos: SourcePosition | undefined;
   const jurisdictions: JurisdictionTaxRates[] = [];
   const seenJurisdictions = new Set<string>();
@@ -777,12 +800,12 @@ function compilePolicy(decl: PolicyDecl, profilesById: Map<string, CompiledProfi
       }
       forbidStates = { names, pos: f.pos };
     } else if (f.key === "concession_floor") {
-      if (floor !== undefined) dupPolicyField("concession_floor", f.pos, id);
-      floor = toMoney(f.money as MoneyLit);
+      if (floorExpr !== undefined) dupPolicyField("concession_floor", f.pos, id);
+      floorExpr = f.expr as Expr;
       floorPos = f.pos;
     } else if (f.key === "committed_price") {
-      if (committed !== undefined) dupPolicyField("committed_price", f.pos, id);
-      committed = toMoney(f.money as MoneyLit);
+      if (committedExpr !== undefined) dupPolicyField("committed_price", f.pos, id);
+      committedExpr = f.expr as Expr;
       committedPos = f.pos;
     } else if (f.key === "tax_rates") {
       const tr = f.taxRates as NonNullable<typeof f.taxRates>;
@@ -852,27 +875,109 @@ function compilePolicy(decl: PolicyDecl, profilesById: Map<string, CompiledProfi
     );
   }
 
-  // --- negotiation bounds well-formedness (mirrors guardConcession's own preconditions)
+  // --- negotiation bounds -------------------------------------------------
+  //
+  // A value position is an EXPRESSION (rung 5A). Two things happen here:
+  //
+  //  1. Every variable an expression names is checked against the closed context
+  //     list, at compile time, with the offending token's position. A typo is a
+  //     compile error, not a runtime surprise.
+  //  2. A CONSTANT expression is folded to its value immediately, so a policy
+  //     that was written before 5A produces exactly the `bounds` it always did,
+  //     and the pre-existing well-formedness checks below still apply to it.
+  //     A value that references the context cannot be folded — it becomes
+  //     `derived`, resolved later against a real commitment.
+  //
+  // The checks that CANNOT be made at compile time for a derived value (floor ≤
+  // committed, matching currencies) are not skipped: `resolveSystem` applies the
+  // identical checks to the evaluated numbers, and beyond that `guardConcession`
+  // enforces the floor exactly as it does for a literal. A computed value gets
+  // strictly no dispensation.
+  const evalConst = (e: Expr, what: string, pos: SourcePosition): Money => {
+    const r = evaluate(e, {});
+    if (!r.ok) {
+      throw new WarpCompileError(
+        `Policy '${id}': ${what} could not be computed — ${r.error.message}`,
+        r.error.pos,
+      );
+    }
+    if (r.value.kind !== "money") {
+      throw new WarpCompileError(
+        `Policy '${id}': ${what} must be a money amount, but '${formatExpr(e)}' evaluates to the ` +
+          `plain number ${r.value.value}. Give it a currency (e.g. '${r.value.value} MAD'), or ` +
+          `scale a money value (e.g. 'committed * 0.75').`,
+        pos,
+      );
+    }
+    return { amount: r.value.amount, currency: r.value.currency };
+  };
+
+  const checkVars = (e: Expr, what: string): void => {
+    for (const name of variablesOf(e)) {
+      if (!CONTEXT_VARIABLE_NAMES.includes(name as (typeof CONTEXT_VARIABLE_NAMES)[number])) {
+        const at = (function find(x: Expr): SourcePosition | undefined {
+          if (x.kind === "var") return x.name === name ? x.pos : undefined;
+          if (x.kind === "binary") return find(x.left) ?? find(x.right);
+          if (x.kind === "call") return x.args.map(find).find((p) => p !== undefined);
+          return undefined;
+        })(e);
+        throw new WarpCompileError(
+          `Policy '${id}': ${what} references unknown variable '${name}'. An expression may use ` +
+            `only the commerce context: ${CONTEXT_VARIABLE_NAMES.join(", ")}.`,
+          at ?? decl.pos,
+        );
+      }
+    }
+  };
+
   let bounds: NegotiationBounds | undefined;
-  if (floor !== undefined) {
-    if (committed !== undefined && committed.currency !== floor.currency) {
-      throw new WarpCompileError(
-        `Policy '${id}' sets a concession_floor in ${floor.currency} but a committed_price in ` +
-          `${committed.currency}. A cross-currency concession is out of scope — express both in ` +
-          `one currency (Invariant 1: Value Conservation).`,
-        committedPos as SourcePosition,
-      );
+  let derived: CompiledPolicy["derived"];
+
+  if (floorExpr !== undefined) checkVars(floorExpr, "concession_floor");
+  if (committedExpr !== undefined) checkVars(committedExpr, "committed_price");
+
+  if (floorExpr !== undefined) {
+    const floorConst = isConstant(floorExpr);
+    const committedConst = committedExpr === undefined || isConstant(committedExpr);
+
+    if (floorConst && committedConst) {
+      // Fully constant — fold now and apply the original checks unchanged.
+      const floor = evalConst(floorExpr, "concession_floor", floorPos as SourcePosition);
+      const committed =
+        committedExpr === undefined
+          ? undefined
+          : evalConst(committedExpr, "committed_price", committedPos as SourcePosition);
+      if (committed !== undefined && committed.currency !== floor.currency) {
+        throw new WarpCompileError(
+          `Policy '${id}' sets a concession_floor in ${floor.currency} but a committed_price in ` +
+            `${committed.currency}. A cross-currency concession is out of scope — express both in ` +
+            `one currency (Invariant 1: Value Conservation).`,
+          committedPos as SourcePosition,
+        );
+      }
+      if (committed !== undefined && floor.amount > committed.amount) {
+        throw new WarpCompileError(
+          `Policy '${id}' sets a concession_floor of ${floor.amount} ${floor.currency} above its ` +
+            `committed_price of ${committed.amount} ${committed.currency}. The floor is the LOWEST ` +
+            `acceptable price, so it cannot exceed the opening price.`,
+          floorPos as SourcePosition,
+        );
+      }
+      bounds = committed === undefined ? { floor } : { floor, committed };
+    } else {
+      // At least one value depends on the commitment — resolve it later.
+      derived = {};
+      if (!floorConst) derived.floor = floorExpr;
+      else bounds = { floor: evalConst(floorExpr, "concession_floor", floorPos as SourcePosition) };
+      if (committedExpr !== undefined) {
+        if (!committedConst) derived.committed = committedExpr;
+        else {
+          const c = evalConst(committedExpr, "committed_price", committedPos as SourcePosition);
+          bounds = bounds === undefined ? ({ committed: c } as unknown as NegotiationBounds) : { ...bounds, committed: c };
+        }
+      }
     }
-    if (committed !== undefined && floor.amount > committed.amount) {
-      throw new WarpCompileError(
-        `Policy '${id}' sets a concession_floor of ${floor.amount} ${floor.currency} above its ` +
-          `committed_price of ${committed.amount} ${committed.currency}. The floor is the LOWEST ` +
-          `acceptable price, so it cannot exceed the opening price.`,
-        floorPos as SourcePosition,
-      );
-    }
-    bounds = committed === undefined ? { floor } : { floor, committed };
-  } else if (committed !== undefined) {
+  } else if (committedExpr !== undefined) {
     throw new WarpCompileError(
       `Policy '${id}' sets a 'committed_price' but no 'concession_floor'. The committed price is ` +
         `the opening price a floor is measured against, so it is only meaningful alongside one.`,
@@ -897,6 +1002,7 @@ function compilePolicy(decl: PolicyDecl, profilesById: Map<string, CompiledProfi
     asserts: asserts ?? [],
   };
   if (bounds !== undefined) compiled.bounds = bounds;
+  if (derived !== undefined) compiled.derived = derived;
   if (narrowed !== undefined) {
     compiled.profile = narrowed;
     compiled.appliesTo = appliesTo?.ident as string;

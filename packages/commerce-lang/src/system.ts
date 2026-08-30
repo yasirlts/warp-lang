@@ -49,7 +49,16 @@ import type {
   CommerceModel,
   CommercePolicy,
   CommerceProfile,
+  Commitment,
+  Money,
 } from "@warp-lang/commerce-types";
+import {
+  evaluate,
+  formatExpr,
+  type EvalContext,
+  type EvalError,
+  type Expr,
+} from "./expr.js";
 import type { Document, ProfileDecl } from "./ast.js";
 import {
   compileDocument,
@@ -301,4 +310,216 @@ export function systemFromDocument(
 export function compileSystem(source: string, opts: SystemOptions = {}): CompiledSystem {
   const doc = parse(source, opts.file !== undefined ? { file: opts.file } : {});
   return systemFromDocument(doc, compileDocument(doc), opts);
+}
+
+
+// ---------------------------------------------------------------------------
+// Rung 5A — resolving DERIVED values against a real commitment
+// ---------------------------------------------------------------------------
+
+/**
+ * Build an {@link EvalContext} from a commitment. This is the ONLY place a
+ * context is derived, so the documented variable list and what an expression can
+ * actually see cannot drift apart.
+ *
+ * A variable that is not derivable is left ABSENT rather than defaulted, so
+ * referencing it fails loudly. A prorated refund computed against a term of zero
+ * because the commitment had no duration is not a small error, and silently
+ * substituting zero would hide it.
+ *
+ * `now` is passed in, never sampled: this function is pure, and the engine's
+ * clock is injectable for the same reason.
+ */
+export function deriveContext(commitment: Commitment, now?: string): EvalContext {
+  const ctx: EvalContext = {};
+
+  // committed — the single-currency Money in the requested subject.
+  const monies: Money[] = [];
+  let quantity = 0;
+  for (const v of commitment.subject.requested) {
+    if (v.form.kind === "Money") monies.push(v.form.money);
+    quantity += typeof v.quantity === "number" ? v.quantity : 0;
+  }
+  const currencies = [...new Set(monies.map((m) => m.currency))];
+  if (monies.length > 0 && currencies.length === 1) {
+    ctx.committed = {
+      kind: "money",
+      amount: monies.reduce((sum, m) => sum + m.amount, 0),
+      currency: currencies[0] as string,
+    };
+  }
+  // A mixed-currency subject leaves `committed` unavailable rather than picking
+  // one — summing across currencies is exactly what I-1 forbids.
+
+  if (quantity > 0) ctx.quantity = { kind: "number", value: quantity };
+
+  // The time-based three, from created_at, a fixed duration, and `now`.
+  const DAY = 86_400_000;
+  const created = Date.parse(commitment.created_at);
+  const endsAt =
+    commitment.terms?.duration?.kind === "Fixed" ? Date.parse(commitment.terms.duration.ends_at) : NaN;
+  const nowMs = now === undefined ? NaN : Date.parse(now);
+
+  const termDays = Number.isFinite(created) && Number.isFinite(endsAt)
+    ? Math.max(0, Math.floor((endsAt - created) / DAY))
+    : undefined;
+  const elapsedDays = Number.isFinite(created) && Number.isFinite(nowMs)
+    ? Math.max(0, Math.floor((nowMs - created) / DAY))
+    : undefined;
+
+  if (termDays !== undefined) ctx.term_days = { kind: "number", value: termDays };
+  if (elapsedDays !== undefined) ctx.elapsed_days = { kind: "number", value: elapsedDays };
+  if (termDays !== undefined && elapsedDays !== undefined) {
+    ctx.remaining_days = { kind: "number", value: Math.max(0, termDays - elapsedDays) };
+  }
+
+  return ctx;
+}
+
+/** A derived value that could not be computed, with where and why. */
+export interface ResolutionFailure {
+  /** The policy whose value failed. */
+  policy: string;
+  /** Which value — `concession_floor` or `committed_price`. */
+  field: "concession_floor" | "committed_price";
+  /** The expression as authored, for the message. */
+  source: string;
+  error: EvalError;
+}
+
+/** The outcome of resolving a system's derived values against a context. */
+export type ResolveResult =
+  | { ok: true; model: CommerceModel }
+  | { ok: false; failures: ResolutionFailure[] };
+
+/**
+ * Resolve every derived policy value against a commerce context, producing the
+ * plain {@link CommerceModel} the engine's `runModel` takes.
+ *
+ * THE SAFETY BOUNDARY, RESTATED WHERE IT MATTERS. This function produces a
+ * NUMBER. It grants that number nothing: the resulting model is byte-identical in
+ * kind to one whose values were typed as literals, and `guardConcession` and the
+ * six invariants judge it exactly the same way. A formula that computes an
+ * unsound floor is refused by the guard precisely as the same unsound literal
+ * would be — the expression layer has no route to the enforcement layer that a
+ * constant does not also take.
+ *
+ * The two well-formedness checks a compile-time constant gets (a floor no higher
+ * than the committed price, both in one currency) are applied here too, to the
+ * evaluated numbers, so a derived value is not held to a lesser standard.
+ *
+ * Total: failures come back as data, never as a thrown error.
+ */
+export function resolveSystem(system: CompiledSystem, ctx: EvalContext): ResolveResult {
+  const failures: ResolutionFailure[] = [];
+  const policies: CommercePolicy[] = [];
+
+  for (const compiled of system.policies) {
+    const out: CommercePolicy = {
+      id: compiled.id,
+      label: compiled.label,
+      description: compiled.description,
+    };
+    if (compiled.profile !== undefined) out.profile = compiled.profile as CommerceProfile;
+    if (compiled.appliesTo !== undefined) out.appliesTo = compiled.appliesTo;
+    if (compiled.pack !== undefined) out.pack = compiled.pack;
+    if (compiled.asserts.length > 0) out.asserts = compiled.asserts;
+
+    const evalMoney = (
+      expr: Expr,
+      field: ResolutionFailure["field"],
+    ): Money | undefined => {
+      const r = evaluate(expr, ctx);
+      if (!r.ok) {
+        failures.push({ policy: compiled.id, field, source: formatExpr(expr), error: r.error });
+        return undefined;
+      }
+      if (r.value.kind !== "money") {
+        failures.push({
+          policy: compiled.id,
+          field,
+          source: formatExpr(expr),
+          error: {
+            code: "type-error",
+            message:
+              `'${formatExpr(expr)}' evaluates to the plain number ${r.value.value}, but ${field} ` +
+              `must be a money amount. Scale a money value (e.g. 'committed * 0.75') rather than ` +
+              `computing a bare number.`,
+            pos: expr.pos,
+          },
+        });
+        return undefined;
+      }
+      return { amount: r.value.amount, currency: r.value.currency };
+    };
+
+    if (compiled.derived !== undefined) {
+      const floor =
+        compiled.derived.floor !== undefined
+          ? evalMoney(compiled.derived.floor, "concession_floor")
+          : compiled.bounds?.floor;
+      const committed =
+        compiled.derived.committed !== undefined
+          ? evalMoney(compiled.derived.committed, "committed_price")
+          : compiled.bounds?.committed;
+
+      if (floor !== undefined) {
+        // The same two checks a constant gets at compile time, applied to the
+        // computed numbers. A derived value is held to the identical standard.
+        if (committed !== undefined && committed.currency !== floor.currency) {
+          failures.push({
+            policy: compiled.id,
+            field: "concession_floor",
+            source: formatExpr(compiled.derived.floor ?? compiled.derived.committed!),
+            error: {
+              code: "currency-mismatch",
+              message:
+                `The computed concession_floor is in ${floor.currency} but the committed_price is in ` +
+                `${committed.currency}. A cross-currency concession is out of scope — value is not ` +
+                `conserved across a currency mix (Invariant 1).`,
+              pos: (compiled.derived.floor ?? compiled.derived.committed!).pos,
+            },
+          });
+        } else if (committed !== undefined && floor.amount > committed.amount) {
+          failures.push({
+            policy: compiled.id,
+            field: "concession_floor",
+            source: formatExpr(compiled.derived.floor ?? compiled.derived.committed!),
+            error: {
+              code: "type-error",
+              message:
+                `The computed concession_floor of ${floor.amount} ${floor.currency} is above the ` +
+                `committed_price of ${committed.amount} ${committed.currency}. The floor is the ` +
+                `LOWEST acceptable price, so it cannot exceed the opening price.`,
+              pos: (compiled.derived.floor ?? compiled.derived.committed!).pos,
+            },
+          });
+        } else {
+          out.bounds = committed === undefined ? { floor } : { floor, committed };
+        }
+      }
+    } else if (compiled.bounds !== undefined) {
+      out.bounds = compiled.bounds;
+    }
+
+    policies.push(out);
+  }
+
+  if (failures.length > 0) return { ok: false, failures };
+
+  const model: CommerceModel = { ...system.model };
+  if (policies.length > 0) model.policies = policies;
+  return { ok: true, model };
+}
+
+/**
+ * Convenience: resolve a system's derived values against a COMMITMENT, deriving
+ * the context from it. Equivalent to `resolveSystem(system, deriveContext(c, now))`.
+ */
+export function resolveForCommitment(
+  system: CompiledSystem,
+  commitment: Commitment,
+  now?: string,
+): ResolveResult {
+  return resolveSystem(system, deriveContext(commitment, now));
 }
