@@ -74,6 +74,7 @@ import type {
   MoneyLit,
   ProfileDecl,
   TenderDecl,
+  CompositionDecl,
   PolicyDecl,
 } from "./ast.js";
 import { WarpCompileError, type SourcePosition } from "./errors.js";
@@ -223,12 +224,39 @@ export interface CompiledAuction {
   subjectState: ValueState | null;
 }
 
-/** The full lowered document: every lifecycle, profile, auction, and policy it declared. */
+/**
+ * One authored composition, lowered (rung 5B). It describes how a commitment
+ * decomposes into child commitments: the legs, and how each leg's amount is
+ * computed from the parent.
+ *
+ * It holds no coherence logic. `buildComposition` instantiates it into ordinary
+ * commitments linked by the model's own `parent` / `children` fields, and
+ * `checkI6TreeConsistency` and the session's per-tree ledger — both unchanged —
+ * decide whether the resulting tree reconciles. Notably, the compiler does NOT
+ * check that the legs sum to the parent: that is exactly I-6's job, and
+ * re-deriving it here would be a second implementation to keep in step.
+ */
+export interface CompiledComposition {
+  /** The composition id, as authored. */
+  id: string;
+  label: string;
+  description: string;
+  /** The legs, in source order. */
+  legs: {
+    /** The leg name, as authored — used to address it when building. */
+    name: string;
+    /** How this leg's amount is computed from the parent (a rung-5A expression). */
+    amount: Expr;
+  }[];
+}
+
+/** The full lowered document: every lifecycle, profile, auction, policy, and composition. */
 export interface CompiledModel {
   lifecycles: CompiledLifecycle[];
   profiles: CompiledProfile[];
   auctions: CompiledAuction[];
   policies: CompiledPolicy[];
+  compositions: CompiledComposition[];
 }
 
 /** Assert that `name` is a state the current model defines, or throw at `pos`. */
@@ -1012,6 +1040,77 @@ function compilePolicy(decl: PolicyDecl, profilesById: Map<string, CompiledProfi
 }
 
 /**
+ * Lower one composition declaration.
+ *
+ * Every leg must declare an `amount`, and every variable it names is checked
+ * against the closed rung-5A context at compile time. What is deliberately NOT
+ * checked here is whether the legs reconcile with the parent — that is I-6, it
+ * already exists, and a second copy of it in the compiler would be one more thing
+ * to keep in step for no gain.
+ */
+function compileComposition(decl: CompositionDecl): CompiledComposition {
+  const id = decl.name.name;
+  let label: string | undefined;
+  let description: string | undefined;
+
+  for (const f of decl.fields) {
+    if (f.key === "label") {
+      if (label !== undefined) {
+        throw new WarpCompileError(`Duplicate 'label' field in composition '${id}'.`, f.pos);
+      }
+      label = f.text;
+    } else {
+      if (description !== undefined) {
+        throw new WarpCompileError(`Duplicate 'description' field in composition '${id}'.`, f.pos);
+      }
+      description = f.text;
+    }
+  }
+
+  if (decl.legs.length === 0) {
+    throw new WarpCompileError(
+      `Composition '${id}' declares no legs. A composition describes how a commitment splits, ` +
+        `so it needs at least one 'leg <name> { amount … }'.`,
+      decl.pos,
+    );
+  }
+
+  const seen = new Set<string>();
+  const legs: CompiledComposition["legs"] = [];
+  for (const leg of decl.legs) {
+    if (seen.has(leg.name.name)) {
+      throw new WarpCompileError(
+        `Duplicate leg '${leg.name.name}' in composition '${id}'. Leg names address the child ` +
+          `commitments a build produces, so they must be unique.`,
+        leg.name.pos,
+      );
+    }
+    seen.add(leg.name.name);
+
+    if (leg.amount === undefined) {
+      throw new WarpCompileError(
+        `Leg '${leg.name.name}' in composition '${id}' has no 'amount'. Every leg needs one — ` +
+          `a money literal, or an expression over the parent (e.g. 'committed * 0.85').`,
+        leg.pos,
+      );
+    }
+    for (const name of variablesOf(leg.amount)) {
+      if (!CONTEXT_VARIABLE_NAMES.includes(name as (typeof CONTEXT_VARIABLE_NAMES)[number])) {
+        throw new WarpCompileError(
+          `Composition '${id}', leg '${leg.name.name}': amount references unknown variable ` +
+            `'${name}'. An expression may use only the commerce context: ` +
+            `${CONTEXT_VARIABLE_NAMES.join(", ")}.`,
+          leg.amount.pos,
+        );
+      }
+    }
+    legs.push({ name: leg.name.name, amount: leg.amount });
+  }
+
+  return { id, label: label ?? id, description: description ?? id, legs };
+}
+
+/**
  * Lower a parsed {@link Document} to the model's structures.
  *
  * TWO PASSES. Lifecycles, profiles and auctions are lowered in source order;
@@ -1025,10 +1124,12 @@ export function compileDocument(doc: Document): CompiledModel {
   const profiles: CompiledProfile[] = [];
   const auctions: CompiledAuction[] = [];
   const policies: CompiledPolicy[] = [];
+  const compositions: CompiledComposition[] = [];
   const lifecycleNames = new Set<string>();
   const profileNames = new Set<string>();
   const auctionNames = new Set<string>();
   const policyNames = new Set<string>();
+  const compositionNames = new Set<string>();
   const policyDecls: PolicyDecl[] = [];
 
   // Pass 1 — structure (lifecycle / profile / auction), in source order.
@@ -1058,12 +1159,18 @@ export function compileDocument(doc: Document): CompiledModel {
       }
       auctionNames.add(decl.name.name);
       auctions.push(compileAuction(decl));
-    } else {
+    } else if (decl.kind === "policy") {
       if (policyNames.has(decl.name.name)) {
         throw new WarpCompileError(`Duplicate policy '${decl.name.name}'.`, decl.name.pos);
       }
       policyNames.add(decl.name.name);
       policyDecls.push(decl);
+    } else {
+      if (compositionNames.has(decl.name.name)) {
+        throw new WarpCompileError(`Duplicate composition '${decl.name.name}'.`, decl.name.pos);
+      }
+      compositionNames.add(decl.name.name);
+      compositions.push(compileComposition(decl));
     }
   }
 
@@ -1073,7 +1180,7 @@ export function compileDocument(doc: Document): CompiledModel {
     policies.push(compilePolicy(decl, profilesById));
   }
 
-  return { lifecycles, profiles, auctions, policies };
+  return { lifecycles, profiles, auctions, policies, compositions };
 }
 
 /** Parse `.warp` source and lower it in one step. Throws on syntax or semantic error. */

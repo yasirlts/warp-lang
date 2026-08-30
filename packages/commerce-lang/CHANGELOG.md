@@ -2,6 +2,51 @@
 
 All notable changes to this package are documented here.
 
+## 0.7.0 — rung 5B: composed systems (multi-party commitment trees)
+
+A `.warp` file can author a **composition** — the legs a commitment splits into,
+and how each leg's amount is computed from the parent:
+
+```warp
+composition marketplace_order {
+  leg payout     { amount committed - 70 MAD }
+  leg commission { amount 70 MAD }
+}
+```
+
+`buildComposition` instantiates it against a parent commitment, producing the
+model's own `parent` / `children` tree. 430 becomes 360 + 70; 1070 becomes
+1000 + 70 — one authored rule, a tree per order.
+
+**The language authors the structure; the model enforces the coherence.** The
+tree a composition builds is ORDINARY commitments, which is exactly why
+`checkI6TreeConsistency` and the session's per-tree cumulative refund ledger apply
+to it unchanged. `packages/commerce-types` has **zero diff**.
+
+**The compiler deliberately does not check reconciliation.** A composition whose
+legs over-sum the parent compiles and builds, and I-6 then refuses it. Value
+conservation has one implementation, in the model; a second copy in the compiler
+would be one more thing to keep in step, for no gain. The example and tests show
+I-6 refusing an over-sum, an under-sum and a mixed-currency split, and the session
+ledger refusing a cumulative over-refund across the authored tree.
+
+- **`composition` declaration** with named `leg` blocks; leg amounts are rung-5A
+  expressions over the SAME closed context — composition needed no new context
+  variable, which was the design-slip signal to watch for.
+- **`buildComposition(composition, parent, opts?)`** → `{ parent, children }` or
+  failures as data. Party ids are supplied per leg at build time, because they are
+  runtime data, not authored structure.
+- **Compile errors**, positioned: no legs, a duplicate leg name, a leg with no
+  amount, an unknown variable, a duplicate composition id.
+- **21 new tests**; a file with no composition is unchanged, and a composition
+  does not enter `CommerceModel` — it describes commitments, not engine config.
+
+**The limit, honestly.** This authors a TREE — one parent and its children —
+because that is what `parent`/`children` express and what I-6 and the session
+ledger check. Arbitrary cross-order graphs (a leg with two parents, cycles) are
+not authorable: the model does not represent them, and syntax for a structure
+nothing enforces would be authoring fiction.
+
 ## 0.6.0 — rung 5A: derived logic (computed policy values)
 
 A policy value may be a **pure arithmetic expression** over the commerce context,

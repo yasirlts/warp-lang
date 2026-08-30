@@ -409,6 +409,17 @@ jobs:
         working-directory: packages/commerce-lang
         run: npm run example:derived
 
+      # Rung 5B: COMPOSITION. A .warp file authors the legs a commitment splits
+      # into; the split compiles to the model's own parent/children tree. The
+      # example proves the division the rung rests on: a composition whose legs
+      # over-sum the parent COMPILES and BUILDS, and checkI6TreeConsistency — which
+      # knows nothing about compositions — refuses it, as does the session's
+      # per-tree cumulative ledger on a further refund. The compiler deliberately
+      # does not re-derive I-6. Exits non-zero if any outcome changes.
+      - name: Run the composed-system example verbatim
+        working-directory: packages/commerce-lang
+        run: npm run example:composed
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding
