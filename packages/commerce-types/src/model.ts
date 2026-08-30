@@ -35,6 +35,8 @@ import { guardConcession } from "./negotiation.js";
 import type { RegulatoryPolicyPack } from "./policy-packs.js";
 import { checkSettlementPolicy } from "./policy-packs.js";
 import type { InvariantId } from "./invariants.js";
+import type { AuctionProcess } from "./auction.js";
+import { checkAuctionResolution } from "./auction-integrity.js";
 import type { MoneyBreakdown } from "./money.js";
 import type { Money } from "./money.js";
 import type { PartyID } from "./primitives.js";
@@ -111,6 +113,20 @@ export interface CommerceModel {
   profile?: CommerceProfile;
   /** Policies applied to every event in the run. */
   policies?: readonly CommercePolicy[];
+  /**
+   * An auction this system coordinates. When present, every event's resulting
+   * world is checked for RESOLUTION SOUNDNESS — the winner was a bid the auction
+   * collected, only one bid is awarded, losing bids are released, and the
+   * clearing price is in the winner's currency and no higher than their offer.
+   *
+   * These checks are not re-expressions of the six invariants: an unsound
+   * resolution is invariant-clean (a dangling loser and a double award both
+   * return zero violations from `auditCommerce` — pinned in the tests). They are
+   * a data-driven check over an auxiliary record, the same category as a profile
+   * or a policy pack. They do NOT judge whether a mechanism produced a good
+   * price; see {@link checkAuctionResolution}.
+   */
+  auction?: AuctionProcess;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +168,7 @@ export interface SettlementEvent {
 export type ModelEvent = CommerceEvent | ConcessionEvent | SettlementEvent;
 
 /** Which layer decided a block — so a caller can tell "illegal move" from "your policy forbids it". */
-export type ModelLayer = "base" | "profile" | "policy";
+export type ModelLayer = "base" | "profile" | "policy" | "auction";
 
 /** The engine's decision for one event under a composed model. */
 export interface ModelVerdict extends EngineVerdict {
@@ -209,7 +225,12 @@ function profilesOf(model: CommerceModel): { profile: CommerceProfile; policy?: 
  *     base layer would refuse.)
  *  2. BASE — `step` (i.e. `guardAction`) decides legality and produces the next
  *     world and effects. This is the only layer that advances anything.
- * There is deliberately no third "assertion" layer: the base guard already audits
+ *  3. AUCTION — when the model carries an auction, the resulting world is checked
+ *     for resolution soundness, and the event is refused if it INTRODUCED an
+ *     unsoundness (one not already present). These rules catch what the
+ *     invariants provably do not: an unsound resolution is invariant-clean.
+ *
+ * There is deliberately no assertion layer: the base guard already audits
  * all six invariants over the whole resulting world, so a policy's `asserts` list
  * is carried as declared intent and cannot gate anything. See
  * {@link CommercePolicy.asserts}.
@@ -344,6 +365,27 @@ export function stepModel(
     if (!base.verdict.ok) {
       return { world: base.world, effects: base.effects, verdict: { ...base.verdict, layer: "base" } };
     }
+
+    // AUCTION — resolution soundness over the RESULTING world. Checked after the
+    // base advance because a resolution is a property of the world an event
+    // produces, not of the event in isolation. An auction nobody has won yet is
+    // not unsound, so this is silent until a bid is awarded.
+    if (model.auction !== undefined) {
+      const introduced = checkAuctionResolution(model.auction, base.world);
+      if (introduced.length > 0) {
+        // Only refuse what THIS event caused. A resolution already unsound before
+        // the event is not this event's fault, and blaming it would make every
+        // subsequent event unfixable.
+        const already = new Set(
+          checkAuctionResolution(model.auction, world).map((v) => `${v.rule}|${v.message}`),
+        );
+        const caused = introduced.filter((v) => !already.has(`${v.rule}|${v.message}`));
+        if (caused.length > 0) {
+          return blocked({ ok: false, layer: "auction", violations: caused });
+        }
+      }
+    }
+
     return { world: base.world, effects: base.effects, verdict: base.verdict };
   } catch (err) {
     // Totality, exactly as the base engine: never throw — surface as a block.

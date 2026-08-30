@@ -292,9 +292,25 @@ itself as more than it is. All three are asserted in `examples/system.mjs`.
    any commitment blocks every event, including one targeting a different, healthy
    commitment. There is no per-commitment isolation to rely on.
 
-**Auctions are compiled but not run.** `CommerceModel` has no auction field and
-`runModel` has no auction layer, so an authored auction is returned on
-`CompiledSystem.auctions` as compiled data — it is not enforced by the engine run.
+### Auctions run
+
+An authored `auction` populates `model.auction`, and `runModel`'s **auction layer**
+checks its **resolution** on every event: the winner was a bid the auction
+collected, only one bid is awarded, losing bids are released (Cancelled, or still
+`Tendered` with `superseded_by` set), and the clearing price is in the winner's
+currency and no higher than their offer.
+
+These are **not** re-expressions of the six invariants. An unsound resolution is
+invariant-clean: a world with a dangling losing bid, and a world with two awarded
+bids, both return **zero** violations from `auditCommerce`. That is asserted in
+`examples/auction-run.mjs` before anything else, because it is the reason the
+layer is worth having.
+
+It is **not** a seventh invariant and changes no schema — it is a data-driven
+check over an auxiliary record the schema already defines, the same category as a
+profile or a policy pack. It does **not** judge whether a mechanism produced a
+good price: a Vickrey auction clearing *below* the winning bid is sound and
+passes; only being charged *more* than you bid is refused.
 
 ## API
 
@@ -331,6 +347,7 @@ npm run build && npm run example          # examples/lang.mjs
 npm run build && npm run example:auction  # examples/lang-auction.mjs
 npm run build && npm run example:policy   # examples/lang-policy.mjs
 npm run build && npm run example:system   # examples/system.mjs
+npm run build && npm run example:auction-run  # examples/auction-run.mjs
 ```
 
 `examples/lang.mjs` authors a lifecycle and a profile in `.warp`, compiles them,
@@ -362,6 +379,11 @@ profile + policy) compiled by `compileSystem` into one `CommerceModel`, then run
 through the engine's `runModel` with host-supplied events — a policy block, a
 profile block and a base invariant block, with nothing hand-wired. It also asserts
 the three honesty properties above rather than claiming them.
+
+`examples/auction-run.mjs` proves the auction layer both ways: it first shows the
+six invariants catching neither a dangling losing bid nor a double award, then
+shows the layer refusing each unsound resolution with its specific rule and
+letting a sound one through.
 
 ## Grammar
 

@@ -318,6 +318,30 @@ model object, one `runModel` call, three classes of violation refused by three
 different layers, plus the additive and determinism properties. It asserts every
 verdict and exits non-zero if any changes.
 
+### The auction layer (rung 4c)
+
+When a model carries an `auction`, `runModel` checks its **resolution** on every
+event: the winner was a bid the auction collected, only one bid is awarded, losing
+bids are released (Cancelled, or still `Tendered` with `superseded_by` set), and
+the clearing price is in the winner's currency and no higher than their offer.
+`checkAuctionResolution(auction, world)` is the check on its own.
+
+**These are not re-expressions of the six invariants.** An unsound resolution is
+invariant-clean — a world with a dangling losing bid, and a world with two awarded
+bids, both return **zero** violations from `auditCommerce`. That is pinned in
+`tests/auction-integrity.test.ts` as the justification for the layer existing; if
+it ever stops being true, the layer is redundant and should be reconsidered.
+
+It is **not** a seventh invariant and changes no schema: a data-driven check over
+an auxiliary record the schema already defines, the same category as a profile or
+a policy pack. It does **not** judge whether a mechanism produced a good price — a
+Vickrey auction clearing *below* the winning bid is sound; only being charged
+*more* than you bid is refused.
+
+An auction nobody has won yet is not unsound, so the layer is silent until a bid
+is awarded, and it refuses only unsoundness the event **introduced** — a
+resolution already unsound beforehand does not make every later event unfixable.
+
 ## Bounded temporal verification — `verifyLifecycle()` (Phase 4.1)
 
 A reachability checker over the commitment lifecycle's **state machine**: explore

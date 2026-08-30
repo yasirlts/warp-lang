@@ -37,11 +37,13 @@
  *     commitment blocks every event, including one targeting a different,
  *     healthy commitment. There is no per-commitment isolation to rely on.
  *
- * AUCTIONS. An authored auction compiles (rung 2) and is returned alongside the
- * model, but `CommerceModel` has no auction field and `runModel` has no auction
- * layer — so an auction is NOT enforced by the engine run. It is carried as
- * compiled data for a caller to use. Saying otherwise would be the easiest
- * overclaim in this rung.
+ * AUCTIONS RUN. An authored auction populates `model.auction`, and `runModel`'s
+ * auction layer checks its RESOLUTION for soundness on every event: the winner
+ * was a bid the auction collected, only one bid is awarded, losing bids are
+ * released, and the clearing price is in the winner's currency and no higher than
+ * their offer. Those checks are not re-expressions of the six invariants — an
+ * unsound resolution is invariant-clean — and they do not judge whether the
+ * mechanism produced a good price.
  */
 import type {
   CommerceModel,
@@ -68,6 +70,8 @@ export interface SystemOptions {
   lifecycle?: string;
   /** Which declared profile is the system's base profile, when the file declares more than one. */
   profile?: string;
+  /** Which declared auction the system runs, when the file declares more than one. */
+  auction?: string;
   /** Override the model id (defaults to the single lifecycle's name, else the file name). */
   id?: string;
   label?: string;
@@ -89,8 +93,9 @@ export interface CompiledSystem {
   /** Every policy the file declared, in source order. */
   policies: CompiledPolicy[];
   /**
-   * Every auction the file declared. NOT part of `model`, and NOT enforced by
-   * `runModel` — the engine has no auction layer. Compiled data for a caller.
+   * Every auction the file declared, in source order. The one that governs the
+   * run also populates `model.auction`, where `runModel`'s auction layer checks
+   * its resolution.
    */
   auctions: CompiledAuction[];
 }
@@ -233,6 +238,32 @@ export function systemFromDocument(
     return out;
   });
 
+  // --- auction -------------------------------------------------------------
+  // Selected exactly like the lifecycle and the profile: one is unambiguous, more
+  // than one needs saying which, because runModel holds a single auction.
+  let auction: CompiledAuction | undefined;
+  if (opts.auction !== undefined) {
+    auction = compiled.auctions.find((a) => a.process.id === opts.auction);
+    if (auction === undefined) {
+      const names = compiled.auctions.map((a) => a.process.id);
+      throw new WarpCompileError(
+        `No auction '${opts.auction}' in this document. ` +
+          (names.length === 0 ? `It declares no auction.` : `Declared auctions: ${names.join(", ")}.`),
+        doc.declarations[0]?.pos ?? { line: 1, column: 1 },
+      );
+    }
+  } else if (compiled.auctions.length === 1) {
+    auction = compiled.auctions[0] as CompiledAuction;
+  } else if (compiled.auctions.length > 1) {
+    const names = compiled.auctions.map((a) => a.process.id);
+    const second = doc.declarations.filter((d) => d.kind === "auction")[1];
+    throw new WarpCompileError(
+      `This document declares ${compiled.auctions.length} auctions (${orList(names)}), but a system ` +
+        `runs one. Select it with the 'auction' option, or keep one auction per system.`,
+      second?.pos ?? { line: 1, column: 1 },
+    );
+  }
+
   const id = opts.id ?? lifecycle?.name ?? base?.id ?? opts.file ?? "system";
   const model: CommerceModel = { id };
   if (opts.label !== undefined) model.label = opts.label;
@@ -241,6 +272,8 @@ export function systemFromDocument(
   if (lifecycle !== undefined) model.transitions = lifecycle.transitions;
   if (base !== undefined) model.profile = base as CommerceProfile;
   if (policies.length > 0) model.policies = policies;
+  // The authored auction RUNS: runModel's auction layer checks its resolution.
+  if (auction !== undefined) model.auction = auction.process;
 
   const system: CompiledSystem = {
     model,
