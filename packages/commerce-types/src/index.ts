@@ -128,6 +128,14 @@ export * from "./engine.js";
 // invariant, state, transition, or schema field. `step`/`run` are unchanged, and a model
 // with no profile and no policies produces exactly their verdicts (tested).
 export * from "./model.js";
+// checkAuctionResolution — auction RESOLUTION soundness (rung 4c): the winner was a
+// bid the auction collected, only one bid is awarded, losing bids are released, and the
+// clearing price is in the winner's currency and no higher than their offer. Composed into
+// runModel as the `auction` layer. NOT a seventh invariant and no schema change: a
+// data-driven check over an auxiliary record, like a profile or a policy pack. It catches
+// what the six invariants do not — an unsound resolution is invariant-clean. It does not
+// judge whether a mechanism produced a good price.
+export * from "./auction-integrity.js";
 // reachableStates / verifyLifecycle — BOUNDED reachability over the lifecycle state
 // machine: explore the legal moves from a start state (up to a bound) and report whether
 // any reachable transition is one the frozen model forbids, with a counterexample path.

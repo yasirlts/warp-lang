@@ -386,6 +386,17 @@ jobs:
         working-directory: packages/commerce-lang
         run: npm run example:system
 
+      # Rung 4c: the AUCTION layer. An authored .warp auction now populates
+      # model.auction and runModel checks its resolution. The example first shows
+      # auditCommerce returning ZERO violations for a dangling losing bid and for a
+      # double award — the gap this layer fills — then asserts each unsound
+      # resolution is refused with its rule and a sound one advances (including a
+      # Vickrey clearing price below the bid, which is sound). Exits non-zero if any
+      # verdict changes, so it is a gate rather than a demo.
+      - name: Run the auction-run example verbatim
+        working-directory: packages/commerce-lang
+        run: npm run example:auction-run
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding
