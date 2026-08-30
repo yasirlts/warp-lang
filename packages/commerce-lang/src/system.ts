@@ -50,8 +50,11 @@ import type {
   CommercePolicy,
   CommerceProfile,
   Commitment,
+  CommitmentID,
   Money,
+  PartyID,
 } from "@warp-lang/commerce-types";
+import { newCommitment, valueId } from "@warp-lang/commerce-types";
 import {
   evaluate,
   formatExpr,
@@ -63,6 +66,7 @@ import type { Document, ProfileDecl } from "./ast.js";
 import {
   compileDocument,
   type CompiledAuction,
+  type CompiledComposition,
   type CompiledLifecycle,
   type CompiledModel,
   type CompiledPolicy,
@@ -107,6 +111,13 @@ export interface CompiledSystem {
    * its resolution.
    */
   auctions: CompiledAuction[];
+  /**
+   * Every composition the file declared, in source order. A composition is
+   * instantiated with {@link buildComposition}; it is not part of `model`,
+   * because it describes how COMMITMENTS decompose rather than how the engine is
+   * configured.
+   */
+  compositions: CompiledComposition[];
 }
 
 /** Find a profile declaration by id, for error positions. */
@@ -289,6 +300,7 @@ export function systemFromDocument(
     profiles: compiled.profiles,
     policies: compiled.policies,
     auctions: compiled.auctions,
+    compositions: compiled.compositions,
   };
   if (lifecycle !== undefined) system.lifecycle = lifecycle;
   return system;
@@ -522,4 +534,120 @@ export function resolveForCommitment(
   now?: string,
 ): ResolveResult {
   return resolveSystem(system, deriveContext(commitment, now));
+}
+
+
+// ---------------------------------------------------------------------------
+// Rung 5B — instantiating an authored COMPOSITION into the model's own tree
+// ---------------------------------------------------------------------------
+
+/** Per-leg overrides the HOST supplies at build time — party ids are runtime data. */
+export interface LegOptions {
+  /** The child's initiator. Defaults to the parent's initiator. */
+  initiator?: PartyID | string;
+  /** The child's counterparty. Defaults to the parent's counterparty. */
+  counterparty?: PartyID | string;
+}
+
+/** Options for {@link buildComposition}. */
+export interface BuildOptions {
+  /** Per-leg party overrides, keyed by leg name. */
+  legs?: Record<string, LegOptions>;
+  /** `now`, for any leg amount using the time-based context variables. */
+  now?: string;
+}
+
+/** A leg whose amount could not be computed, with where and why. */
+export interface LegFailure {
+  composition: string;
+  leg: string;
+  source: string;
+  error: EvalError;
+}
+
+/** The result of instantiating a composition. */
+export type BuildResult =
+  | { ok: true; parent: Commitment; children: Commitment[] }
+  | { ok: false; failures: LegFailure[] };
+
+/**
+ * Instantiate an authored composition against a parent commitment, producing the
+ * parent (now carrying its `children`) and the child commitments, linked by the
+ * model's own `parent` / `children` fields.
+ *
+ * WHAT THIS DOES NOT DO, WHICH IS THE POINT. It does not check that the legs
+ * reconcile with the parent. That is `checkI6TreeConsistency`, it already exists,
+ * and re-deriving it here would be a second implementation of conservation to
+ * keep in step — the exact duplication this rung is meant to avoid. A composition
+ * whose legs over-sum the parent BUILDS, and is then caught by I-6, in the same
+ * way an unsound lifecycle compiles and is caught by the temporal verifier.
+ *
+ * The output is ordinary commitments. There is no new structure here: a tree
+ * built by this function is indistinguishable from one hand-built, which is why
+ * the existing checks apply to it unchanged.
+ *
+ * Total: a leg whose amount cannot be computed comes back as data, never a throw.
+ */
+export function buildComposition(
+  composition: CompiledComposition,
+  parent: Commitment,
+  opts: BuildOptions = {},
+): BuildResult {
+  const ctx = deriveContext(parent, opts.now);
+  const failures: LegFailure[] = [];
+  const children: Commitment[] = [];
+
+  for (const leg of composition.legs) {
+    const r = evaluate(leg.amount, ctx);
+    if (!r.ok) {
+      failures.push({
+        composition: composition.id,
+        leg: leg.name,
+        source: formatExpr(leg.amount),
+        error: r.error,
+      });
+      continue;
+    }
+    if (r.value.kind !== "money") {
+      failures.push({
+        composition: composition.id,
+        leg: leg.name,
+        source: formatExpr(leg.amount),
+        error: {
+          code: "type-error",
+          message:
+            `'${formatExpr(leg.amount)}' evaluates to the plain number ${r.value.value}, but a leg ` +
+            `amount must be money. Scale the parent (e.g. 'committed * 0.85') or give a currency.`,
+          pos: leg.amount.pos,
+        },
+      });
+      continue;
+    }
+
+    const legOpts = opts.legs?.[leg.name] ?? {};
+    const child = newCommitment(
+      (legOpts.initiator ?? parent.parties.initiator) as PartyID,
+      (legOpts.counterparty ?? parent.parties.counterparty) as PartyID,
+      {
+        offered: [],
+        requested: [
+          {
+            id: valueId(`value:${composition.id}:${leg.name}`),
+            form: { kind: "Money", money: { amount: r.value.amount, currency: r.value.currency } },
+            quantity: 1,
+            state: { type: "Available" },
+          },
+        ],
+      },
+    );
+    children.push({ ...child, parent: parent.id });
+  }
+
+  if (failures.length > 0) return { ok: false, failures };
+
+  const linkedParent: Commitment = {
+    ...parent,
+    children: [...parent.children, ...children.map((c) => c.id)] as CommitmentID[],
+  };
+  return { ok: true, parent: linkedParent, children };
 }

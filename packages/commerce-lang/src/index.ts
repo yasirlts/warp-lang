@@ -36,7 +36,17 @@
  */
 
 export { compileSystem, systemFromDocument, resolveSystem, resolveForCommitment, deriveContext } from "./system.js";
-export type { CompiledSystem, SystemOptions, ResolveResult, ResolutionFailure } from "./system.js";
+export { buildComposition } from "./system.js";
+export type {
+  CompiledSystem,
+  SystemOptions,
+  ResolveResult,
+  ResolutionFailure,
+  BuildOptions,
+  BuildResult,
+  LegOptions,
+  LegFailure,
+} from "./system.js";
 export {
   evaluate,
   formatExpr,
@@ -74,6 +84,7 @@ export type {
   CompiledLifecycle,
   CompiledProfile,
   CompiledPolicy,
+  CompiledComposition,
   CompiledAuction,
   CompiledTender,
 } from "./compile.js";
@@ -88,6 +99,9 @@ export type {
   Declaration,
   LifecycleDecl,
   ProfileDecl,
+  CompositionDecl,
+  CompositionField,
+  LegDecl,
   PolicyDecl,
   PolicyField,
   PolicyFieldKey,

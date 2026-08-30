@@ -110,7 +110,7 @@ describe("parser — invalid source → precise error", () => {
   });
 
   it("unexpected top-level keyword", () => {
-    expectSyntaxErrorAt("widget w {}", 1, 1, "'lifecycle', 'profile', 'auction', or 'policy'");
+    expectSyntaxErrorAt("widget w {}", 1, 1, "'lifecycle', 'profile', 'auction', 'policy', or 'composition'");
   });
 
   it("stray '-' that is not an arrow", () => {

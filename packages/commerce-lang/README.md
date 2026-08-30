@@ -242,6 +242,58 @@ Two consequences worth being explicit about:
 And what it deliberately will **not** do: author a rule the model has no way to
 enforce. Syntax for one would be fiction, so there is none.
 
+## Composed systems — multi-party commitment trees
+
+A marketplace order is not one commitment: it is a parent the buyer pays,
+splitting into a seller payout and a platform commission. A `composition` authors
+that **shape**:
+
+```warp
+composition marketplace_order {
+  label "Marketplace order"
+  leg payout     { amount committed - 70 MAD }
+  leg commission { amount 70 MAD }
+}
+```
+
+```ts
+const { compositions } = compileSystem(source)
+const built = buildComposition(compositions[0], parentCommitment, {
+  legs: { commission: { counterparty: platformId } },   // party ids are runtime data
+})
+// built.parent.children === built.children.map(c => c.id); each child.parent === parent.id
+```
+
+Leg amounts are rung-5A expressions over the same closed context, so a split
+follows the order it is applied to — 430 becomes 360 + 70, 1070 becomes 1000 + 70.
+
+**The language authors the structure; the model enforces the coherence.** A
+composition compiles to the model's own `parent` / `children` fields, and the tree
+it builds is **ordinary commitments** — which is exactly why
+`checkI6TreeConsistency` and the session's per-tree cumulative refund ledger apply
+to it unchanged. `packages/commerce-types` has **zero diff** in this rung.
+
+### The compiler does not check reconciliation, on purpose
+
+A composition whose legs over-sum the parent **compiles and builds** — and then
+I-6 refuses it:
+
+```
+Children of <parent> sum to 140 MAD but the parent requests 100 MAD.
+```
+
+That is deliberate. Value conservation has **one** implementation, in the model. A
+second copy in the compiler would be one more thing to keep in step with it, for
+no gain. Mixed currencies across legs are caught the same way, and a cumulative
+over-refund across the tree is caught by the session ledger — none of which was
+taught anything about compositions.
+
+**The limit, honestly.** This authors a **tree** — one parent and its children —
+because that is what the model's `parent`/`children` fields express and what I-6
+and the session ledger check. Arbitrary cross-order graphs (a leg belonging to two
+parents, cycles) are not authorable: the model does not represent them, and syntax
+for a structure nothing enforces would be authoring fiction.
+
 ## Derived logic — computed policy values
 
 A policy value may be a **pure arithmetic expression** over the commerce context,
@@ -411,6 +463,7 @@ npm run build && npm run example:policy   # examples/lang-policy.mjs
 npm run build && npm run example:system   # examples/system.mjs
 npm run build && npm run example:auction-run  # examples/auction-run.mjs
 npm run build && npm run example:derived  # examples/derived.mjs
+npm run build && npm run example:composed # examples/composed.mjs
 ```
 
 `examples/lang.mjs` authors a lifecycle and a profile in `.warp`, compiles them,

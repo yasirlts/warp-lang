@@ -7,7 +7,9 @@
  * The grammar it accepts (see GRAMMAR.md for the canonical form):
  *
  *   document    := declaration*
- *   declaration := lifecycle | profile | auction | policy
+ *   declaration := lifecycle | profile | auction | policy | composition
+ *   composition := "composition" IDENT "{" { "label" STRING | "description" STRING | leg } "}"
+ *   leg         := "leg" IDENT "{" { "amount" expr } "}"
  *   lifecycle   := "lifecycle" IDENT "{" lifecycleItem* "}"
  *   lifecycleItem := "state" IDENT
  *                  | IDENT "->" identList
@@ -56,6 +58,9 @@ import type {
   LifecycleDecl,
   MechanismDecl,
   MoneyLit,
+  CompositionDecl,
+  CompositionField,
+  LegDecl,
   PolicyDecl,
   PolicyField,
   PolicyFieldKey,
@@ -229,10 +234,11 @@ class Parser {
     if (t.type === "ident" && t.value === "profile") return this.parseProfile();
     if (t.type === "ident" && t.value === "auction") return this.parseAuction();
     if (t.type === "ident" && t.value === "policy") return this.parsePolicy();
+    if (t.type === "ident" && t.value === "composition") return this.parseComposition();
     throw new WarpSyntaxError(
       `Expected a declaration but found ${describe(t)}.`,
       t.pos,
-      "'lifecycle', 'profile', 'auction', or 'policy'",
+      "'lifecycle', 'profile', 'auction', 'policy', or 'composition'",
     );
   }
 
@@ -653,6 +659,66 @@ class Parser {
     // forbid_states | assert
     const list = this.identList(`an identifier list after '${key}'`);
     return { key, list, pos: t.pos };
+  }
+
+  /** composition := "composition" IDENT "{" { compositionItem } "}" */
+  private parseComposition(): CompositionDecl {
+    const kw = this.next(); // 'composition'
+    const name = this.ident("a composition id");
+    this.expect("lbrace", "'{'");
+    const fields: CompositionField[] = [];
+    const legs: LegDecl[] = [];
+    while (!this.at("rbrace") && !this.at("eof")) {
+      const t = this.peek();
+      if (t.type === "ident" && t.value === "leg") {
+        legs.push(this.parseLeg());
+        continue;
+      }
+      if (t.type === "ident" && (t.value === "label" || t.value === "description")) {
+        const key = this.next().value as CompositionField["key"];
+        const str = this.expect("string", `a string after '${key}'`);
+        fields.push({ key, text: str.value, pos: t.pos });
+        continue;
+      }
+      throw new WarpSyntaxError(
+        `Expected a composition field but found ${describe(t)}.`,
+        t.pos,
+        "'label', 'description', or 'leg'",
+      );
+    }
+    this.expect("rbrace", "'}' to close the composition block");
+    return { kind: "composition", name, fields, legs, pos: kw.pos };
+  }
+
+  /** leg := "leg" IDENT "{" { "amount" expr } "}" */
+  private parseLeg(): LegDecl {
+    const kw = this.next(); // 'leg'
+    const name = this.ident("a leg name");
+    this.expect("lbrace", "'{' to open the leg block");
+    let amount: Expr | undefined;
+    while (!this.at("rbrace") && !this.at("eof")) {
+      const t = this.peek();
+      if (t.type !== "ident" || t.value !== "amount") {
+        throw new WarpSyntaxError(
+          `Expected a leg field but found ${describe(t)}.`,
+          t.pos,
+          "'amount'",
+        );
+      }
+      this.next();
+      if (amount !== undefined) {
+        throw new WarpSyntaxError(
+          `Duplicate 'amount' in leg '${name.name}'.`,
+          t.pos,
+          "one 'amount' per leg",
+        );
+      }
+      amount = this.parseExpr(
+        `a money amount or expression after 'amount' (like '70 MAD' or 'committed * 0.85')`,
+      );
+    }
+    this.expect("rbrace", `'}' to close leg '${name.name}'`);
+    return { kind: "leg", name, amount, pos: kw.pos };
   }
 }
 

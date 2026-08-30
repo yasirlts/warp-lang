@@ -247,8 +247,53 @@ export interface PolicyDecl {
   pos: SourcePosition;
 }
 
-/** A top-level declaration: a lifecycle, a profile, an auction, or a policy. */
-export type Declaration = LifecycleDecl | ProfileDecl | AuctionDecl | PolicyDecl;
+
+// ---------------------------------------------------------------------------
+// Composition (rung 5B) — authoring a WEB of related commitments.
+//
+// A `composition` authors the SHAPE a commitment decomposes into: a marketplace
+// order splitting into a seller payout and a platform commission, an order
+// splitting into sub-orders. It authors the STRUCTURE — which legs exist and how
+// each leg's amount is computed from the parent — not particular commitments.
+// Concrete parties, ids and totals remain runtime data the host supplies, exactly
+// as events do (rung 4).
+//
+// It compiles to the model's OWN `parent` / `children` commitment tree, which
+// `checkI6TreeConsistency` and the session's per-tree refund ledger already
+// enforce. The language gains no coherence logic of its own.
+// ---------------------------------------------------------------------------
+
+/** `leg payout { amount committed - 70 MAD }` — one branch of a composition. */
+export interface LegDecl {
+  kind: "leg";
+  name: Ident;
+  /** How this leg's amount is computed from the parent (a rung-5A expression). */
+  amount: Expr | undefined;
+  pos: SourcePosition;
+}
+
+/** One `key value` field directly inside a `composition { … }` block. */
+export interface CompositionField {
+  key: "label" | "description";
+  text: string;
+  pos: SourcePosition;
+}
+
+/**
+ * `composition <id> { label …; leg <name> { amount … } … }` — authors how a
+ * commitment decomposes into child commitments. Lowers to `parent` / `children`
+ * links on ordinary commitments; it introduces no new model structure.
+ */
+export interface CompositionDecl {
+  kind: "composition";
+  name: Ident;
+  fields: CompositionField[];
+  legs: LegDecl[];
+  pos: SourcePosition;
+}
+
+/** A top-level declaration: a lifecycle, a profile, an auction, a policy, or a composition. */
+export type Declaration = LifecycleDecl | ProfileDecl | AuctionDecl | PolicyDecl | CompositionDecl;
 
 /** A parsed `.warp` document — a sequence of declarations. */
 export interface Document {
