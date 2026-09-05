@@ -1,0 +1,13 @@
+{
+  "name": "warp-deploy-host-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A standalone host that loads a compiled Warp commerce model and runs it. Depends ONLY on the runtime library — never on the compiler or on repo source.",
+  "scripts": {
+    "start": "node host.mjs model.json"
+  },
+  "dependencies": {
+    "@warp-lang/commerce-types": "file:../../packages/commerce-types/warp-lang-commerce-types.tgz"
+  }
+}

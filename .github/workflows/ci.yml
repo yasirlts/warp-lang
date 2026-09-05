@@ -420,6 +420,37 @@ jobs:
         working-directory: packages/commerce-lang
         run: npm run example:composed
 
+  # --- Deploy flow (rung C) -------------------------------------------------
+  # The boundary crossing, run for real: pack @warp-lang/commerce-types into a
+  # tarball, install THAT into examples/deploy-host/ (no path into this repo's
+  # source), compile shop.warp to model.json with warpc, and run the host — which
+  # imports the library and loads JSON, and could not parse .warp if it tried.
+  # The host exits non-zero unless the deployed model accepts 1 event and refuses
+  # 2, so this is a gate rather than a script that prints something.
+  deploy-flow:
+    name: deploy flow (artifact + standalone host)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install commerce-types
+        working-directory: packages/commerce-types
+        run: npm ci
+
+      - name: Install commerce-lang
+        working-directory: packages/commerce-lang
+        run: npm ci
+
+      - name: Compile, pack, install and run the host
+        run: node scripts/deploy-flow.mjs
+
+      - name: The committed artifact must match the compiler's output
+        run: git diff --exit-code -- examples/deploy-host/model.json
+
   # --- Python binding (warp-commerce-types) --------------------------------
   python:
     name: python binding

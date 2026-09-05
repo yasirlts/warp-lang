@@ -1,0 +1,96 @@
+{
+  "id": "sales",
+  "policies": [
+    {
+      "appliesTo": "digital",
+      "bounds": {
+        "committed": {
+          "amount": 200,
+          "currency": "MAD"
+        },
+        "floor": {
+          "amount": 150,
+          "currency": "MAD"
+        }
+      },
+      "description": "Never discount below 150 MAD; MA VAT rates only.",
+      "id": "house_rules",
+      "label": "House rules",
+      "pack": {
+        "description": "Never discount below 150 MAD; MA VAT rates only.",
+        "id": "house_rules",
+        "jurisdictions": [
+          {
+            "jurisdiction": "MA",
+            "rates": [
+              0,
+              0.1,
+              0.2
+            ]
+          }
+        ],
+        "label": "House rules"
+      },
+      "profile": {
+        "allowedStates": [
+          "Draft",
+          "Proposed",
+          "Accepted",
+          "Fulfilled",
+          "Refunded",
+          "Cancelled"
+        ],
+        "allowedValueForms": [
+          "DigitalGood",
+          "Money"
+        ],
+        "description": "digital goods paid in money",
+        "id": "house_rules",
+        "label": "House rules"
+      }
+    }
+  ],
+  "profile": {
+    "allowedStates": [
+      "Draft",
+      "Proposed",
+      "Accepted",
+      "Fulfilled",
+      "Refunded",
+      "Cancelled"
+    ],
+    "allowedValueForms": [
+      "DigitalGood",
+      "Money"
+    ],
+    "description": "digital goods paid in money",
+    "id": "digital",
+    "label": "Digital goods"
+  },
+  "transitions": {
+    "Accepted": [
+      "Fulfilled",
+      "Cancelled",
+      "Disputed"
+    ],
+    "Cancelled": [],
+    "Disputed": [
+      "Fulfilled",
+      "Refunded",
+      "Cancelled"
+    ],
+    "Draft": [
+      "Proposed",
+      "Cancelled"
+    ],
+    "Fulfilled": [
+      "Disputed",
+      "Refunded"
+    ],
+    "Proposed": [
+      "Accepted",
+      "Cancelled"
+    ],
+    "Refunded": []
+  }
+}

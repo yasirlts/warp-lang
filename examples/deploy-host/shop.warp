@@ -1,0 +1,36 @@
+# The commerce brain for an imaginary digital-goods shop.
+#
+# This file is SOURCE. It is compiled once, at build time, into model.json — and
+# the host next door never sees it again. See ../../docs/DEPLOYMENT.md.
+
+lifecycle sales {
+  state Draft
+  state Proposed
+  state Accepted
+  state Fulfilled
+  state Disputed
+  state Refunded
+  state Cancelled
+
+  Draft     -> Proposed, Cancelled
+  Proposed  -> Accepted, Cancelled
+  Accepted  -> Fulfilled, Cancelled, Disputed
+  Fulfilled -> Disputed, Refunded
+  Disputed  -> Fulfilled, Refunded, Cancelled
+}
+
+profile digital {
+  label       "Digital goods"
+  description "digital goods paid in money"
+  states Draft, Proposed, Accepted, Fulfilled, Refunded, Cancelled
+  value_forms DigitalGood, Money
+}
+
+policy house_rules {
+  label       "House rules"
+  description "Never discount below 150 MAD; MA VAT rates only."
+  applies_to  digital
+  concession_floor 150 MAD
+  committed_price  200 MAD
+  tax_rates "MA" 0, 0.1, 0.2
+}

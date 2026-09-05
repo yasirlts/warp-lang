@@ -2,6 +2,50 @@
 
 All notable changes to this package are documented here.
 
+## 0.8.0 — rung C: deployment (compile to an artifact a real host loads)
+
+An authored `.warp` system can now leave the repo as DATA and be run by code that
+has never seen the compiler.
+
+```
+shop.warp  ──warpc──▶  model.json  ──loaded by──▶  a host importing @warp-lang/commerce-types
+```
+
+- **`warpc`** (`bin/warpc.mjs`) — compile a `.warp` system to a deployable
+  `model.json`. Canonical JSON: sorted keys, fixed formatting, so the same source
+  always produces byte-identical output and an artifact can be committed and
+  diffed like any other build product.
+- **`serializeModel` / `loadModel` / `serializeSystem`** — the artifact API.
+  Round-trips exactly, and a loaded model produces identical verdicts to the
+  in-memory one (tested across a valid action, a policy block and an invariant
+  block).
+- **`examples/deploy-host/`** — a standalone host with its own `package.json`,
+  depending only on the runtime library. It imports `@warp-lang/commerce-types`
+  and `node:fs`, and nothing else; it cannot parse `.warp`.
+- **`scripts/deploy-flow.mjs`** — the crossing, run in CI: pack the library,
+  install the tarball into the host, compile the system, check determinism, run
+  the host. The host exits non-zero unless it accepts 1 event and refuses 2.
+
+**A bug this rung found and fixed.** A rung-5A computed value (`concession_floor
+committed * 0.75`) SILENTLY VANISHED when a model was serialized — the policy came
+out with no `bounds` at all, and a host would have loaded it, enforced no floor,
+and said nothing. `serializeSystem` and `warpc` now REFUSE such a system, naming
+the policy, the field and the expression, and pointing at the two honest ways
+forward (use a constant, or resolve per-commitment in-process). Silently dropping
+a rule is worse than refusing to ship one.
+
+**The boundary is checked mechanically**, because the claim is only as good as its
+check: `tests/deploy.test.ts` reads the host's real import specifiers and fails if
+any points into this repo or at the compiler, and CI fails if the committed
+`model.json` drifts from what the compiler produces.
+
+**Honest limits**, in [docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md): the model is
+portable data, but the RUNTIME today is JS/TS only — the four-binding conformance
+proves the bindings agree on verdicts, which is not a Go/Python loader, and those
+are future work. And the published `@warp-lang/commerce-types@1.5.0` predates
+`runModel`, so it cannot run a composed model at all; the flow packs the library
+from source and says so as it runs.
+
 ## 0.7.0 — rung 5B: composed systems (multi-party commitment trees)
 
 A `.warp` file can author a **composition** — the legs a commitment splits into,
