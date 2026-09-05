@@ -15,3 +15,11 @@ venv/
 # session environment, never from a tracked file.
 .env
 .env.*
+
+# Rung C — deploy flow build products. The host's model.json IS committed (the
+# artifact should be reviewable); its installed library and the packed tarball
+# are build output.
+examples/deploy-host/node_modules/
+examples/deploy-host/package-lock.json
+packages/commerce-types/warp-lang-commerce-types.tgz
+packages/commerce-types/*.tgz
