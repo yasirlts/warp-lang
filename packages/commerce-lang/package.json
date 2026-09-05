@@ -1,6 +1,6 @@
 {
   "name": "@warp-lang/commerce-lang",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A focused syntax for AUTHORING the current Warp Commerce Model \u2014 parse a .warp file into a commitment lifecycle, profile, and auction (market-making: AuctionProcess + Tendered commitments) and compile it to the exact structures the model already uses. Adds no new semantics; the compiled output is checked by the same guard and temporal verifier.",
   "type": "module",
   "sideEffects": false,
@@ -23,7 +23,8 @@
     "dist",
     "GRAMMAR.md",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "bin"
   ],
   "scripts": {
     "build": "tsup",
@@ -36,6 +37,7 @@
     "example:auction-run": "node examples/auction-run.mjs",
     "example:derived": "node examples/derived.mjs",
     "example:composed": "node examples/composed.mjs",
+    "deploy": "node ../../scripts/deploy-flow.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -68,5 +70,8 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "bin": {
+    "warpc": "./bin/warpc.mjs"
   }
 }

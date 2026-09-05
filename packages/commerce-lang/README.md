@@ -501,6 +501,31 @@ six invariants catching neither a dangling losing bid nor a double award, then
 shows the layer refusing each unsound resolution with its specific rule and
 letting a sound one through.
 
+## Deploying — compile to an artifact a host loads
+
+```sh
+npx warpc shop.warp -o model.json
+```
+
+`model.json` is a serialized `CommerceModel`: canonical JSON, deterministic, and
+free of any reference back to the compiler. A host installs
+`@warp-lang/commerce-types`, loads the file, and runs it:
+
+```js
+const model = JSON.parse(readFileSync("model.json", "utf8"))
+const { world, verdicts } = runModel(model, myWorld, myEvents, { clock })
+```
+
+`examples/deploy-host/` is a standalone host built exactly that way — it imports
+the library and `node:fs`, and nothing else — and `scripts/deploy-flow.mjs` runs
+the whole crossing in CI. The full story, including what is **not** yet possible
+(Go/Python host runtimes; the npm release predates `runModel`), is in
+[docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md).
+
+`warpc` **refuses** to compile a system with a computed (rung-5A) value, because a
+static artifact holds numbers rather than expressions and serializing one would
+drop the rule silently.
+
 ## Grammar
 
 The canonical grammar (and exactly what the compiler checks — and deliberately does

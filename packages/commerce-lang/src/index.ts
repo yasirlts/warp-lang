@@ -37,6 +37,8 @@
 
 export { compileSystem, systemFromDocument, resolveSystem, resolveForCommitment, deriveContext } from "./system.js";
 export { buildComposition } from "./system.js";
+export { serializeModel, loadModel, serializeSystem, undeployableValues, WarpDeployError } from "./artifact.js";
+export type { UndeployableValue } from "./artifact.js";
 export type {
   CompiledSystem,
   SystemOptions,
