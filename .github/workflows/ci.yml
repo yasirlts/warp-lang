@@ -420,6 +420,15 @@ jobs:
         working-directory: packages/commerce-lang
         run: npm run example:composed
 
+      # Rung D: the shipped .warp files are canonical and compile. `fmt --check`
+      # fails if any file is not the formatter's own output; `check` fails on any
+      # diagnostic. Both compose the real parser/compiler — no second opinion.
+      - name: Shipped .warp files are formatted and check clean
+        working-directory: packages/commerce-lang
+        run: |
+          node bin/warpc.mjs fmt --check ../../examples/deploy-host/shop.warp
+          node bin/warpc.mjs check       ../../examples/deploy-host/shop.warp
+
   # --- Deploy flow (rung C) -------------------------------------------------
   # The boundary crossing, run for real: pack @warp-lang/commerce-types into a
   # tarball, install THAT into examples/deploy-host/ (no path into this repo's

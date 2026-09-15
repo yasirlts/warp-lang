@@ -2,6 +2,45 @@
 
 All notable changes to this package are documented here.
 
+## 0.9.0 — rung D: tooling (formatter, check, editor aid)
+
+The tools that make `.warp` comfortable to author in. Everything composes the
+parser, compiler and AST that already ship; nothing here has a grammar or an
+opinion of its own.
+
+- **`warpc fmt`** — AST → canonical `.warp`. **Never changes meaning:**
+  `parse(format(src))` equals `parse(src)`, tested on a file using every
+  construct and on every commerce-lang `.warp` in the repo. Idempotent.
+  Comments kept in place (the lexer now collects them on request). Expression
+  parentheses preserved exactly where the tree needs them — the pre-existing
+  `formatExpr` prints none and would have turned `(committed - 50 MAD) * 2` into
+  `committed - 50 MAD * 2`; the formatter uses a precedence-aware printer
+  instead. Author's order untouched. `--write` and `--check`.
+- **`warpc check`** — the real parser and compiler, collected: syntax (first
+  error only — the parser has no recovery, and adding it is a parser change),
+  compile (all, per declaration), cross-declaration (once the parts are sound),
+  and a WARNING for a computed value that `compile` will refuse to serialize.
+  `--json` emits one positioned object per line for editors. Exit 1 on any error,
+  0 on warnings only.
+- **`warpc compile`** — the rung-C compiler, now a subcommand; the bare
+  `warpc <file>` form still works.
+- **Rung-C deploy wart fixed** — the host's `package.json` names the tarball
+  `npm pack` actually produces, so a by-hand `npm pack` + `npm install` works
+  with no rename. `deploy-flow.mjs` checks the two agree and fails loudly on a
+  version bump instead of silently working in CI while the by-hand path breaks.
+- **AST:** block nodes now carry `end` (the closing brace's position), so a
+  formatter can keep comments inside the block they were written in. Additive.
+- **`examples/deploy-host/shop.warp`** reformatted to canonical (whitespace
+  only; `model.json` unchanged, verified byte-for-byte).
+
+**Not shipped, and why:** a syntax-highlighting grammar for commerce-lang. The
+grammar already under `editors/vscode/warp-language/` is for the *workflow* DSL,
+which shares the `.warp` extension; a second grammar on the same extension would
+fight it. Which dialect owns `.warp` is an undecided repo question, not one to
+settle by accident in a tmLanguage file. **Future, not implied:** a language
+server — `check --json` gives positioned diagnostics on save; live diagnostics,
+go-to-definition and completion are their own project.
+
 ## 0.8.0 — rung C: deployment (compile to an artifact a real host loads)
 
 An authored `.warp` system can now leave the repo as DATA and be run by code that

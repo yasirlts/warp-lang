@@ -36,7 +36,8 @@ policy house_rules {
 ## 2. Compile — at build time, once
 
 ```sh
-npx warpc shop.warp -o model.json
+npx warpc check   shop.warp                 # any problems? (see docs/TOOLING.md)
+npx warpc compile shop.warp -o model.json
 ```
 
 `model.json` is a serialized `CommerceModel`: plain data, canonical JSON (sorted

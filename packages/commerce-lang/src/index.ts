@@ -38,6 +38,10 @@
 export { compileSystem, systemFromDocument, resolveSystem, resolveForCommitment, deriveContext } from "./system.js";
 export { buildComposition } from "./system.js";
 export { serializeModel, loadModel, serializeSystem, undeployableValues, WarpDeployError } from "./artifact.js";
+export { format, formatExprCanonical } from "./format.js";
+export { check, formatDiagnostics } from "./check.js";
+export type { Diagnostic } from "./check.js";
+export type { Comment, TokenizeOptions } from "./lexer.js";
 export type { UndeployableValue } from "./artifact.js";
 export type {
   CompiledSystem,

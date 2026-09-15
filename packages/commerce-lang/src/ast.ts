@@ -53,6 +53,8 @@ export interface LifecycleDecl {
   states: StateDecl[];
   transitions: TransitionDecl[];
   pos: SourcePosition;
+  /** Position of the closing `}` — lets a formatter keep comments inside the block. */
+  end: SourcePosition;
 }
 
 /** One `key value` field inside a `profile { … }` block. */
@@ -76,6 +78,8 @@ export interface ProfileDecl {
   name: Ident;
   fields: ProfileField[];
   pos: SourcePosition;
+  /** Position of the closing `}` — lets a formatter keep comments inside the block. */
+  end: SourcePosition;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +136,8 @@ export interface MechanismDecl {
   mechanismKind: Ident;
   fields: Field[];
   pos: SourcePosition;
+  /** Position of the closing `}`, when the node has a block — lets a formatter keep comments inside the block. */
+  end?: SourcePosition;
 }
 
 /**
@@ -145,6 +151,8 @@ export interface AuctionStateDecl {
   stateType: Ident;
   fields: Field[];
   pos: SourcePosition;
+  /** Position of the closing `}`, when the node has a block — lets a formatter keep comments inside the block. */
+  end?: SourcePosition;
 }
 
 /**
@@ -159,6 +167,8 @@ export interface TenderDecl {
   id: Ident;
   fields: Field[];
   pos: SourcePosition;
+  /** Position of the closing `}` — lets a formatter keep comments inside the block. */
+  end: SourcePosition;
 }
 
 /** An item inside an `auction { … }` block: a plain field, a mechanism, a state, or a tender. */
@@ -178,6 +188,8 @@ export interface AuctionDecl {
   state: AuctionStateDecl | undefined;
   tenders: TenderDecl[];
   pos: SourcePosition;
+  /** Position of the closing `}` — lets a formatter keep comments inside the block. */
+  end: SourcePosition;
 }
 
 
@@ -245,6 +257,8 @@ export interface PolicyDecl {
   name: Ident;
   fields: PolicyField[];
   pos: SourcePosition;
+  /** Position of the closing `}` — lets a formatter keep comments inside the block. */
+  end: SourcePosition;
 }
 
 
@@ -270,6 +284,8 @@ export interface LegDecl {
   /** How this leg's amount is computed from the parent (a rung-5A expression). */
   amount: Expr | undefined;
   pos: SourcePosition;
+  /** Position of the closing `}` — lets a formatter keep comments inside the block. */
+  end: SourcePosition;
 }
 
 /** One `key value` field directly inside a `composition { … }` block. */
@@ -290,6 +306,8 @@ export interface CompositionDecl {
   fields: CompositionField[];
   legs: LegDecl[];
   pos: SourcePosition;
+  /** Position of the closing `}` — lets a formatter keep comments inside the block. */
+  end: SourcePosition;
 }
 
 /** A top-level declaration: a lifecycle, a profile, an auction, a policy, or a composition. */

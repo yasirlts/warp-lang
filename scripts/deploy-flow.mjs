@@ -19,7 +19,7 @@
  * npm release needs a release that contains runModel. See docs/DEPLOYMENT.md.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,7 +27,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = join(ROOT, "packages", "commerce-types");
 const LANG = join(ROOT, "packages", "commerce-lang");
 const HOST = join(ROOT, "examples", "deploy-host");
-const TARBALL = join(TYPES, "warp-lang-commerce-types.tgz");
+// `npm pack` names the tarball <scope>-<name>-<version>.tgz. The host's
+// package.json points at exactly that name, so a by-hand `npm pack` in
+// packages/commerce-types followed by `npm install` in the host just works —
+// no rename step (rung D closed that wart from rung C).
+const TYPES_VERSION = JSON.parse(readFileSync(join(TYPES, "package.json"), "utf8")).version;
+const TARBALL = join(TYPES, `warp-lang-commerce-types-${TYPES_VERSION}.tgz`);
 
 const step = (n, what) => console.log(`\n${"═".repeat(72)}\n${n}. ${what}\n${"═".repeat(72)}`);
 const run = (cmd, args, cwd, opts = {}) =>
@@ -36,8 +41,21 @@ const run = (cmd, args, cwd, opts = {}) =>
 step(1, "Build and PACK the runtime library — what npm would ship");
 run("npm", ["run", "build"], TYPES, { quiet: true, env: { NODE_ENV: "development" } });
 const packed = run("npm", ["pack", "--silent"], TYPES, { quiet: true }).trim().split("\n").pop();
-renameSync(join(TYPES, packed), TARBALL);
-console.log(`   packed ${packed} → ${TARBALL.replace(ROOT + "/", "")}`);
+if (join(TYPES, packed) !== TARBALL) {
+  console.error(`   FAILED: npm pack produced ${packed}, expected ${TARBALL.replace(TYPES + "/", "")}`);
+  process.exit(1);
+}
+console.log(`   packed ${packed} (no rename — the host's package.json names this file)`);
+
+// The host must point at this exact tarball, or a by-hand repro breaks on a
+// version bump while CI silently keeps working. Check it, don't assume it.
+const hostDep = JSON.parse(readFileSync(join(HOST, "package.json"), "utf8")).dependencies["@warp-lang/commerce-types"];
+if (!hostDep.endsWith(`/${packed}`)) {
+  console.error(`   FAILED: examples/deploy-host/package.json depends on '${hostDep}' but npm pack produced '${packed}'.`);
+  console.error(`   Update the host's dependency to the new version's tarball name.`);
+  process.exit(1);
+}
+console.log(`   host depends on: ${hostDep}`);
 
 step(2, "Install the tarball into the host — what an adopter's `npm install` does");
 rmSync(join(HOST, "node_modules"), { recursive: true, force: true });

@@ -70,8 +70,8 @@ import type {
   TenderDecl,
   TransitionDecl,
 } from "./ast.js";
-import { WarpSyntaxError } from "./errors.js";
-import { tokenize, type Token, type TokenType } from "./lexer.js";
+import { WarpSyntaxError, type SourcePosition } from "./errors.js";
+import { tokenize, type Comment, type Token, type TokenType } from "./lexer.js";
 import { EXPR_FUNCTIONS, type Expr } from "./expr.js";
 
 /** The four keywords legal as a profile field. */
@@ -254,8 +254,8 @@ class Parser {
       if (item.kind === "state") states.push(item);
       else transitions.push(item);
     }
-    this.expect("rbrace", "'}' to close the lifecycle block");
-    return { kind: "lifecycle", name, states, transitions, pos: kw.pos };
+    const close = this.expect("rbrace", "'}' to close the lifecycle block");
+    return { kind: "lifecycle", name, states, transitions, pos: kw.pos, end: close.pos };
   }
 
   /** lifecycleItem := "state" IDENT | IDENT "->" identList */
@@ -374,41 +374,49 @@ class Parser {
     return { kind: "field", key, value, pos: t.pos };
   }
 
-  /** Read `{ field* }` against `table`, or nothing when the block is optional and absent. */
-  private fieldBlock(table: FieldTable, blockLabel: string, required: boolean): Field[] {
+  /**
+   * Read `{ field* }` against `table`, or nothing when the block is optional and
+   * absent. Returns the closing brace's position too (rung D — a formatter needs
+   * it to keep comments inside the block they were written in).
+   */
+  private fieldBlock(
+    table: FieldTable,
+    blockLabel: string,
+    required: boolean,
+  ): { fields: Field[]; end: SourcePosition | undefined } {
     if (!this.at("lbrace")) {
       if (required) this.expect("lbrace", `'{' to open the ${blockLabel} block`);
-      return [];
+      return { fields: [], end: undefined };
     }
     this.next(); // '{'
     const fields: Field[] = [];
     while (!this.at("rbrace") && !this.at("eof")) fields.push(this.parseField(table, blockLabel));
-    this.expect("rbrace", `'}' to close the ${blockLabel} block`);
-    return fields;
+    const close = this.expect("rbrace", `'}' to close the ${blockLabel} block`);
+    return { fields, end: close.pos };
   }
 
   /** mechanism := "mechanism" IDENT [ "{" field* "}" ] */
   private parseMechanism(): MechanismDecl {
     const kw = this.next(); // 'mechanism'
     const mechanismKind = this.ident("a mechanism kind after 'mechanism' (like 'English')");
-    const fields = this.fieldBlock(MECHANISM_FIELDS, "mechanism", false);
-    return { kind: "mechanism", mechanismKind, fields, pos: kw.pos };
+    const { fields, end } = this.fieldBlock(MECHANISM_FIELDS, "mechanism", false);
+    return { kind: "mechanism", mechanismKind, fields, pos: kw.pos, ...(end ? { end } : {}) };
   }
 
   /** tender := "tender" STRING "{" field* "}" */
   private parseTender(): TenderDecl {
     const kw = this.next(); // 'tender'
     const id = this.stringAsIdent("a tendered commitment id after 'tender' (a quoted string)");
-    const fields = this.fieldBlock(TENDER_FIELDS, "tender", true);
-    return { kind: "tender", id, fields, pos: kw.pos };
+    const { fields, end } = this.fieldBlock(TENDER_FIELDS, "tender", true);
+    return { kind: "tender", id, fields, pos: kw.pos, end: end as SourcePosition };
   }
 
   /** auctionState := "state" IDENT [ "{" field* "}" ] */
   private parseAuctionState(): AuctionStateDecl {
     const kw = this.next(); // 'state'
     const stateType = this.ident("an auction state after 'state' (like 'Open')");
-    const fields = this.fieldBlock(AUCTION_STATE_FIELDS, "auction state", false);
-    return { kind: "auctionState", stateType, fields, pos: kw.pos };
+    const { fields, end } = this.fieldBlock(AUCTION_STATE_FIELDS, "auction state", false);
+    return { kind: "auctionState", stateType, fields, pos: kw.pos, ...(end ? { end } : {}) };
   }
 
   /** auction := "auction" STRING "{" auctionItem* "}" */
@@ -446,8 +454,8 @@ class Parser {
         fields.push(item);
       }
     }
-    this.expect("rbrace", "'}' to close the auction block");
-    return { kind: "auction", name, fields, mechanism, state, tenders, pos: kw.pos };
+    const close = this.expect("rbrace", "'}' to close the auction block");
+    return { kind: "auction", name, fields, mechanism, state, tenders, pos: kw.pos, end: close.pos };
   }
 
   /** auctionItem := field | mechanism | tender | auctionState */
@@ -475,8 +483,8 @@ class Parser {
     while (!this.at("rbrace") && !this.at("eof")) {
       fields.push(this.parseProfileField());
     }
-    this.expect("rbrace", "'}' to close the profile block");
-    return { kind: "profile", name, fields, pos: kw.pos };
+    const close = this.expect("rbrace", "'}' to close the profile block");
+    return { kind: "profile", name, fields, pos: kw.pos, end: close.pos };
   }
 
   /**
@@ -609,8 +617,8 @@ class Parser {
     while (!this.at("rbrace") && !this.at("eof")) {
       fields.push(this.parsePolicyField());
     }
-    this.expect("rbrace", "'}' to close the policy block");
-    return { kind: "policy", name, fields, pos: kw.pos };
+    const close = this.expect("rbrace", "'}' to close the policy block");
+    return { kind: "policy", name, fields, pos: kw.pos, end: close.pos };
   }
 
   /**
@@ -686,8 +694,8 @@ class Parser {
         "'label', 'description', or 'leg'",
       );
     }
-    this.expect("rbrace", "'}' to close the composition block");
-    return { kind: "composition", name, fields, legs, pos: kw.pos };
+    const close = this.expect("rbrace", "'}' to close the composition block");
+    return { kind: "composition", name, fields, legs, pos: kw.pos, end: close.pos };
   }
 
   /** leg := "leg" IDENT "{" { "amount" expr } "}" */
@@ -717,8 +725,8 @@ class Parser {
         `a money amount or expression after 'amount' (like '70 MAD' or 'committed * 0.85')`,
       );
     }
-    this.expect("rbrace", `'}' to close leg '${name.name}'`);
-    return { kind: "leg", name, amount, pos: kw.pos };
+    const close = this.expect("rbrace", `'}' to close leg '${name.name}'`);
+    return { kind: "leg", name, amount, pos: kw.pos, end: close.pos };
   }
 }
 
@@ -750,7 +758,7 @@ function describe(t: Token): string {
  * into every error position so messages print `file:line:col`. Throws
  * {@link WarpSyntaxError} on the first malformed token.
  */
-export function parse(source: string, opts: { file?: string } = {}): Document {
-  const tokens = tokenize(source, opts.file);
+export function parse(source: string, opts: { file?: string; comments?: Comment[] } = {}): Document {
+  const tokens = tokenize(source, opts.file, opts.comments !== undefined ? { comments: opts.comments } : {});
   return new Parser(tokens).parseDocument();
 }
