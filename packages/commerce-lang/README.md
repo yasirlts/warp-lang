@@ -501,6 +501,20 @@ six invariants catching neither a dangling losing bid nor a double award, then
 shows the layer refusing each unsound resolution with its specific rule and
 letting a sound one through.
 
+## Tooling — `warpc fmt` and `warpc check`
+
+```sh
+npx warpc fmt   shop.warp --write   # canonical layout; never changes meaning (tested)
+npx warpc check shop.warp           # every diagnostic with line:col; --json for editors
+```
+
+The formatter walks the parser's own AST, so `parse(format(src))` equals
+`parse(src)` — comments kept in place, expression parentheses preserved exactly
+where the tree needs them, author's order untouched. `check` runs the real
+parser and compiler and collects what they say; it is not a linter and cannot
+disagree with `warpc compile`. Details, what is collected and what is not, and
+what is future (a language server) in [docs/TOOLING.md](../../docs/TOOLING.md).
+
 ## Deploying — compile to an artifact a host loads
 
 ```sh

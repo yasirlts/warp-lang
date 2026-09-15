@@ -21,5 +21,4 @@ venv/
 # are build output.
 examples/deploy-host/node_modules/
 examples/deploy-host/package-lock.json
-packages/commerce-types/warp-lang-commerce-types.tgz
 packages/commerce-types/*.tgz

@@ -22,15 +22,16 @@ lifecycle sales {
 profile digital {
   label       "Digital goods"
   description "digital goods paid in money"
-  states Draft, Proposed, Accepted, Fulfilled, Refunded, Cancelled
+  states      Draft, Proposed, Accepted, Fulfilled, Refunded, Cancelled
   value_forms DigitalGood, Money
 }
 
 policy house_rules {
-  label       "House rules"
-  description "Never discount below 150 MAD; MA VAT rates only."
-  applies_to  digital
+  label            "House rules"
+  description      "Never discount below 150 MAD; MA VAT rates only."
+
+  applies_to       digital
   concession_floor 150 MAD
   committed_price  200 MAD
-  tax_rates "MA" 0, 0.1, 0.2
+  tax_rates        "MA" 0, 0.1, 0.2
 }

@@ -68,7 +68,24 @@ function isDigit(ch: string): boolean {
  * `file:line:col`. Throws {@link WarpSyntaxError} on an unterminated string or a
  * stray character — the earliest lexical failures a language should catch.
  */
-export function tokenize(source: string, file?: string): Token[] {
+/**
+ * A comment the lexer saw. Comments carry no meaning and are not tokens, but a
+ * formatter must put them back where the author wrote them — so `tokenize` can
+ * collect them on request (rung D). `text` is the comment body without its `//`
+ * or `#` marker, trimmed.
+ */
+export interface Comment {
+  text: string;
+  pos: SourcePosition;
+}
+
+/** Options for {@link tokenize}. */
+export interface TokenizeOptions {
+  /** When supplied, every comment is pushed here in source order. */
+  comments?: Comment[];
+}
+
+export function tokenize(source: string, file?: string, opts: TokenizeOptions = {}): Token[] {
   const tokens: Token[] = [];
   let i = 0;
   let line = 1;
@@ -99,9 +116,16 @@ export function tokenize(source: string, file?: string): Token[] {
       continue;
     }
 
-    // Line comments: `//…` or `#…` to end of line.
+    // Line comments: `//…` or `#…` to end of line. Not tokens — but collected on
+    // request so a formatter can preserve them (rung D).
     if (ch === "#" || (ch === "/" && source[i + 1] === "/")) {
-      while (i < n && source[i] !== "\n") advance();
+      const start = posHere();
+      let raw = "";
+      while (i < n && source[i] !== "\n") raw += advance();
+      if (opts.comments !== undefined) {
+        const body = raw.startsWith("//") ? raw.slice(2) : raw.slice(1);
+        opts.comments.push({ text: body.trim(), pos: start });
+      }
       continue;
     }
 
